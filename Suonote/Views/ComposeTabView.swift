@@ -11,6 +11,12 @@ struct ComposeTabView: View {
     @State private var selectedChordSlot: ChordSlot?
     @State private var showingKeyPicker = false
     @State private var showingExport = false
+    @State private var showingEditSheet = false
+    @StateObject private var audioManager = AudioRecordingManager()
+    
+    private func linkedRecordings(for section: SectionTemplate) -> [Recording] {
+        project.recordings.filter { $0.linkedSectionId == section.id }
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -38,8 +44,8 @@ struct ComposeTabView: View {
                 selectedSection = section
             })
         }
-        .sheet(isPresented: $showingChordPalette) {
-            if let slot = selectedChordSlot, let section = selectedSection {
+        .sheet(item: $selectedChordSlot) { slot in
+            if let section = selectedSection {
                 ChordPaletteSheet(
                     section: section,
                     slot: slot,
@@ -52,6 +58,12 @@ struct ComposeTabView: View {
         }
         .sheet(isPresented: $showingExport) {
             ExportView(project: project)
+        }
+        .sheet(isPresented: $showingEditSheet) {
+            EditProjectSheet(project: project)
+        }
+        .onAppear {
+            audioManager.setup(project: project)
         }
     }
     
@@ -76,35 +88,45 @@ struct ComposeTabView: View {
                 .foregroundStyle(.purple)
             }
             
-            HStack(spacing: 6) {
-                Image(systemName: "metronome")
-                    .font(.caption)
-                Text("\(project.timeTop)/\(project.timeBottom)")
-                    .font(.subheadline.weight(.semibold))
+            Button {
+                // Open edit project sheet focused on time signature
+                showingEditSheet = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "metronome")
+                        .font(.caption)
+                    Text("\(project.timeTop)/\(project.timeBottom)")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule()
+                        .fill(Color.orange.opacity(0.15))
+                        .overlay(Capsule().stroke(Color.orange, lineWidth: 1))
+                )
+                .foregroundStyle(.orange)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(
-                Capsule()
-                    .fill(Color.orange.opacity(0.15))
-                    .overlay(Capsule().stroke(Color.orange, lineWidth: 1))
-            )
-            .foregroundStyle(.orange)
             
-            HStack(spacing: 6) {
-                Image(systemName: "waveform")
-                    .font(.caption)
-                Text("\(project.bpm)")
-                    .font(.subheadline.weight(.semibold))
+            Button {
+                // Open edit project sheet focused on BPM
+                showingEditSheet = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "waveform")
+                        .font(.caption)
+                    Text("\(project.bpm)")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule()
+                        .fill(Color.cyan.opacity(0.15))
+                        .overlay(Capsule().stroke(Color.cyan, lineWidth: 1))
+                )
+                .foregroundStyle(.cyan)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(
-                Capsule()
-                    .fill(Color.cyan.opacity(0.15))
-                    .overlay(Capsule().stroke(Color.cyan, lineWidth: 1))
-            )
-            .foregroundStyle(.cyan)
             
             Spacer()
             
@@ -234,7 +256,8 @@ struct ComposeTabView: View {
                                 },
                                 onDelete: {
                                     deleteArrangementItem(item)
-                                }
+                                },
+                                linkedRecordingsCount: linkedRecordings(for: section).count
                             )
                         }
                     }
@@ -244,7 +267,9 @@ struct ComposeTabView: View {
     }
     
     private func sectionEditor(_ section: SectionTemplate) -> some View {
-        VStack(alignment: .leading, spacing: 20) {
+        let recordings = linkedRecordings(for: section)
+        
+        return VStack(alignment: .leading, spacing: 20) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(section.name)
@@ -259,13 +284,15 @@ struct ComposeTabView: View {
                 Spacer()
             }
             
+            // Linked recordings section
+            if !recordings.isEmpty {
+                linkedRecordingsSection(recordings: recordings)
+            }
+            
             ChordGridView(
                 section: section,
                 project: project,
-                onChordSlotTap: { slot in
-                    selectedChordSlot = slot
-                    showingChordPalette = true
-                }
+                selectedChordSlot: $selectedChordSlot
             )
         }
         .padding(20)
@@ -275,6 +302,47 @@ struct ComposeTabView: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 20)
                         .stroke(Color.purple.opacity(0.3), lineWidth: 2)
+                )
+        )
+    }
+    
+    private func linkedRecordingsSection(recordings: [Recording]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "waveform.badge.mic")
+                    .font(.caption)
+                    .foregroundStyle(.purple)
+                
+                Text("Linked Recordings (\(recordings.count))")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white)
+            }
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(recordings) { recording in
+                        LinkedRecordingCard(
+                            recording: recording,
+                            isPlaying: audioManager.currentlyPlayingRecording?.id == recording.id,
+                            onPlay: {
+                                if audioManager.currentlyPlayingRecording?.id == recording.id {
+                                    audioManager.stopPlayback()
+                                } else {
+                                    audioManager.playRecording(recording)
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.purple.opacity(0.05))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.purple.opacity(0.2), lineWidth: 1)
                 )
         )
     }
@@ -308,6 +376,9 @@ struct SectionTimelineCard: View {
     let onDelete: () -> Void
     
     @State private var showingDeleteConfirmation = false
+    
+    // Add this to get recording count
+    var linkedRecordingsCount: Int = 0
     
     private var sectionColor: Color {
         switch section.name.lowercased() {
@@ -345,9 +416,25 @@ struct SectionTimelineCard: View {
                     .foregroundStyle(.white)
                     .lineLimit(1)
                 
-                Text("\(section.bars) bars")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    Text("\(section.bars) bars")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    
+                    if linkedRecordingsCount > 0 {
+                        Text("•")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        
+                        HStack(spacing: 2) {
+                            Image(systemName: "waveform")
+                                .font(.caption2)
+                            Text("\(linkedRecordingsCount)")
+                                .font(.caption2.weight(.medium))
+                        }
+                        .foregroundStyle(.purple)
+                    }
+                }
             }
             .padding(12)
             .frame(width: 120)
@@ -370,7 +457,8 @@ struct SectionTimelineCard: View {
     }
 }
 
-struct ChordSlot {
+struct ChordSlot: Identifiable {
+    let id = UUID()
     let barIndex: Int
     let beatOffset: Int
 }
@@ -378,7 +466,7 @@ struct ChordSlot {
 struct ChordGridView: View {
     let section: SectionTemplate
     let project: Project
-    let onChordSlotTap: (ChordSlot) -> Void
+    @Binding var selectedChordSlot: ChordSlot?
     
     private var beatsPerBar: Int { project.timeTop }
     
@@ -401,7 +489,7 @@ struct ChordGridView: View {
                                 beatOffset: beatOffset,
                                 beatsPerBar: beatsPerBar,
                                 onTap: {
-                                    onChordSlotTap(ChordSlot(barIndex: barIndex, beatOffset: beatOffset))
+                                    selectedChordSlot = ChordSlot(barIndex: barIndex, beatOffset: beatOffset)
                                 }
                             )
                         }
@@ -725,7 +813,7 @@ struct ChordPaletteSheet: View {
     @Bindable var project: Project
     @Environment(\.dismiss) private var dismiss
     
-    @State private var selectedRoot = "C"
+    @State private var selectedRoot: String
     @State private var selectedQuality: ChordQuality = .major
     @State private var selectedExtensions: [String] = []
     @State private var duration = 1
@@ -733,38 +821,197 @@ struct ChordPaletteSheet: View {
     private let roots = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
     private let commonExtensions = ["7", "9", "11", "13", "sus2", "sus4", "add9"]
     
+    init(section: SectionTemplate, slot: ChordSlot, project: Project) {
+        self.section = section
+        self.slot = slot
+        self.project = project
+        _selectedRoot = State(initialValue: project.keyRoot)
+    }
+    
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
-                VStack(spacing: 8) {
-                    Text(chordDisplay)
-                        .font(.system(size: 48, weight: .bold, design: .rounded))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.purple, .blue],
-                                startPoint: .leading,
-                                endPoint: .trailing
+            ScrollView {
+                VStack(spacing: 28) {
+                    // Chord Preview
+                    VStack(spacing: 8) {
+                        Text(chordDisplay)
+                            .font(.system(size: 56, weight: .bold, design: .rounded))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [.purple, .blue],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
                             )
-                        )
+                        
+                        Text("Bar \(slot.barIndex + 1) • Beat \(slot.beatOffset + 1)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 12)
                     
-                    Text("Bar \(slot.barIndex + 1) • Beat \(slot.beatOffset + 1)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.vertical, 20)
-                
-                ScrollView {
-                    VStack(spacing: 24) {
-                        rootSelector
-                        qualitySelector
-                        extensionsSelector
-                        durationSelector
+                    // Root Note
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Root Note")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                        
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 8) {
+                            ForEach(roots, id: \.self) { root in
+                                Button {
+                                    selectedRoot = root
+                                } label: {
+                                    Text(root)
+                                        .font(.headline)
+                                        .foregroundStyle(selectedRoot == root ? .white : .secondary)
+                                        .frame(height: 44)
+                                        .frame(maxWidth: .infinity)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .fill(selectedRoot == root ? Color.purple : Color.white.opacity(0.05))
+                                        )
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Quality
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Quality")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                        
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 8) {
+                            ForEach(ChordQuality.allCases, id: \.self) { quality in
+                                Button {
+                                    selectedQuality = quality
+                                } label: {
+                                    Text(quality.rawValue.isEmpty ? "Major" : quality.rawValue)
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(selectedQuality == quality ? .white : .secondary)
+                                        .frame(height: 44)
+                                        .frame(maxWidth: .infinity)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .fill(selectedQuality == quality ? Color.blue : Color.white.opacity(0.05))
+                                        )
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Extensions
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Extensions (Optional)")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                        
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 8) {
+                            ForEach(commonExtensions, id: \.self) { ext in
+                                Button {
+                                    if selectedExtensions.contains(ext) {
+                                        selectedExtensions.removeAll { $0 == ext }
+                                    } else {
+                                        selectedExtensions.append(ext)
+                                    }
+                                } label: {
+                                    Text(ext)
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(selectedExtensions.contains(ext) ? .white : .secondary)
+                                        .frame(height: 40)
+                                        .frame(maxWidth: .infinity)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 10)
+                                                .fill(selectedExtensions.contains(ext) ? Color.cyan : Color.white.opacity(0.05))
+                                        )
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Duration
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Duration (beats)")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                        
+                        HStack {
+                            Button {
+                                if duration > 1 {
+                                    duration -= 1
+                                }
+                            } label: {
+                                Image(systemName: "minus.circle.fill")
+                                    .font(.title2)
+                                    .foregroundStyle(Color.orange)
+                            }
+                            .disabled(duration <= 1)
+                            
+                            Spacer()
+                            
+                            Text("\(duration)")
+                                .font(.system(size: 36, weight: .bold, design: .rounded))
+                                .foregroundStyle(.white)
+                                .monospacedDigit()
+                            
+                            Spacer()
+                            
+                            Button {
+                                if duration < 16 {
+                                    duration += 1
+                                }
+                            } label: {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.title2)
+                                    .foregroundStyle(Color.orange)
+                            }
+                            .disabled(duration >= 16)
+                        }
+                        .padding(20)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.white.opacity(0.05))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                                )
+                        )
+                    }
+                    
+                    // Add Button
+                    Button {
+                        addChord()
+                    } label: {
+                        Text("Add Chord")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(
+                                Capsule()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [.purple, .blue],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                            )
                     }
                 }
-                
-                addButton
+                .padding(24)
             }
-            .padding(24)
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.05, green: 0.05, blue: 0.15),
+                        Color(red: 0.1, green: 0.05, blue: 0.2),
+                        Color.black
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
             .navigationTitle("Add Chord")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -774,133 +1021,6 @@ struct ChordPaletteSheet: View {
             }
         }
         .preferredColorScheme(.dark)
-        .onAppear {
-            selectedRoot = project.keyRoot
-        }
-    }
-    
-    private var rootSelector: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Root Note")
-                .font(.headline)
-                .foregroundStyle(.white)
-            
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 8) {
-                ForEach(roots, id: \.self) { root in
-                    Button {
-                        selectedRoot = root
-                    } label: {
-                        Text(root)
-                            .font(.headline)
-                            .foregroundStyle(selectedRoot == root ? .white : .secondary)
-                            .frame(height: 44)
-                            .frame(maxWidth: .infinity)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(selectedRoot == root ? Color.purple : Color.white.opacity(0.05))
-                            )
-                    }
-                }
-            }
-        }
-    }
-    
-    private var qualitySelector: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Quality")
-                .font(.headline)
-                .foregroundStyle(.white)
-            
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 8) {
-                ForEach(ChordQuality.allCases, id: \.self) { quality in
-                    Button {
-                        selectedQuality = quality
-                    } label: {
-                        Text(quality.rawValue.isEmpty ? "Major" : quality.rawValue)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(selectedQuality == quality ? .white : .secondary)
-                            .frame(height: 44)
-                            .frame(maxWidth: .infinity)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(selectedQuality == quality ? Color.blue : Color.white.opacity(0.05))
-                            )
-                    }
-                }
-            }
-        }
-    }
-    
-    private var extensionsSelector: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Extensions")
-                .font(.headline)
-                .foregroundStyle(.white)
-            
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 8) {
-                ForEach(commonExtensions, id: \.self) { ext in
-                    Button {
-                        if selectedExtensions.contains(ext) {
-                            selectedExtensions.removeAll { $0 == ext }
-                        } else {
-                            selectedExtensions.append(ext)
-                        }
-                    } label: {
-                        Text(ext)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(selectedExtensions.contains(ext) ? .white : .secondary)
-                            .frame(height: 40)
-                            .frame(maxWidth: .infinity)
-                            .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(selectedExtensions.contains(ext) ? Color.cyan : Color.white.opacity(0.05))
-                            )
-                    }
-                }
-            }
-        }
-    }
-    
-    private var durationSelector: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Duration (beats)")
-                .font(.headline)
-                .foregroundStyle(.white)
-            
-            Stepper("\(duration) beat\(duration > 1 ? "s" : "")", value: $duration, in: 1...16)
-                .padding(12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.white.opacity(0.05))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                        )
-                )
-                .foregroundStyle(.white)
-        }
-    }
-    
-    private var addButton: some View {
-        Button {
-            addChord()
-        } label: {
-            Text("Add Chord")
-                .font(.headline)
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [.purple, .blue],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                )
-        }
     }
     
     private var chordDisplay: String {
@@ -927,6 +1047,89 @@ struct ChordPaletteSheet: View {
         
         section.chordEvents.append(chord)
         dismiss()
+    }
+}
+
+// MARK: - Key Picker
+
+struct LinkedRecordingCard: View {
+    let recording: Recording
+    let isPlaying: Bool
+    let onPlay: () -> Void
+    
+    var body: some View {
+        Button(action: onPlay) {
+            VStack(alignment: .leading, spacing: 8) {
+                // Play button
+                ZStack {
+                    Circle()
+                        .fill(
+                            isPlaying ?
+                                LinearGradient(colors: [.green, .cyan], startPoint: .topLeading, endPoint: .bottomTrailing) :
+                                LinearGradient(colors: [recording.recordingType.color.opacity(0.3), recording.recordingType.color.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                        )
+                        .frame(width: 36, height: 36)
+                        .shadow(color: isPlaying ? Color.green.opacity(0.3) : recording.recordingType.color.opacity(0.2), radius: 6)
+                    
+                    if isPlaying {
+                        Image(systemName: "pause.fill")
+                            .font(.caption)
+                            .foregroundStyle(.white)
+                    } else {
+                        Image(systemName: "play.fill")
+                            .font(.caption)
+                            .foregroundStyle(.white)
+                            .offset(x: 1)
+                    }
+                }
+                
+                // Info
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 3) {
+                        Image(systemName: recording.recordingType.icon)
+                            .font(.caption2)
+                        Text(recording.recordingType.rawValue)
+                            .font(.caption2)
+                    }
+                    .foregroundStyle(recording.recordingType.color)
+                    
+                    Text(recording.name)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    
+                    Text(formatDuration(recording.duration))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(10)
+            .frame(width: 110)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(
+                        isPlaying ?
+                            Color.green.opacity(0.1) :
+                            Color.white.opacity(0.05)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(
+                                isPlaying ?
+                                    Color.green.opacity(0.5) :
+                                    Color.white.opacity(0.1),
+                                lineWidth: isPlaying ? 1.5 : 1
+                            )
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        let minutes = Int(duration) / 60
+        let seconds = Int(duration) % 60
+        return String(format: "%d:%02d", minutes, seconds)
     }
 }
 

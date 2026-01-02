@@ -5,54 +5,87 @@ import AVFoundation
 struct RecordingsTabView: View {
     @Bindable var project: Project
     @StateObject private var audioManager = AudioRecordingManager()
-    @State private var currentBeat = 0
-    @State private var currentBar = 0
-    @State private var audioLevels: [Float] = Array(repeating: 0, count: 50)
-    @State private var micPermissionGranted = false
-    @State private var showingPermissionAlert = false
-    @State private var metronomeTimer: Timer?
+    @State private var showingRecordingScreen = false
+    @State private var showingTypePicker = false
+    @State private var selectedRecordingType: RecordingType = .voice
+    @State private var filterType: RecordingType?
+    @State private var showLinkedOnly = false
+    @State private var sortOrder: RecordingSortOrder = .dateDescending
+    @State private var selectedRecording: Recording?
     @State private var showingSectionPicker = false
     @State private var selectedRecordingForLink: Recording?
     
-    private var uniqueSections: [SectionTemplate] {
-        var seen = Set<UUID>()
-        return project.arrangementItems.compactMap { item in
-            guard let section = item.sectionTemplate,
-                  !seen.contains(section.id) else { return nil }
-            seen.insert(section.id)
-            return section
+    enum RecordingSortOrder: String, CaseIterable {
+        case dateDescending = "Newest First"
+        case dateAscending = "Oldest First"
+        case nameAscending = "Name A-Z"
+        case durationDescending = "Longest First"
+    }
+    
+    private var filteredAndSortedRecordings: [Recording] {
+        var recordings = project.recordings
+        
+        // Filter by type
+        if let type = filterType {
+            recordings = recordings.filter { $0.recordingType == type }
         }
+        
+        // Filter by linked status
+        if showLinkedOnly {
+            recordings = recordings.filter { $0.linkedSectionId != nil }
+        }
+        
+        // Sort
+        switch sortOrder {
+        case .dateDescending:
+            recordings.sort { $0.createdAt > $1.createdAt }
+        case .dateAscending:
+            recordings.sort { $0.createdAt < $1.createdAt }
+        case .nameAscending:
+            recordings.sort { $0.name < $1.name }
+        case .durationDescending:
+            recordings.sort { $0.duration > $1.duration }
+        }
+        
+        return recordings
+    }
+    
+    private var uniqueSections: [SectionTemplate] {
+        // Get unique sections from arrangement items
+        var seen = Set<UUID>()
+        var sections: [SectionTemplate] = []
+        
+        for item in project.arrangementItems {
+            if let section = item.sectionTemplate,
+               !seen.contains(section.id) {
+                seen.insert(section.id)
+                sections.append(section)
+            }
+        }
+        
+        return sections
     }
     
     var body: some View {
         VStack(spacing: 0) {
-            if audioManager.isRecording {
-                recordingInterfaceView
-            } else {
-                readyToRecordView
-            }
+            // Header con botón de grabar
+            recordingHeader
             
             Divider()
                 .overlay(Color.white.opacity(0.1))
-                .padding(.vertical, 20)
             
+            // Lista de takes
             takesListView
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 20)
-        .onAppear {
-            audioManager.setup(project: project)
-            requestMicrophonePermission()
+        .fullScreenCover(isPresented: $showingRecordingScreen) {
+            ActiveRecordingView(
+                project: project,
+                audioManager: audioManager,
+                recordingType: selectedRecordingType
+            )
         }
-        .alert("Microphone Access Required", isPresented: $showingPermissionAlert) {
-            Button("Open Settings", role: .cancel) {
-                if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
-                    UIApplication.shared.open(settingsUrl)
-                }
-            }
-            Button("Cancel", role: .destructive) {}
-        } message: {
-            Text("Suonote needs microphone access to record audio. Please enable it in Settings.")
+        .sheet(isPresented: $showingTypePicker) {
+            RecordingTypePickerSheet(selectedType: $selectedRecordingType)
         }
         .sheet(isPresented: $showingSectionPicker) {
             if let recording = selectedRecordingForLink {
@@ -65,166 +98,229 @@ struct RecordingsTabView: View {
                 )
             }
         }
-    }
-    
-    private var readyToRecordView: some View {
-        VStack(spacing: 32) {
-            Button {
-                if micPermissionGranted {
-                    audioManager.startRecording(countIn: 1, clickEnabled: true)
-                    startMetronome()
-                } else {
-                    showingPermissionAlert = true
-                }
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color.red.opacity(0.8), Color.red.opacity(0.6)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 120, height: 120)
-                        .shadow(color: Color.red.opacity(0.4), radius: 20, x: 0, y: 10)
-                    
-                    Circle()
-                        .stroke(Color.white.opacity(0.3), lineWidth: 2)
-                        .frame(width: 120, height: 120)
-                    
-                    Image(systemName: "circle.fill")
-                        .font(.system(size: 40))
-                        .foregroundStyle(.white)
-                }
-            }
-            
-            VStack(spacing: 8) {
-                Text("Ready to Record")
-                    .font(.title3.bold())
-                    .foregroundStyle(.white)
-                
-                Text("Take \(project.recordings.count + 1)")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            
-            HStack(spacing: 20) {
-                VStack(spacing: 4) {
-                    Text("\(project.bpm)")
-                        .font(.title.bold())
-                        .foregroundStyle(.white)
-                    Text("BPM")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                
-                Divider()
-                    .frame(height: 40)
-                    .overlay(Color.white.opacity(0.2))
-                
-                VStack(spacing: 4) {
-                    Text("\(project.timeTop)/\(project.timeBottom)")
-                        .font(.title.bold())
-                        .foregroundStyle(.white)
-                    Text("Time")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .padding(20)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.white.opacity(0.05))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                    )
-            )
+        .onAppear {
+            audioManager.setup(project: project)
         }
-        .frame(maxHeight: .infinity)
     }
     
-    private var recordingInterfaceView: some View {
-        VStack(spacing: 24) {
-            WaveformView(levels: audioLevels)
-                .frame(height: 100)
-            
-            HStack(spacing: 40) {
-                VStack(spacing: 8) {
-                    Text("BAR")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    
-                    Text("\(currentBar + 1)")
-                        .font(.system(size: 48, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .monospacedDigit()
-                }
-                
-                VStack(spacing: 8) {
-                    Text("BEAT")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    
-                    HStack(spacing: 8) {
-                        ForEach(0..<project.timeTop, id: \.self) { beat in
-                            Circle()
-                                .fill(beat == currentBeat ? Color.red : Color.white.opacity(0.3))
-                                .frame(width: beat == currentBeat ? 16 : 12, height: beat == currentBeat ? 16 : 12)
-                                .shadow(color: beat == currentBeat ? Color.red.opacity(0.6) : .clear, radius: 8)
-                                .animation(.spring(response: 0.2), value: currentBeat)
-                        }
-                    }
-                }
-            }
-            .padding(.vertical, 20)
-            
+    private var recordingHeader: some View {
+        VStack(spacing: 16) {
+            // Record button
             Button {
-                audioManager.stopRecording()
-                stopMetronome()
+                showingRecordingScreen = true
             } label: {
                 HStack(spacing: 12) {
-                    Image(systemName: "stop.fill")
-                        .font(.title2)
-                    Text("Stop Recording")
-                        .font(.headline)
+                    ZStack {
+                        Circle()
+                            .fill(Color.red.opacity(0.2))
+                            .frame(width: 48, height: 48)
+                        
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 20, height: 20)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Start Recording")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                        
+                        Text("Take \(project.recordings.count + 1) • \(selectedRecordingType.rawValue)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(.secondary)
                 }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 32)
-                .padding(.vertical, 16)
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color.white.opacity(0.05))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(Color.red.opacity(0.3), lineWidth: 1)
+                        )
+                )
+            }
+            
+            // Type selector
+            Button {
+                showingTypePicker = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: selectedRecordingType.icon)
+                        .font(.caption)
+                    Text("Recording Type: \(selectedRecordingType.rawValue)")
+                        .font(.caption.weight(.medium))
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2)
+                }
+                .foregroundStyle(selectedRecordingType.color)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
                 .background(
                     Capsule()
-                        .fill(Color.red.opacity(0.8))
-                        .shadow(color: Color.red.opacity(0.4), radius: 10, x: 0, y: 5)
+                        .fill(selectedRecordingType.color.opacity(0.15))
+                        .overlay(Capsule().stroke(selectedRecordingType.color, lineWidth: 1))
                 )
             }
         }
-        .frame(maxHeight: .infinity)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
     }
     
     private var takesListView: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Takes (\(project.recordings.count))")
-                .font(.headline)
-                .foregroundStyle(.white)
-            
-            if project.recordings.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "waveform")
-                        .font(.system(size: 40))
-                        .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Takes")
+                    .font(.title3.bold())
+                    .foregroundStyle(.white)
+                
+                Text("\(filteredAndSortedRecordings.count)")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(Color.white.opacity(0.1))
+                    )
+                
+                Spacer()
+                
+                Menu {
+                    // Type Filter
+                    Menu("Filter by Type") {
+                        Button {
+                            filterType = nil
+                        } label: {
+                            HStack {
+                                Text("All Types")
+                                if filterType == nil {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                        
+                        ForEach(RecordingType.allCases, id: \.self) { type in
+                            Button {
+                                filterType = type
+                            } label: {
+                                HStack {
+                                    Image(systemName: type.icon)
+                                    Text(type.rawValue)
+                                    if filterType == type {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    }
                     
-                    Text("No recordings yet")
-                        .font(.subheadline)
+                    // Linked Filter
+                    Button {
+                        showLinkedOnly.toggle()
+                    } label: {
+                        HStack {
+                            Image(systemName: showLinkedOnly ? "checkmark.square" : "square")
+                            Text("Linked Only")
+                        }
+                    }
+                    
+                    Divider()
+                    
+                    // Sort Options
+                    Menu("Sort By") {
+                        ForEach(RecordingSortOrder.allCases, id: \.self) { order in
+                            Button {
+                                sortOrder = order
+                            } label: {
+                                HStack {
+                                    Text(order.rawValue)
+                                    if sortOrder == order {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.white)
+                        .symbolRenderingMode(.hierarchical)
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 16)
+            
+            // Active Filters Display
+            if filterType != nil || showLinkedOnly {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        if let type = filterType {
+                            FilterChipView(
+                                icon: type.icon,
+                                text: type.rawValue,
+                                color: type.color,
+                                onRemove: { filterType = nil }
+                            )
+                        }
+                        
+                        if showLinkedOnly {
+                            FilterChipView(
+                                icon: "link",
+                                text: "Linked",
+                                color: .purple,
+                                onRemove: { showLinkedOnly = false }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                }
+            }
+            
+            if filteredAndSortedRecordings.isEmpty {
+                VStack(spacing: 16) {
+                    Image(systemName: "waveform.circle")
+                        .font(.system(size: 48))
                         .foregroundStyle(.secondary)
+                        .symbolEffect(.pulse)
+                    
+                    VStack(spacing: 6) {
+                        Text(project.recordings.isEmpty ? "No recordings yet" : "No recordings match filters")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                        
+                        Text(project.recordings.isEmpty ? "Tap 'Start Recording' to begin" : "Try adjusting your filters")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    
+                    if !project.recordings.isEmpty {
+                        Button("Clear Filters") {
+                            filterType = nil
+                            showLinkedOnly = false
+                        }
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.blue)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule()
+                                .fill(Color.blue.opacity(0.15))
+                        )
+                    }
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 40)
+                .padding(.vertical, 60)
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(project.recordings.sorted(by: { $0.createdAt > $1.createdAt })) { recording in
+                    LazyVStack(spacing: 10) {
+                        ForEach(filteredAndSortedRecordings) { recording in
                             ModernTakeCard(
                                 recording: recording,
                                 linkedSection: uniqueSections.first(where: { $0.id == recording.linkedSectionId }),
@@ -246,43 +342,11 @@ struct RecordingsTabView: View {
                             )
                         }
                     }
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
                 }
             }
         }
-    }
-    
-    private func requestMicrophonePermission() {
-        AVAudioSession.sharedInstance().requestRecordPermission { granted in
-            DispatchQueue.main.async {
-                micPermissionGranted = granted
-                if !granted {
-                    showingPermissionAlert = true
-                }
-            }
-        }
-    }
-    
-    private func startMetronome() {
-        let interval = 60.0 / Double(project.bpm)
-        metronomeTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
-            withAnimation {
-                currentBeat = (currentBeat + 1) % project.timeTop
-                if currentBeat == 0 {
-                    currentBar += 1
-                }
-            }
-            
-            audioLevels.removeFirst()
-            audioLevels.append(Float.random(in: 0...1))
-        }
-    }
-    
-    private func stopMetronome() {
-        metronomeTimer?.invalidate()
-        metronomeTimer = nil
-        currentBeat = 0
-        currentBar = 0
-        audioLevels = Array(repeating: 0, count: 50)
     }
     
     private func deleteRecording(_ recording: Recording) {
@@ -331,98 +395,167 @@ struct ModernTakeCard: View {
     let onLinkSection: () -> Void
     let onDelete: () -> Void
     
-    private var playButtonGradient: LinearGradient {
-        LinearGradient(
-            colors: isPlaying ? [Color.green, Color.cyan] : [Color.purple, Color.blue],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
-    
-    private var borderColor: Color {
-        isPlaying ? Color.green.opacity(0.5) : Color.white.opacity(0.1)
-    }
-    
     var body: some View {
-        HStack(spacing: 12) {
-            // Play button
+        HStack(spacing: 16) {
+            // Play button with type indicator
             Button(action: onPlay) {
                 ZStack {
                     Circle()
-                        .fill(playButtonGradient)
-                        .frame(width: 44, height: 44)
+                        .fill(
+                            isPlaying ? 
+                                LinearGradient(colors: [.green, .cyan], startPoint: .topLeading, endPoint: .bottomTrailing) :
+                                LinearGradient(colors: [recording.recordingType.color.opacity(0.3), recording.recordingType.color.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                        )
+                        .frame(width: 56, height: 56)
+                        .shadow(color: isPlaying ? Color.green.opacity(0.3) : recording.recordingType.color.opacity(0.2), radius: 8)
                     
-                    Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 16))
-                        .foregroundStyle(.white)
+                    if isPlaying {
+                        Image(systemName: "pause.fill")
+                            .font(.title3)
+                            .foregroundStyle(.white)
+                    } else {
+                        Image(systemName: "play.fill")
+                            .font(.title3)
+                            .foregroundStyle(.white)
+                            .offset(x: 2)
+                    }
                 }
             }
+            .buttonStyle(.plain)
             
-            // Info
-            VStack(alignment: .leading, spacing: 4) {
-                Text(recording.name)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                
+            // Info section
+            VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
+                    Text(recording.name)
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    
+                    Image(systemName: recording.recordingType.icon)
+                        .font(.caption)
+                        .foregroundStyle(recording.recordingType.color)
+                }
+                
+                HStack(spacing: 6) {
                     if let section = linkedSection {
-                        Text(section.name)
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(.purple)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
+                        HStack(spacing: 4) {
+                            Image(systemName: "link")
+                                .font(.caption2)
+                            Text(section.name)
+                                .font(.caption.weight(.medium))
+                        }
+                        .foregroundStyle(.purple)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .fill(Color.purple.opacity(0.2))
+                                .overlay(Capsule().stroke(Color.purple.opacity(0.5), lineWidth: 1))
+                        )
+                    } else {
+                        Button(action: onLinkSection) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "link.badge.plus")
+                                    .font(.caption2)
+                                Text("Link Section")
+                                    .font(.caption.weight(.medium))
+                            }
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
                             .background(
                                 Capsule()
-                                    .fill(Color.purple.opacity(0.2))
+                                    .fill(Color.white.opacity(0.05))
+                                    .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 1))
                             )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                
+                HStack(spacing: 8) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock")
+                            .font(.caption2)
+                        Text(formatDuration(recording.duration))
+                            .font(.caption)
                     }
                     
-                    Text(recording.createdAt.formatted(date: .omitted, time: .shortened))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    
                     Text("•")
-                        .foregroundStyle(.secondary)
+                        .font(.caption2)
                     
-                    Text(formatDuration(recording.duration))
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
+                    Text(recording.createdAt.formatted(date: .abbreviated, time: .shortened))
+                        .font(.caption)
                 }
+                .foregroundStyle(.secondary)
             }
             
             Spacer()
             
-            // Mini waveform preview
-            MiniWaveformView()
-                .frame(width: 40, height: 24)
-            
-            // Link section button
-            Button(action: onLinkSection) {
-                Image(systemName: linkedSection == nil ? "link.badge.plus" : "link")
-                    .font(.caption)
-                    .foregroundStyle(linkedSection == nil ? .blue.opacity(0.8) : .purple.opacity(0.8))
-                    .padding(8)
-                    .background(Circle().fill((linkedSection == nil ? Color.blue : Color.purple).opacity(0.15)))
-            }
-            
-            // Delete button
-            Button(action: onDelete) {
-                Image(systemName: "trash.fill")
-                    .font(.caption)
-                    .foregroundStyle(.red.opacity(0.8))
-                    .padding(8)
-                    .background(Circle().fill(Color.red.opacity(0.15)))
+            // Actions menu
+            Menu {
+                Button {
+                    onPlay()
+                } label: {
+                    Label(isPlaying ? "Pause" : "Play", systemImage: isPlaying ? "pause.fill" : "play.fill")
+                }
+                
+                Divider()
+                
+                Button {
+                    onLinkSection()
+                } label: {
+                    Label(linkedSection == nil ? "Link to Section" : "Change Section", systemImage: "link")
+                }
+                
+                if linkedSection != nil {
+                    Button {
+                        recording.linkedSectionId = nil
+                    } label: {
+                        Label("Unlink Section", systemImage: "link.circle.fill")
+                    }
+                }
+                
+                Divider()
+                
+                Button(role: .destructive) {
+                    onDelete()
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 44, height: 44)
             }
         }
-        .padding(12)
+        .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white.opacity(0.05))
+            RoundedRectangle(cornerRadius: 16)
+                .fill(
+                    isPlaying ?
+                        Color.green.opacity(0.05) :
+                        Color.white.opacity(0.03)
+                )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(borderColor, lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(borderColor, lineWidth: borderWidth)
                 )
         )
+    }
+    
+    private var borderColor: Color {
+        if isPlaying {
+            return .green.opacity(0.5)
+        } else if linkedSection != nil {
+            return .purple.opacity(0.4)
+        } else {
+            return Color.white.opacity(0.1)
+        }
+    }
+    
+    private var borderWidth: CGFloat {
+        isPlaying || linkedSection != nil ? 1.5 : 1
     }
     
     private func formatDuration(_ duration: TimeInterval) -> String {
@@ -454,69 +587,110 @@ struct SectionLinkSheet: View {
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                if sections.isEmpty {
-                    VStack(spacing: 16) {
-                        Image(systemName: "music.note.list")
-                            .font(.system(size: 50))
-                            .foregroundStyle(.secondary)
-                        
-                        Text("No sections available")
-                            .font(.headline)
+            ScrollView {
+                VStack(spacing: 28) {
+                    // Recording info
+                    VStack(spacing: 8) {
+                        Text(recording.name)
+                            .font(.title2.bold())
                             .foregroundStyle(.white)
                         
-                        Text("Create sections in the Compose tab first")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: 6) {
+                            Image(systemName: recording.recordingType.icon)
+                                .font(.caption)
+                            Text(recording.recordingType.rawValue)
+                                .font(.caption)
+                        }
+                        .foregroundStyle(recording.recordingType.color)
                     }
-                    .frame(maxHeight: .infinity)
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
+                    .padding(.top, 12)
+                    
+                    if sections.isEmpty {
+                        // Empty state
+                        VStack(spacing: 20) {
+                            Image(systemName: "music.note.list")
+                                .font(.system(size: 60))
+                                .foregroundStyle(.secondary)
+                            
+                            VStack(spacing: 8) {
+                                Text("No sections available")
+                                    .font(.headline)
+                                    .foregroundStyle(.white)
+                                
+                                Text("Create sections in the Compose tab first")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .multilineTextAlignment(.center)
+                            }
+                        }
+                        .frame(maxHeight: .infinity)
+                        .padding(.vertical, 40)
+                    } else {
+                        // Sections list
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("Select Section")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.white)
+                            
+                            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 12) {
+                                ForEach(sections) { section in
+                                    Button {
+                                        onLink(section.id)
+                                        dismiss()
+                                    } label: {
+                                        VStack(spacing: 8) {
+                                            Text(section.name)
+                                                .font(.subheadline.weight(.semibold))
+                                                .foregroundStyle(recording.linkedSectionId == section.id ? .white : .secondary)
+                                            
+                                            Text("\(section.bars) bars")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 60)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .fill(recording.linkedSectionId == section.id ? Color.purple : Color.white.opacity(0.05))
+                                        )
+                                    }
+                                }
+                            }
+                            
                             // Unlink option
                             if recording.linkedSectionId != nil {
                                 Button {
                                     onLink(nil)
                                     dismiss()
                                 } label: {
-                                    HStack {
-                                        Image(systemName: "link.badge.minus")
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "xmark.circle.fill")
                                             .font(.title3)
                                             .foregroundStyle(.red)
                                         
                                         Text("Remove Link")
-                                            .font(.headline)
+                                            .font(.subheadline.weight(.semibold))
                                             .foregroundStyle(.white)
                                         
                                         Spacer()
                                     }
+                                    .frame(maxWidth: .infinity)
                                     .padding(16)
                                     .background(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .fill(Color.red.opacity(0.15))
+                                            .fill(Color.red.opacity(0.1))
                                             .overlay(
                                                 RoundedRectangle(cornerRadius: 12)
                                                     .stroke(Color.red.opacity(0.3), lineWidth: 1)
                                             )
                                     )
                                 }
-                                .padding(.bottom, 8)
-                            }
-                            
-                            ForEach(sections) { section in
-                                SectionLinkButton(
-                                    section: section,
-                                    isLinked: recording.linkedSectionId == section.id,
-                                    onSelect: {
-                                        onLink(section.id)
-                                        dismiss()
-                                    }
-                                )
+                                .padding(.top, 8)
                             }
                         }
-                        .padding(24)
                     }
                 }
+                .padding(24)
             }
             .background(
                 LinearGradient(
@@ -543,44 +717,37 @@ struct SectionLinkSheet: View {
     }
 }
 
-struct SectionLinkButton: View {
-    let section: SectionTemplate
-    let isLinked: Bool
-    let onSelect: () -> Void
+// MARK: - Filter Chip View
+
+struct FilterChipView: View {
+    let icon: String
+    let text: String
+    let color: Color
+    let onRemove: () -> Void
     
     var body: some View {
-        Button(action: onSelect) {
-            HStack(spacing: 12) {
-                Image(systemName: isLinked ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
-                    .foregroundStyle(isLinked ? .purple : .secondary)
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(section.name)
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                    
-                    Text("\(section.bars) bars")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                
-                Spacer()
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.caption2)
+            Text(text)
+                .font(.caption.weight(.medium))
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.caption)
             }
-            .padding(16)
-            .background(linkBackground)
         }
-    }
-    
-    private var linkBackground: some View {
-        RoundedRectangle(cornerRadius: 12)
-            .fill(isLinked ? Color.purple.opacity(0.15) : Color.white.opacity(0.05))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(isLinked ? Color.purple : Color.white.opacity(0.1), lineWidth: 1)
-            )
+        .foregroundStyle(color)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(color.opacity(0.15))
+                .overlay(Capsule().stroke(color, lineWidth: 1))
+        )
     }
 }
+
+// MARK: - Preview
 
 #Preview {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)

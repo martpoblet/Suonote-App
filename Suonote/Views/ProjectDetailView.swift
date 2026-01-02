@@ -5,6 +5,7 @@ struct ProjectDetailView: View {
     @Bindable var project: Project
     @State private var selectedTab = 0
     @State private var showingEditSheet = false
+    @State private var showingStatusPicker = false
     @Namespace private var animation
     
     var body: some View {
@@ -28,17 +29,19 @@ struct ProjectDetailView: View {
                     .padding(.vertical, 16)
                 
                 // Content
-                TabView(selection: $selectedTab) {
-                    ComposeTabView(project: project)
-                        .tag(0)
-                    
-                    LyricsTabView(project: project)
-                        .tag(1)
-                    
-                    RecordingsTabView(project: project)
-                        .tag(2)
+                Group {
+                    switch selectedTab {
+                    case 0:
+                        ComposeTabView(project: project)
+                    case 1:
+                        LyricsTabView(project: project)
+                    case 2:
+                        RecordingsTabView(project: project)
+                    default:
+                        ComposeTabView(project: project)
+                    }
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
+                .transition(.opacity)
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -49,20 +52,20 @@ struct ProjectDetailView: View {
                         .font(.headline.bold())
                         .foregroundStyle(.white)
                     
-                    if !project.tags.isEmpty {
-                        HStack(spacing: 6) {
-                            ForEach(project.tags.prefix(2), id: \.self) { tag in
-                                Text(tag)
-                                    .font(.caption2.weight(.medium))
-                                    .foregroundStyle(.purple)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 3)
-                                    .background(
-                                        Capsule()
-                                            .fill(Color.purple.opacity(0.2))
-                                    )
-                            }
+                    Button {
+                        showingStatusPicker = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: statusIcon(for: project.status))
+                                .font(.system(size: 10, weight: .bold))
+                            Text(project.status.rawValue)
+                                .font(.caption2.weight(.bold))
                         }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(statusColor(for: project.status).opacity(0.25))
+                        .foregroundStyle(statusColor(for: project.status))
+                        .clipShape(Capsule())
                     }
                 }
             }
@@ -80,7 +83,30 @@ struct ProjectDetailView: View {
         .sheet(isPresented: $showingEditSheet) {
             EditProjectSheet(project: project)
         }
+        .sheet(isPresented: $showingStatusPicker) {
+            StatusPickerSheet(project: project)
+        }
         .preferredColorScheme(.dark)
+    }
+    
+    private func statusIcon(for status: ProjectStatus) -> String {
+        switch status {
+        case .idea: return "lightbulb.fill"
+        case .inProgress: return "hammer.fill"
+        case .polished: return "sparkles"
+        case .finished: return "checkmark.seal.fill"
+        case .archived: return "archivebox.fill"
+        }
+    }
+    
+    private func statusColor(for status: ProjectStatus) -> Color {
+        switch status {
+        case .idea: return .yellow
+        case .inProgress: return .orange
+        case .polished: return .purple
+        case .finished: return .green
+        case .archived: return .gray
+        }
     }
     
     private var customTabBar: some View {
@@ -156,6 +182,7 @@ struct EditProjectSheet: View {
     @State private var tempKeyMode: KeyMode = .major
     @State private var tempTags: [String] = []
     @State private var newTag: String = ""
+    @State private var tempStatus: ProjectStatus = .idea
     
     private let roots = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
     private let timeBottoms = [2, 4, 8, 16]
@@ -183,6 +210,39 @@ struct EditProjectSheet: View {
                                     )
                             )
                             .foregroundStyle(.white)
+                    }
+                    
+                    // Status
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Status")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                        
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 12) {
+                            ForEach(ProjectStatus.allCases, id: \.self) { status in
+                                Button {
+                                    tempStatus = status
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: statusIconFor(status))
+                                            .font(.caption)
+                                        Text(status.rawValue)
+                                            .font(.subheadline.weight(.semibold))
+                                    }
+                                    .foregroundStyle(tempStatus == status ? .white : .secondary)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 44)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(tempStatus == status ? statusColorFor(status).opacity(0.3) : Color.white.opacity(0.05))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .stroke(tempStatus == status ? statusColorFor(status) : Color.white.opacity(0.1), lineWidth: tempStatus == status ? 2 : 1)
+                                            )
+                                    )
+                                }
+                            }
+                        }
                     }
                     
                     // BPM
@@ -444,6 +504,7 @@ struct EditProjectSheet: View {
         tempKeyRoot = project.keyRoot
         tempKeyMode = project.keyMode
         tempTags = project.tags
+        tempStatus = project.status
     }
     
     private func addTag() {
@@ -462,14 +523,163 @@ struct EditProjectSheet: View {
         project.keyRoot = tempKeyRoot
         project.keyMode = tempKeyMode
         project.tags = tempTags
+        project.status = tempStatus
         project.updatedAt = Date()
         
         try? modelContext.save()
         dismiss()
     }
+    
+    private func statusIconFor(_ status: ProjectStatus) -> String {
+        switch status {
+        case .idea: return "lightbulb.fill"
+        case .inProgress: return "hammer.fill"
+        case .polished: return "sparkles"
+        case .finished: return "checkmark.seal.fill"
+        case .archived: return "archivebox.fill"
+        }
+    }
+    
+    private func statusColorFor(_ status: ProjectStatus) -> Color {
+        switch status {
+        case .idea: return .yellow
+        case .inProgress: return .orange
+        case .polished: return .purple
+        case .finished: return .green
+        case .archived: return .gray
+        }
+    }
 }
 
 // MARK: - Flow Layout for Tags
+
+struct StatusPickerSheet: View {
+    @Bindable var project: Project
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 16) {
+                    Text("Update project status to track your progress")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 8)
+                
+                VStack(spacing: 12) {
+                    ForEach(ProjectStatus.allCases, id: \.self) { status in
+                        Button {
+                            updateStatus(to: status)
+                        } label: {
+                            HStack(spacing: 16) {
+                                Image(systemName: statusIcon(for: status))
+                                    .font(.title3)
+                                    .foregroundStyle(statusColor(for: status))
+                                    .frame(width: 32)
+                                
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(status.rawValue)
+                                        .font(.headline)
+                                        .foregroundStyle(.white)
+                                    
+                                    Text(statusDescription(for: status))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                
+                                Spacer()
+                                
+                                if project.status == status {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(statusColor(for: status))
+                                }
+                            }
+                            .padding(16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(project.status == status ? statusColor(for: status).opacity(0.15) : Color.white.opacity(0.05))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 16)
+                                            .stroke(project.status == status ? statusColor(for: status) : Color.white.opacity(0.1), 
+                                                   lineWidth: project.status == status ? 2 : 1)
+                                    )
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                
+                Spacer()
+            }
+            .padding(24)
+            }
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.05, green: 0.05, blue: 0.15),
+                        Color(red: 0.1, green: 0.05, blue: 0.2),
+                        Color.black
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .navigationTitle("Project Status")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+        .presentationDetents([.medium])
+    }
+    
+    private func updateStatus(to status: ProjectStatus) {
+        withAnimation {
+            project.status = status
+            project.updatedAt = Date()
+            try? modelContext.save()
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                dismiss()
+            }
+        }
+    }
+    
+    private func statusIcon(for status: ProjectStatus) -> String {
+        switch status {
+        case .idea: return "lightbulb.fill"
+        case .inProgress: return "hammer.fill"
+        case .polished: return "sparkles"
+        case .finished: return "checkmark.seal.fill"
+        case .archived: return "archivebox.fill"
+        }
+    }
+    
+    private func statusColor(for status: ProjectStatus) -> Color {
+        switch status {
+        case .idea: return .yellow
+        case .inProgress: return .orange
+        case .polished: return .purple
+        case .finished: return .green
+        case .archived: return .gray
+        }
+    }
+    
+    private func statusDescription(for status: ProjectStatus) -> String {
+        switch status {
+        case .idea: return "Just an idea, needs work"
+        case .inProgress: return "Actively working on it"
+        case .polished: return "Almost there, refining details"
+        case .finished: return "Complete and ready"
+        case .archived: return "Put on hold or completed"
+        }
+    }
+}
 
 struct FlowLayout: Layout {
     var spacing: CGFloat = 8

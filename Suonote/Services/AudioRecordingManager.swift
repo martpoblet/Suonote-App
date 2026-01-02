@@ -16,6 +16,7 @@ class AudioRecordingManager: NSObject, ObservableObject {
     private var recordingStartTime: Date?
     private var countInBars = 1
     private var clickEnabled = true
+    private var currentRecordingType: RecordingType = .voice
     
     func setup(project: Project) {
         self.project = project
@@ -28,11 +29,12 @@ class AudioRecordingManager: NSObject, ObservableObject {
         }
     }
     
-    func startRecording(countIn: Int, clickEnabled: Bool) {
+    func startRecording(countIn: Int, clickEnabled: Bool, recordingType: RecordingType = .voice) {
         guard let project = project else { return }
         
         self.countInBars = countIn
         self.clickEnabled = clickEnabled
+        self.currentRecordingType = recordingType
         
         let fileName = "\(UUID().uuidString).m4a"
         let url = getDocumentsDirectory().appendingPathComponent(fileName)
@@ -83,7 +85,8 @@ class AudioRecordingManager: NSObject, ObservableObject {
             bpm: project.bpm,
             timeTop: project.timeTop,
             timeBottom: project.timeBottom,
-            countIn: countInBars
+            countIn: countInBars,
+            recordingType: currentRecordingType
         )
         
         recording.project = project

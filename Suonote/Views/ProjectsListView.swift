@@ -73,6 +73,21 @@ struct ProjectsListView: View {
                                     ModernProjectCard(project: project)
                                 }
                                 .buttonStyle(.plain)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                    Button(role: .destructive) {
+                                        deleteProject(project)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                    
+                                    Button {
+                                        archiveProject(project)
+                                    } label: {
+                                        Label(project.status == .archived ? "Unarchive" : "Archive", 
+                                              systemImage: project.status == .archived ? "tray.and.arrow.up" : "archivebox")
+                                    }
+                                    .tint(.orange)
+                                }
                             }
                         }
                         .padding(.horizontal, 24)
@@ -247,6 +262,21 @@ struct ProjectsListView: View {
         case .polished: return .purple
         case .finished: return .green
         case .archived: return .gray
+        }
+    }
+    
+    private func deleteProject(_ project: Project) {
+        withAnimation {
+            modelContext.delete(project)
+            try? modelContext.save()
+        }
+    }
+    
+    private func archiveProject(_ project: Project) {
+        withAnimation {
+            project.status = project.status == .archived ? .idea : .archived
+            project.updatedAt = Date()
+            try? modelContext.save()
         }
     }
 }
