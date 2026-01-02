@@ -11,6 +11,18 @@ struct RecordingsTabView: View {
     @State private var micPermissionGranted = false
     @State private var showingPermissionAlert = false
     @State private var metronomeTimer: Timer?
+    @State private var showingSectionPicker = false
+    @State private var selectedRecordingForLink: Recording?
+    
+    private var uniqueSections: [SectionTemplate] {
+        var seen = Set<UUID>()
+        return project.arrangementItems.compactMap { item in
+            guard let section = item.sectionTemplate,
+                  !seen.contains(section.id) else { return nil }
+            seen.insert(section.id)
+            return section
+        }
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -41,6 +53,17 @@ struct RecordingsTabView: View {
             Button("Cancel", role: .destructive) {}
         } message: {
             Text("Suonote needs microphone access to record audio. Please enable it in Settings.")
+        }
+        .sheet(isPresented: $showingSectionPicker) {
+            if let recording = selectedRecordingForLink {
+                SectionLinkSheet(
+                    recording: recording,
+                    sections: uniqueSections,
+                    onLink: { sectionId in
+                        recording.linkedSectionId = sectionId
+                    }
+                )
+            }
         }
     }
     
@@ -204,6 +227,7 @@ struct RecordingsTabView: View {
                         ForEach(project.recordings.sorted(by: { $0.createdAt > $1.createdAt })) { recording in
                             ModernTakeCard(
                                 recording: recording,
+                                linkedSection: uniqueSections.first(where: { $0.id == recording.linkedSectionId }),
                                 isPlaying: audioManager.currentlyPlayingRecording?.id == recording.id,
                                 onPlay: {
                                     if audioManager.currentlyPlayingRecording?.id == recording.id {
@@ -211,6 +235,10 @@ struct RecordingsTabView: View {
                                     } else {
                                         audioManager.playRecording(recording)
                                     }
+                                },
+                                onLinkSection: {
+                                    selectedRecordingForLink = recording
+                                    showingSectionPicker = true
                                 },
                                 onDelete: {
                                     deleteRecording(recording)
@@ -224,22 +252,11 @@ struct RecordingsTabView: View {
     }
     
     private func requestMicrophonePermission() {
-        if #available(iOS 17.0, *) {
-            AVAudioApplication.requestRecordPermission { granted in
-                DispatchQueue.main.async {
-                    micPermissionGranted = granted
-                    if !granted {
-                        showingPermissionAlert = true
-                    }
-                }
-            }
-        } else {
-            AVAudioSession.sharedInstance().requestRecordPermission { granted in
-                DispatchQueue.main.async {
-                    micPermissionGranted = granted
-                    if !granted {
-                        showingPermissionAlert = true
-                    }
+        AVAudioSession.sharedInstance().requestRecordPermission { granted in
+            DispatchQueue.main.async {
+                micPermissionGranted = granted
+                if !granted {
+                    showingPermissionAlert = true
                 }
             }
         }
@@ -308,8 +325,10 @@ struct WaveformView: View {
 
 struct ModernTakeCard: View {
     let recording: Recording
+    let linkedSection: SectionTemplate?
     let isPlaying: Bool
     let onPlay: () -> Void
+    let onLinkSection: () -> Void
     let onDelete: () -> Void
     
     private var playButtonGradient: LinearGradient {
@@ -346,6 +365,18 @@ struct ModernTakeCard: View {
                     .foregroundStyle(.white)
                 
                 HStack(spacing: 8) {
+                    if let section = linkedSection {
+                        Text(section.name)
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(.purple)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(
+                                Capsule()
+                                    .fill(Color.purple.opacity(0.2))
+                            )
+                    }
+                    
                     Text(recording.createdAt.formatted(date: .omitted, time: .shortened))
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -363,7 +394,16 @@ struct ModernTakeCard: View {
             
             // Mini waveform preview
             MiniWaveformView()
-                .frame(width: 60, height: 24)
+                .frame(width: 40, height: 24)
+            
+            // Link section button
+            Button(action: onLinkSection) {
+                Image(systemName: linkedSection == nil ? "link.badge.plus" : "link")
+                    .font(.caption)
+                    .foregroundStyle(linkedSection == nil ? .blue.opacity(0.8) : .purple.opacity(0.8))
+                    .padding(8)
+                    .background(Circle().fill((linkedSection == nil ? Color.blue : Color.purple).opacity(0.15)))
+            }
             
             // Delete button
             Button(action: onDelete) {
@@ -401,6 +441,144 @@ struct MiniWaveformView: View {
                     .frame(width: 2, height: CGFloat.random(in: 4...20))
             }
         }
+    }
+}
+
+// MARK: - Section Link Sheet
+
+struct SectionLinkSheet: View {
+    @Bindable var recording: Recording
+    let sections: [SectionTemplate]
+    let onLink: (UUID?) -> Void
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                if sections.isEmpty {
+                    VStack(spacing: 16) {
+                        Image(systemName: "music.note.list")
+                            .font(.system(size: 50))
+                            .foregroundStyle(.secondary)
+                        
+                        Text("No sections available")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                        
+                        Text("Create sections in the Compose tab first")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxHeight: .infinity)
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            // Unlink option
+                            if recording.linkedSectionId != nil {
+                                Button {
+                                    onLink(nil)
+                                    dismiss()
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "link.badge.minus")
+                                            .font(.title3)
+                                            .foregroundStyle(.red)
+                                        
+                                        Text("Remove Link")
+                                            .font(.headline)
+                                            .foregroundStyle(.white)
+                                        
+                                        Spacer()
+                                    }
+                                    .padding(16)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Color.red.opacity(0.15))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .stroke(Color.red.opacity(0.3), lineWidth: 1)
+                                            )
+                                    )
+                                }
+                                .padding(.bottom, 8)
+                            }
+                            
+                            ForEach(sections) { section in
+                                SectionLinkButton(
+                                    section: section,
+                                    isLinked: recording.linkedSectionId == section.id,
+                                    onSelect: {
+                                        onLink(section.id)
+                                        dismiss()
+                                    }
+                                )
+                            }
+                        }
+                        .padding(24)
+                    }
+                }
+            }
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.05, green: 0.05, blue: 0.15),
+                        Color(red: 0.1, green: 0.05, blue: 0.2),
+                        Color.black
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .navigationTitle("Link to Section")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+}
+
+struct SectionLinkButton: View {
+    let section: SectionTemplate
+    let isLinked: Bool
+    let onSelect: () -> Void
+    
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 12) {
+                Image(systemName: isLinked ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(isLinked ? .purple : .secondary)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(section.name)
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    
+                    Text("\(section.bars) bars")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                
+                Spacer()
+            }
+            .padding(16)
+            .background(linkBackground)
+        }
+    }
+    
+    private var linkBackground: some View {
+        RoundedRectangle(cornerRadius: 12)
+            .fill(isLinked ? Color.purple.opacity(0.15) : Color.white.opacity(0.05))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isLinked ? Color.purple : Color.white.opacity(0.1), lineWidth: 1)
+            )
     }
 }
 

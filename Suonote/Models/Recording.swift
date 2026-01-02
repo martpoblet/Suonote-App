@@ -13,6 +13,7 @@ final class Recording {
     var countIn: Int
     var createdAt: Date
     var isFavorite: Bool
+    var linkedSectionId: UUID?
     
     var project: Project?
     

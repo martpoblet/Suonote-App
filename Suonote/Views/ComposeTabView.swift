@@ -10,6 +10,7 @@ struct ComposeTabView: View {
     @State private var showingChordPalette = false
     @State private var selectedChordSlot: ChordSlot?
     @State private var showingKeyPicker = false
+    @State private var showingExport = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -36,7 +37,6 @@ struct ComposeTabView: View {
             SectionCreatorView(project: project, onSectionCreated: { section in
                 selectedSection = section
             })
-            .presentationDetents([.medium, .large])
         }
         .sheet(isPresented: $showingChordPalette) {
             if let slot = selectedChordSlot, let section = selectedSection {
@@ -45,11 +45,13 @@ struct ComposeTabView: View {
                     slot: slot,
                     project: project
                 )
-                .presentationDetents([.large])
             }
         }
         .sheet(isPresented: $showingKeyPicker) {
             KeyPickerSheet(project: project)
+        }
+        .sheet(isPresented: $showingExport) {
+            ExportView(project: project)
         }
     }
     
@@ -105,6 +107,19 @@ struct ComposeTabView: View {
             .foregroundStyle(.cyan)
             
             Spacer()
+            
+            Button {
+                showingExport = true
+            } label: {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.title3)
+                    .foregroundStyle(.white)
+                    .padding(8)
+                    .background(
+                        Circle()
+                            .fill(Color.white.opacity(0.1))
+                    )
+            }
             
             Button {
                 showingSectionCreator = true
