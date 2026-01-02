@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import SwiftData
+import Combine
 
 class AudioRecordingManager: NSObject, ObservableObject {
     @Published var isRecording = false

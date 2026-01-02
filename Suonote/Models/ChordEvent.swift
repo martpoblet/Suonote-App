@@ -6,6 +6,7 @@ final class ChordEvent {
     var id: UUID
     var barIndex: Int
     var beatOffset: Int
+    var duration: Int
     var root: String
     var quality: ChordQuality
     var extensions: [String]
@@ -17,6 +18,7 @@ final class ChordEvent {
     init(
         barIndex: Int,
         beatOffset: Int,
+        duration: Int = 1,
         root: String,
         quality: ChordQuality = .major,
         extensions: [String] = [],
@@ -25,6 +27,7 @@ final class ChordEvent {
         self.id = UUID()
         self.barIndex = barIndex
         self.beatOffset = beatOffset
+        self.duration = duration
         self.root = root
         self.quality = quality
         self.extensions = extensions
