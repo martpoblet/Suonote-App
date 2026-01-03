@@ -30,7 +30,7 @@ struct ActiveRecordingView: View {
     }
     
     var body: some View {
-        ZStack {
+        ZStack(alignment: .top) {
             // Background gradient
             LinearGradient(
                 colors: [
@@ -76,7 +76,9 @@ struct ActiveRecordingView: View {
                 }
             }
             .padding(.vertical, 40)
+            .frame(maxHeight: .infinity, alignment: .top)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showingMetronomeSettings) {
             metronomeSettingsSheet
@@ -183,7 +185,7 @@ struct ActiveRecordingView: View {
                 HStack(spacing: 8) {
                     Image(systemName: selectedRecordingType.icon)
                         .font(.title2)
-                    Text(selectedRecordingType.rawValue)
+                    Text("Recording Type: \(selectedRecordingType.rawValue)")
                         .font(.title3.weight(.semibold))
                 }
                 .foregroundStyle(selectedRecordingType.color)
@@ -685,7 +687,7 @@ struct RecordingTypePickerSheet: View {
             }
         }
         .preferredColorScheme(.dark)
-        .presentationDetents([.height(500)])
+        .presentationDetents([.height(600)])
     }
 }
 

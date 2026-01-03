@@ -12,7 +12,6 @@ struct RecordingsTabView: View {
     @State private var showLinkedOnly = false
     @State private var sortOrder: RecordingSortOrder = .dateDescending
     @State private var selectedRecording: Recording?
-    @State private var showingSectionPicker = false
     @State private var selectedRecordingForLink: Recording?
     
     enum RecordingSortOrder: String, CaseIterable {
@@ -87,16 +86,14 @@ struct RecordingsTabView: View {
         .sheet(isPresented: $showingTypePicker) {
             RecordingTypePickerSheet(selectedType: $selectedRecordingType)
         }
-        .sheet(isPresented: $showingSectionPicker) {
-            if let recording = selectedRecordingForLink {
-                SectionLinkSheet(
-                    recording: recording,
-                    sections: uniqueSections,
-                    onLink: { sectionId in
-                        recording.linkedSectionId = sectionId
-                    }
-                )
-            }
+        .sheet(item: $selectedRecordingForLink) { recording in
+            SectionLinkSheet(
+                recording: recording,
+                sections: uniqueSections,
+                onLink: { sectionId in
+                    recording.linkedSectionId = sectionId
+                }
+            )
         }
         .onAppear {
             audioManager.setup(project: project)
@@ -143,28 +140,6 @@ struct RecordingsTabView: View {
                             RoundedRectangle(cornerRadius: 16)
                                 .stroke(Color.red.opacity(0.3), lineWidth: 1)
                         )
-                )
-            }
-            
-            // Type selector
-            Button {
-                showingTypePicker = true
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: selectedRecordingType.icon)
-                        .font(.caption)
-                    Text("Recording Type: \(selectedRecordingType.rawValue)")
-                        .font(.caption.weight(.medium))
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.caption2)
-                }
-                .foregroundStyle(selectedRecordingType.color)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule()
-                        .fill(selectedRecordingType.color.opacity(0.15))
-                        .overlay(Capsule().stroke(selectedRecordingType.color, lineWidth: 1))
                 )
             }
         }
@@ -255,7 +230,7 @@ struct RecordingsTabView: View {
                 }
             }
             .padding(.horizontal, 24)
-            .padding(.top, 16)
+            .padding(.top, 8)
             
             // Active Filters Display
             if filterType != nil || showLinkedOnly {
@@ -284,6 +259,8 @@ struct RecordingsTabView: View {
             }
             
             if filteredAndSortedRecordings.isEmpty {
+                Spacer()
+                
                 VStack(spacing: 16) {
                     Image(systemName: "waveform.circle")
                         .font(.system(size: 48))
@@ -316,7 +293,8 @@ struct RecordingsTabView: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 60)
+                
+                Spacer()
             } else {
                 ScrollView {
                     LazyVStack(spacing: 10) {
@@ -334,7 +312,6 @@ struct RecordingsTabView: View {
                                 },
                                 onLinkSection: {
                                     selectedRecordingForLink = recording
-                                    showingSectionPicker = true
                                 },
                                 onDelete: {
                                     deleteRecording(recording)
@@ -343,7 +320,8 @@ struct RecordingsTabView: View {
                         }
                     }
                     .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
+                    .padding(.top, 12)
+                    .padding(.bottom, 12)
                 }
             }
         }
@@ -587,111 +565,112 @@ struct SectionLinkSheet: View {
     
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 28) {
-                    // Recording info
-                    VStack(spacing: 8) {
-                        Text(recording.name)
-                            .font(.title2.bold())
-                            .foregroundStyle(.white)
-                        
-                        HStack(spacing: 6) {
-                            Image(systemName: recording.recordingType.icon)
-                                .font(.caption)
-                            Text(recording.recordingType.rawValue)
-                                .font(.caption)
-                        }
-                        .foregroundStyle(recording.recordingType.color)
-                    }
-                    .padding(.top, 12)
+            VStack(spacing: 16) {
+                // Recording info
+                VStack(spacing: 8) {
+                    Text(recording.name)
+                        .font(.headline)
+                        .foregroundStyle(.white)
                     
-                    if sections.isEmpty {
-                        // Empty state
-                        VStack(spacing: 20) {
-                            Image(systemName: "music.note.list")
-                                .font(.system(size: 60))
-                                .foregroundStyle(.secondary)
-                            
-                            VStack(spacing: 8) {
-                                Text("No sections available")
-                                    .font(.headline)
-                                    .foregroundStyle(.white)
-                                
-                                Text("Create sections in the Compose tab first")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                    .multilineTextAlignment(.center)
-                            }
-                        }
-                        .frame(maxHeight: .infinity)
-                        .padding(.vertical, 40)
-                    } else {
-                        // Sections list
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("Select Section")
-                                .font(.subheadline.weight(.semibold))
+                    HStack(spacing: 6) {
+                        Image(systemName: recording.recordingType.icon)
+                            .font(.caption)
+                        Text(recording.recordingType.rawValue)
+                            .font(.caption)
+                    }
+                    .foregroundStyle(recording.recordingType.color)
+                }
+                .padding(.top, 8)
+                
+                if sections.isEmpty {
+                    // Empty state
+                    VStack(spacing: 20) {
+                        Image(systemName: "music.note.list")
+                            .font(.system(size: 60))
+                            .foregroundStyle(.secondary)
+                        
+                        VStack(spacing: 8) {
+                            Text("No sections available")
+                                .font(.headline)
                                 .foregroundStyle(.white)
                             
-                            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 12) {
-                                ForEach(sections) { section in
-                                    Button {
-                                        onLink(section.id)
-                                        dismiss()
-                                    } label: {
-                                        VStack(spacing: 8) {
-                                            Text(section.name)
-                                                .font(.subheadline.weight(.semibold))
-                                                .foregroundStyle(recording.linkedSectionId == section.id ? .white : .secondary)
-                                            
-                                            Text("\(section.bars) bars")
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        .frame(maxWidth: .infinity)
-                                        .frame(height: 60)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .fill(recording.linkedSectionId == section.id ? Color.purple : Color.white.opacity(0.05))
-                                        )
-                                    }
-                                }
-                            }
-                            
-                            // Unlink option
-                            if recording.linkedSectionId != nil {
+                            Text("Create sections in Compose first")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                    }
+                    .frame(maxHeight: .infinity)
+                } else {
+                    // Sections grid
+                    ScrollView {
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 12) {
+                            ForEach(sections) { section in
                                 Button {
-                                    onLink(nil)
+                                    onLink(section.id)
                                     dismiss()
                                 } label: {
-                                    HStack(spacing: 12) {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .font(.title3)
-                                            .foregroundStyle(.red)
-                                        
-                                        Text("Remove Link")
+                                    VStack(spacing: 8) {
+                                        Text(section.name)
                                             .font(.subheadline.weight(.semibold))
                                             .foregroundStyle(.white)
                                         
-                                        Spacer()
+                                        Text("\(section.bars) bars")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
                                     }
                                     .frame(maxWidth: .infinity)
-                                    .padding(16)
+                                    .frame(height: 80)
                                     .background(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .fill(Color.red.opacity(0.1))
+                                        RoundedRectangle(cornerRadius: 16)
+                                            .fill(recording.linkedSectionId == section.id ? Color.purple.opacity(0.2) : Color.white.opacity(0.05))
                                             .overlay(
-                                                RoundedRectangle(cornerRadius: 12)
-                                                    .stroke(Color.red.opacity(0.3), lineWidth: 1)
+                                                RoundedRectangle(cornerRadius: 16)
+                                                    .stroke(recording.linkedSectionId == section.id ? Color.purple : Color.white.opacity(0.1), lineWidth: recording.linkedSectionId == section.id ? 2 : 1)
                                             )
                                     )
                                 }
-                                .padding(.top, 8)
+                                .buttonStyle(.plain)
                             }
+                        }
+                        .padding(.horizontal, 24)
+                        
+                        // Unlink button
+                        if recording.linkedSectionId != nil {
+                            Button {
+                                onLink(nil)
+                                dismiss()
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.title3)
+                                        .foregroundStyle(.red)
+                                    
+                                    Text("Remove Link")
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(.white)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 50)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(Color.red.opacity(0.15))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 16)
+                                                .stroke(Color.red.opacity(0.4), lineWidth: 1)
+                                        )
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, 24)
+                            .padding(.top, 8)
                         }
                     }
                 }
-                .padding(24)
+                
+                Spacer()
             }
+            .padding(.vertical, 24)
             .background(
                 LinearGradient(
                     colors: [
@@ -707,13 +686,12 @@ struct SectionLinkSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
+                    Button("Cancel") { dismiss() }
                 }
             }
         }
         .preferredColorScheme(.dark)
+        .presentationDetents([.height(600)])
     }
 }
 
