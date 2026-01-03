@@ -12,6 +12,7 @@ struct ComposeTabView: View {
     @State private var showingKeyPicker = false
     @State private var showingExport = false
     @State private var showingEditSheet = false
+    @State private var showingSectionEditor = false
     @StateObject private var audioManager = AudioRecordingManager()
     
     private func linkedRecordings(for section: SectionTemplate) -> [Recording] {
@@ -61,6 +62,11 @@ struct ComposeTabView: View {
         }
         .sheet(isPresented: $showingEditSheet) {
             EditProjectSheet(project: project)
+        }
+        .sheet(isPresented: $showingSectionEditor) {
+            if let section = selectedSection {
+                SectionEditorSheet(section: section)
+            }
         }
         .onAppear {
             audioManager.setup(project: project)
@@ -282,6 +288,14 @@ struct ComposeTabView: View {
                 }
                 
                 Spacer()
+                
+                Button {
+                    showingSectionEditor = true
+                } label: {
+                    Image(systemName: "pencil.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.purple)
+                }
             }
             
             // Linked recordings section
@@ -1068,7 +1082,7 @@ struct LinkedRecordingCard: View {
                                 LinearGradient(colors: [.green, .cyan], startPoint: .topLeading, endPoint: .bottomTrailing) :
                                 LinearGradient(colors: [recording.recordingType.color.opacity(0.3), recording.recordingType.color.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing)
                         )
-                        .frame(width: 36, height: 36)
+                        .frame(width: 26, height: 26)
                         .shadow(color: isPlaying ? Color.green.opacity(0.3) : recording.recordingType.color.opacity(0.2), radius: 6)
                     
                     if isPlaying {
@@ -1104,7 +1118,6 @@ struct LinkedRecordingCard: View {
                 }
             }
             .padding(10)
-            .frame(width: 110)
             .background(
                 RoundedRectangle(cornerRadius: 10)
                     .fill(
@@ -1130,6 +1143,113 @@ struct LinkedRecordingCard: View {
         let minutes = Int(duration) / 60
         let seconds = Int(duration) % 60
         return String(format: "%d:%02d", minutes, seconds)
+    }
+}
+
+// MARK: - Section Editor Sheet
+
+struct SectionEditorSheet: View {
+    @Bindable var section: SectionTemplate
+    @Environment(\.dismiss) private var dismiss
+    
+    @State private var tempName: String = ""
+    @State private var tempBars: Int = 4
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Section Name")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                    
+                    TextField("e.g., Verse 1", text: $tempName)
+                        .textFieldStyle(.plain)
+                        .padding(12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.white.opacity(0.05))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                )
+                        )
+                        .foregroundStyle(.white)
+                }
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Number of Bars")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                    
+                    Stepper("\(tempBars) bars", value: $tempBars, in: 1...32)
+                        .padding(12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.white.opacity(0.05))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                )
+                        )
+                        .foregroundStyle(.white)
+                }
+                
+                Spacer()
+                
+                Button {
+                    saveChanges()
+                } label: {
+                    Text("Save Changes")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(
+                            Capsule()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [.purple, .blue],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                        )
+                }
+                .disabled(tempName.isEmpty)
+            }
+            .padding(24)
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.05, green: 0.05, blue: 0.15),
+                        Color(red: 0.1, green: 0.05, blue: 0.2),
+                        Color.black
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .navigationTitle("Edit Section")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+        .presentationDetents([.height(400)])
+        .onAppear {
+            tempName = section.name
+            tempBars = section.bars
+        }
+    }
+    
+    private func saveChanges() {
+        section.name = tempName
+        section.bars = tempBars
+        dismiss()
     }
 }
 

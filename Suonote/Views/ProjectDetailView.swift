@@ -183,9 +183,14 @@ struct EditProjectSheet: View {
     @State private var tempTags: [String] = []
     @State private var newTag: String = ""
     @State private var tempStatus: ProjectStatus = .idea
+    @State private var showingTimeSignatureWarning = false
     
     private let roots = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
     private let timeBottoms = [2, 4, 8, 16]
+    
+    private var timeSignatureChanged: Bool {
+        tempTimeTop != project.timeTop || tempTimeBottom != project.timeBottom
+    }
     
     var body: some View {
         NavigationStack {
@@ -484,13 +489,25 @@ struct EditProjectSheet: View {
                 
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        saveChanges()
+                        if timeSignatureChanged && !project.arrangementItems.isEmpty {
+                            showingTimeSignatureWarning = true
+                        } else {
+                            saveChanges()
+                        }
                     }
                     .fontWeight(.semibold)
                 }
             }
         }
         .preferredColorScheme(.dark)
+        .alert("Change Time Signature?", isPresented: $showingTimeSignatureWarning) {
+            Button("Cancel", role: .cancel) {}
+            Button("Save Anyway", role: .destructive) {
+                saveChanges()
+            }
+        } message: {
+            Text("Changing the time signature will affect the structure of your existing sections. Chord progressions may need adjustment.")
+        }
         .onAppear {
             loadCurrentValues()
         }
