@@ -9,6 +9,7 @@ struct RecordingDetailView: View {
     @State private var showingTypePicker = false
     @State private var editingName = false
     @State private var tempName = ""
+    @State private var waveformHeights: [CGFloat] = (0..<50).map { _ in CGFloat.random(in: 20...80) }
     
     let sections: [SectionTemplate]
     let onUpdate: () -> Void
@@ -93,10 +94,10 @@ struct RecordingDetailView: View {
                 .frame(height: 100)
                 .overlay(
                     HStack(spacing: 2) {
-                        ForEach(0..<50, id: \.self) { _ in
+                        ForEach(waveformHeights.indices, id: \.self) { index in
                             RoundedRectangle(cornerRadius: 2)
                                 .fill(recording.recordingType.color.opacity(0.6))
-                                .frame(width: 3, height: CGFloat.random(in: 20...80))
+                                .frame(width: 3, height: waveformHeights[index])
                         }
                     }
                 )

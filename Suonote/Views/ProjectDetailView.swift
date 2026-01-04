@@ -9,10 +9,32 @@ import SwiftData
 struct ProjectDetailView: View {
     // MARK: - Properties
     @Bindable var project: Project
-    @State private var selectedTab = 0  // 0=Compose, 1=Lyrics, 2=Record
+    @State private var selectedTab: ProjectTab = .compose
     @State private var showingEditSheet = false
     @State private var showingStatusPicker = false
     @Namespace private var animation  // Para animaciones fluidas del tab bar
+    
+    private enum ProjectTab: Int, CaseIterable {
+        case compose
+        case lyrics
+        case record
+        
+        var title: String {
+            switch self {
+            case .compose: return "Compose"
+            case .lyrics: return "Lyrics"
+            case .record: return "Record"
+            }
+        }
+        
+        var icon: String {
+            switch self {
+            case .compose: return "music.note.list"
+            case .lyrics: return "text.quote"
+            case .record: return "waveform.circle.fill"
+            }
+        }
+    }
     
     // MARK: - Body
     var body: some View {
@@ -31,22 +53,21 @@ struct ProjectDetailView: View {
             
             // MARK: Tab Content
             /// Contenido dinámico según la tab seleccionada
-            VStack(spacing: 0) {
-                // Content area with proper top padding for navigation bar
-                Group {
-                    switch selectedTab {
-                    case 0:
-                        ComposeTabView(project: project)
-                    case 1:
-                        LyricsTabView(project: project)
-                    case 2:
-                        RecordingsTabView(project: project)
-                    default:
-                        ComposeTabView(project: project)
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            TabView(selection: $selectedTab) {
+                ComposeTabView(project: project)
+                    .tag(ProjectTab.compose)
+                    .tabItem { EmptyView() }
+                
+                LyricsTabView(project: project)
+                    .tag(ProjectTab.lyrics)
+                    .tabItem { EmptyView() }
+                
+                RecordingsTabView(project: project)
+                    .tag(ProjectTab.record)
+                    .tabItem { EmptyView() }
             }
+            .tabViewStyle(.automatic)
+            .toolbar(.hidden, for: .tabBar)
             .padding(.top, 1)  // Small padding to prevent overlap
             
             // MARK: Floating Tab Bar (Bottom)
@@ -139,20 +160,20 @@ struct ProjectDetailView: View {
     /// Barra de tabs personalizada con animación fluida
     private var customTabBar: some View {
         HStack(spacing: 0) {
-            ForEach(Array(tabs.enumerated()), id: \.offset) { index, tab in
+            ForEach(ProjectTab.allCases, id: \.self) { tab in
                 Button {
-                    selectedTab = index
+                    selectedTab = tab
                 } label: {
                     VStack(spacing: 8) {
                         Image(systemName: tab.icon)
-                            .font(.title3.weight(selectedTab == index ? .semibold : .regular))
-                            .foregroundStyle(selectedTab == index ? .white : .white.opacity(0.5))
+                            .font(.title3.weight(selectedTab == tab ? .semibold : .regular))
+                            .foregroundStyle(selectedTab == tab ? .white : .white.opacity(0.5))
                         
                         Text(tab.title)
-                            .font(.caption.weight(selectedTab == index ? .semibold : .regular))
-                            .foregroundStyle(selectedTab == index ? .white : .white.opacity(0.5))
+                            .font(.caption.weight(selectedTab == tab ? .semibold : .regular))
+                            .foregroundStyle(selectedTab == tab ? .white : .white.opacity(0.5))
                         
-                        if selectedTab == index {
+                        if selectedTab == tab {
                             Capsule()
                                 .fill(
                                     LinearGradient(
@@ -210,16 +231,6 @@ struct ProjectDetailView: View {
             .clipShape(RoundedRectangle(cornerRadius: 20))
         )
         .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
-    }
-    
-    /// Definición de las 3 tabs principales
-    /// - Returns: Array con título e ícono de cada tab
-    private var tabs: [(title: String, icon: String)] {
-        [
-            ("Compose", "music.note.list"),      // Tab 0: Composición
-            ("Lyrics", "text.quote"),             // Tab 1: Letras
-            ("Record", "waveform.circle.fill")    // Tab 2: Grabaciones
-        ]
     }
 }
 

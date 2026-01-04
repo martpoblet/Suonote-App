@@ -29,9 +29,14 @@ struct ComposeTabView: View {
     @State private var draggedItem: ArrangementItem?
     @State private var expandedRecordingSections: Set<UUID> = []
     
-    /// Obtiene las grabaciones vinculadas a una sección específica
-    private func linkedRecordings(for section: SectionTemplate) -> [Recording] {
-        project.recordings.filter { $0.linkedSectionId == section.id }
+    private func recordingsBySectionId() -> [UUID: [Recording]] {
+        var map: [UUID: [Recording]] = [:]
+        for recording in project.recordings {
+            if let sectionId = recording.linkedSectionId {
+                map[sectionId, default: []].append(recording)
+            }
+        }
+        return map
     }
     
     /// Encuentra la sección que corresponde a un chord slot
@@ -44,6 +49,9 @@ struct ComposeTabView: View {
     
     // MARK: - Body
     var body: some View {
+        let sortedItems = project.arrangementItems.sorted(by: { $0.orderIndex < $1.orderIndex })
+        let recordingsBySectionId = recordingsBySectionId()
+        
         VStack(spacing: 0) {
             // MARK: Top Controls
             /// Barra superior con controles de exportar, tonalidad, BPM, etc.
@@ -61,14 +69,14 @@ struct ComposeTabView: View {
                 ScrollView {
                     LazyVStack(spacing: 24) {
                         // Timeline con todas las secciones del proyecto
-                        arrangementTimeline
+                        arrangementTimeline(items: sortedItems, recordingsBySectionId: recordingsBySectionId)
                         
                         // Editor de sección(es)
                         if showAllSections {
                             // Mostrar todas las secciones expandidas con drag & drop
-                            ForEach(project.arrangementItems.sorted(by: { $0.orderIndex < $1.orderIndex })) { item in
+                            ForEach(sortedItems) { item in
                                 if let section = item.sectionTemplate {
-                                    sectionEditor(section)
+                                    sectionEditor(section, recordings: recordingsBySectionId[section.id] ?? [])
                                         .id(section.id)
                                         .onDrag {
                                             self.draggedItem = item
@@ -83,7 +91,7 @@ struct ComposeTabView: View {
                             }
                         } else if let section = selectedSection {
                             // Mostrar solo la sección seleccionada
-                            sectionEditor(section)
+                            sectionEditor(section, recordings: recordingsBySectionId[section.id] ?? [])
                                 .id(section.id)
                         }
                     }
@@ -97,6 +105,7 @@ struct ComposeTabView: View {
             if selectedSection == nil, let firstItem = project.arrangementItems.first {
                 selectedSection = firstItem.sectionTemplate
             }
+            audioManager.setup(project: project)
         }
         // MARK: Sheets & Modals
         .sheet(isPresented: $showingSectionCreator) {
@@ -127,9 +136,6 @@ struct ComposeTabView: View {
             if let section = selectedSection {
                 SectionEditorSheet(section: section)
             }
-        }
-        .onAppear {
-            audioManager.setup(project: project)
         }
     }
     
@@ -293,7 +299,10 @@ struct ComposeTabView: View {
         .padding(.horizontal, 40)
     }
     
-    private var arrangementTimeline: some View {
+    private func arrangementTimeline(
+        items: [ArrangementItem],
+        recordingsBySectionId: [UUID: [Recording]]
+    ) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text("Arrangement")
@@ -320,7 +329,7 @@ struct ComposeTabView: View {
                     )
                     
                     // Section cards - draggable
-                    ForEach(project.arrangementItems.sorted(by: { $0.orderIndex < $1.orderIndex })) { item in
+                    ForEach(items) { item in
                         if let section = item.sectionTemplate {
                             SectionTimelineCard(
                                 section: section,
@@ -335,7 +344,7 @@ struct ComposeTabView: View {
                                 onDelete: {
                                     deleteArrangementItem(item)
                                 },
-                                linkedRecordingsCount: linkedRecordings(for: section).count
+                                linkedRecordingsCount: recordingsBySectionId[section.id]?.count ?? 0
                             )
                             .onDrag {
                                 self.draggedItem = item
@@ -354,8 +363,7 @@ struct ComposeTabView: View {
         }
     }
     
-    private func sectionEditor(_ section: SectionTemplate) -> some View {
-        let recordings = linkedRecordings(for: section)
+    private func sectionEditor(_ section: SectionTemplate, recordings: [Recording]) -> some View {
         let sectionColor = section.color
         
         return VStack(alignment: .leading, spacing: 20) {

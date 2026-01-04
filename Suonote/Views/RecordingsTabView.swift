@@ -70,6 +70,14 @@ struct RecordingsTabView: View {
         return sections
     }
     
+    private var sectionsById: [UUID: SectionTemplate] {
+        var map: [UUID: SectionTemplate] = [:]
+        for section in uniqueSections {
+            map[section.id] = section
+        }
+        return map
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
             // Header con botón de grabar
@@ -179,13 +187,16 @@ struct RecordingsTabView: View {
     }
     
     private var takesListView: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let recordings = filteredAndSortedRecordings
+        let sectionMap = sectionsById
+        
+        return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Takes")
                     .font(.title3.bold())
                     .foregroundStyle(.white)
                 
-                Text("\(filteredAndSortedRecordings.count)")
+                Text("\(recordings.count)")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 10)
@@ -304,7 +315,7 @@ struct RecordingsTabView: View {
                 }
             }
             
-            if filteredAndSortedRecordings.isEmpty {
+            if recordings.isEmpty {
                 Spacer()
                 
                 VStack(spacing: 16) {
@@ -343,13 +354,13 @@ struct RecordingsTabView: View {
                 Spacer()
             } else {
                 List {
-                    ForEach(filteredAndSortedRecordings) { recording in
+                    ForEach(recordings) { recording in
                         Button(action: {
                             selectedRecordingForDetail = recording
                         }) {
                             ModernTakeCard(
                                 recording: recording,
-                                linkedSection: uniqueSections.first(where: { $0.id == recording.linkedSectionId }),
+                                linkedSection: recording.linkedSectionId.flatMap { sectionMap[$0] },
                                 isPlaying: audioManager.currentlyPlayingRecording?.id == recording.id,
                                 onPlay: {
                                     if audioManager.currentlyPlayingRecording?.id == recording.id {
