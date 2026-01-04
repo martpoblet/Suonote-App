@@ -1,16 +1,23 @@
 import SwiftUI
 import SwiftData
 
+// MARK: - Project Detail View
+/// Vista principal del proyecto que contiene las 3 tabs principales:
+/// - Tab 0: Compose (Composición de acordes y estructura)
+/// - Tab 1: Lyrics (Edición de letras)
+/// - Tab 2: Record (Grabaciones de audio)
 struct ProjectDetailView: View {
+    // MARK: - Properties
     @Bindable var project: Project
-    @State private var selectedTab = 0
+    @State private var selectedTab = 0  // 0=Compose, 1=Lyrics, 2=Record
     @State private var showingEditSheet = false
     @State private var showingStatusPicker = false
-    @Namespace private var animation
+    @Namespace private var animation  // Para animaciones fluidas del tab bar
     
+    // MARK: - Body
     var body: some View {
         ZStack {
-            // Background
+            // MARK: Background Gradient
             LinearGradient(
                 colors: [
                     Color(red: 0.05, green: 0.05, blue: 0.15),
@@ -22,13 +29,10 @@ struct ProjectDetailView: View {
             )
             .ignoresSafeArea()
             
+            // MARK: Tab Content
+            /// Contenido dinámico según la tab seleccionada
             VStack(spacing: 0) {
-                // Custom Tab Bar
-                customTabBar
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 16)
-                
-                // Content
+                // Content area with proper top padding for navigation bar
                 Group {
                     switch selectedTab {
                     case 0:
@@ -41,17 +45,32 @@ struct ProjectDetailView: View {
                         ComposeTabView(project: project)
                     }
                 }
-                .transition(.opacity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .padding(.top, 1)  // Small padding to prevent overlap
+            
+            // MARK: Floating Tab Bar (Bottom)
+            /// Barra de navegación flotante en la parte inferior
+            VStack {
+                Spacer()
+                
+                customTabBar
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 16)
+            }
+            .ignoresSafeArea(edges: .bottom)
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            // MARK: Toolbar - Title
             ToolbarItem(placement: .principal) {
                 VStack(spacing: 4) {
+                    // Título del proyecto
                     Text(project.title)
                         .font(.headline.bold())
                         .foregroundStyle(.white)
                     
+                    // Badge de estado (Idea, In Progress, etc.)
                     Button {
                         showingStatusPicker = true
                     } label: {
@@ -70,6 +89,7 @@ struct ProjectDetailView: View {
                 }
             }
             
+            // MARK: Toolbar - Edit Button
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     showingEditSheet = true
@@ -80,6 +100,7 @@ struct ProjectDetailView: View {
                 }
             }
         }
+        // MARK: Sheets
         .sheet(isPresented: $showingEditSheet) {
             EditProjectSheet(project: project)
         }
@@ -89,6 +110,9 @@ struct ProjectDetailView: View {
         .preferredColorScheme(.dark)
     }
     
+    // MARK: - Helper Methods
+    
+    /// Retorna el ícono SF Symbol para cada estado
     private func statusIcon(for status: ProjectStatus) -> String {
         switch status {
         case .idea: return "lightbulb.fill"
@@ -99,6 +123,7 @@ struct ProjectDetailView: View {
         }
     }
     
+    /// Retorna el color asociado a cada estado del proyecto
     private func statusColor(for status: ProjectStatus) -> Color {
         switch status {
         case .idea: return .yellow
@@ -109,13 +134,14 @@ struct ProjectDetailView: View {
         }
     }
     
+    // MARK: - Custom Tab Bar View
+    
+    /// Barra de tabs personalizada con animación fluida
     private var customTabBar: some View {
         HStack(spacing: 0) {
             ForEach(Array(tabs.enumerated()), id: \.offset) { index, tab in
                 Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        selectedTab = index
-                    }
+                    selectedTab = index
                 } label: {
                     VStack(spacing: 8) {
                         Image(systemName: tab.icon)
@@ -137,6 +163,7 @@ struct ProjectDetailView: View {
                                 )
                                 .frame(height: 3)
                                 .matchedGeometryEffect(id: "tab", in: animation)
+                                .transition(.opacity)
                         } else {
                             Capsule()
                                 .fill(Color.clear)
@@ -145,24 +172,53 @@ struct ProjectDetailView: View {
                     }
                     .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.plain)
             }
         }
+        .animation(.easeOut(duration: 0.15), value: selectedTab)
         .padding(8)
         .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Color.white.opacity(0.05))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+            ZStack {
+                // Blur background
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                
+                // Gradient overlay for better contrast
+                LinearGradient(
+                    colors: [
+                        Color.black.opacity(0.3),
+                        Color.black.opacity(0.5)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
                 )
+                
+                // Border
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.3),
+                                Color.white.opacity(0.1)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 1
+                    )
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 20))
         )
+        .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
     }
     
+    /// Definición de las 3 tabs principales
+    /// - Returns: Array con título e ícono de cada tab
     private var tabs: [(title: String, icon: String)] {
         [
-            ("Compose", "music.note.list"),
-            ("Lyrics", "text.quote"),
-            ("Record", "waveform.circle.fill")
+            ("Compose", "music.note.list"),      // Tab 0: Composición
+            ("Lyrics", "text.quote"),             // Tab 1: Letras
+            ("Record", "waveform.circle.fill")    // Tab 2: Grabaciones
         ]
     }
 }
@@ -251,51 +307,7 @@ struct EditProjectSheet: View {
                     }
                     
                     // BPM
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Tempo (BPM)")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white)
-                        
-                        HStack {
-                            Button {
-                                if tempBPM > 40 {
-                                    tempBPM -= 1
-                                }
-                            } label: {
-                                Image(systemName: "minus.circle.fill")
-                                    .font(.title2)
-                                    .foregroundStyle(Color.cyan)
-                            }
-                            
-                            Spacer()
-                            
-                            Text("\(tempBPM)")
-                                .font(.system(size: 48, weight: .bold, design: .rounded))
-                                .foregroundStyle(.white)
-                                .monospacedDigit()
-                            
-                            Spacer()
-                            
-                            Button {
-                                if tempBPM < 300 {
-                                    tempBPM += 1
-                                }
-                            } label: {
-                                Image(systemName: "plus.circle.fill")
-                                    .font(.title2)
-                                    .foregroundStyle(Color.cyan)
-                            }
-                        }
-                        .padding(20)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.white.opacity(0.05))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.cyan.opacity(0.3), lineWidth: 1)
-                                )
-                        )
-                    }
+                    BPMSelector(bpm: $tempBPM)
                     
                     // Time Signature
                     VStack(alignment: .leading, spacing: 8) {
@@ -746,6 +758,104 @@ struct FlowLayout: Layout {
             
             self.size = CGSize(width: maxWidth, height: currentY + lineHeight)
         }
+    }
+}
+
+// MARK: - BPM Selector Component
+struct BPMSelector: View {
+    @Binding var bpm: Int
+    
+    private let gradientColors: [Color] = [.white, .white.opacity(0.7)]
+    private let sliderGradient: [Color] = [.purple, .blue, .cyan]
+    private let presets = [60, 90, 120, 140, 180]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Tempo")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+            
+            VStack(spacing: 16) {
+                bpmDisplay
+                bpmSlider
+                bpmPresets
+            }
+            .padding(20)
+            .background(bpmBackground)
+        }
+    }
+    
+    private var bpmDisplay: some View {
+        HStack {
+            Text("\(bpm)")
+                .font(.system(size: 72, weight: .bold, design: .rounded))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: gradientColors,
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .monospacedDigit()
+            
+            Text("BPM")
+                .font(.title3.weight(.medium))
+                .foregroundStyle(.secondary)
+                .padding(.top, 40)
+        }
+    }
+    
+    private var bpmSlider: some View {
+        Slider(value: Binding(
+            get: { Double(bpm) },
+            set: { bpm = Int($0) }
+        ), in: 40...240, step: 1)
+        .tint(
+            LinearGradient(
+                colors: sliderGradient,
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+        )
+    }
+    
+    private var bpmPresets: some View {
+        HStack {
+            ForEach(presets, id: \.self) { preset in
+                presetButton(preset)
+            }
+        }
+    }
+    
+    private func presetButton(_ preset: Int) -> some View {
+        Button {
+            withAnimation(.spring(response: 0.3)) {
+                bpm = preset
+            }
+        } label: {
+            Text("\(preset)")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(bpm == preset ? .white : .secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule()
+                        .fill(bpm == preset ? Color.cyan.opacity(0.2) : Color.white.opacity(0.05))
+                        .overlay(
+                            Capsule()
+                                .stroke(bpm == preset ? Color.cyan : Color.clear, lineWidth: 1)
+                        )
+                )
+        }
+    }
+    
+    private var bpmBackground: some View {
+        RoundedRectangle(cornerRadius: 12)
+            .fill(Color.white.opacity(0.05))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.cyan.opacity(0.3), lineWidth: 1)
+            )
     }
 }
 

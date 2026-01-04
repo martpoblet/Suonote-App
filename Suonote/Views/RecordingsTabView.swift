@@ -5,6 +5,7 @@ import AVFoundation
 struct RecordingsTabView: View {
     @Bindable var project: Project
     @StateObject private var audioManager = AudioRecordingManager()
+    @StateObject private var effectsProcessor = AudioEffectsProcessor()
     @State private var showingRecordingScreen = false
     @State private var showingTypePicker = false
     @State private var selectedRecordingType: RecordingType = .voice
@@ -13,6 +14,10 @@ struct RecordingsTabView: View {
     @State private var sortOrder: RecordingSortOrder = .dateDescending
     @State private var selectedRecording: Recording?
     @State private var selectedRecordingForLink: Recording?
+    @State private var showingEffects = false
+    @State private var selectedRecordingForDetail: Recording?
+    @State private var recordingToDelete: Recording?
+    @State private var showDeleteConfirmation = false
     
     enum RecordingSortOrder: String, CaseIterable {
         case dateDescending = "Newest First"
@@ -95,8 +100,33 @@ struct RecordingsTabView: View {
                 }
             )
         }
+        .sheet(isPresented: $showingEffects) {
+            AudioEffectsSheet(
+                settings: $effectsProcessor.settings,
+                onApply: {
+                    effectsProcessor.applyEffects()
+                }
+            )
+        }
+        .sheet(item: $selectedRecordingForDetail) { recording in
+            RecordingDetailView(
+                recording: recording,
+                sections: uniqueSections,
+                onUpdate: {
+                    // Recording updated
+                }
+            )
+        }
         .onAppear {
             audioManager.setup(project: project)
+        }
+        .alert("Delete Recording?", isPresented: $showDeleteConfirmation, presenting: recordingToDelete) { recording in
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                deleteRecording(recording)
+            }
+        } message: { recording in
+            Text("Are you sure you want to delete '\(recording.name)'? This action cannot be undone.")
         }
     }
     
@@ -144,7 +174,8 @@ struct RecordingsTabView: View {
             }
         }
         .padding(.horizontal, 24)
-        .padding(.vertical, 16)
+        .padding(.top, 24)  // Extra top padding to prevent overlap
+        .padding(.bottom, 16)
     }
     
     private var takesListView: some View {
@@ -166,7 +197,9 @@ struct RecordingsTabView: View {
                 
                 Spacer()
                 
-                Menu {
+                HStack(spacing: 16) {
+                    // Filter menu
+                    Menu {
                     // Type Filter
                     Menu("Filter by Type") {
                         Button {
@@ -223,10 +256,23 @@ struct RecordingsTabView: View {
                         }
                     }
                 } label: {
-                    Image(systemName: "line.3.horizontal.decrease.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.white)
-                        .symbolRenderingMode(.hierarchical)
+                    VStack(spacing: 4) {
+                        Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                            .font(.system(size: 20))
+                        Text("Filter")
+                            .font(.caption2.weight(.medium))
+                    }
+                    .foregroundStyle(.white)
+                    .frame(width: 70, height: 60)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.white.opacity(0.1))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.white.opacity(0.3), lineWidth: 1.5)
+                            )
+                    )
+                }
                 }
             }
             .padding(.horizontal, 24)
@@ -296,9 +342,11 @@ struct RecordingsTabView: View {
                 
                 Spacer()
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 10) {
-                        ForEach(filteredAndSortedRecordings) { recording in
+                List {
+                    ForEach(filteredAndSortedRecordings) { recording in
+                        Button(action: {
+                            selectedRecordingForDetail = recording
+                        }) {
                             ModernTakeCard(
                                 recording: recording,
                                 linkedSection: uniqueSections.first(where: { $0.id == recording.linkedSectionId }),
@@ -306,9 +354,13 @@ struct RecordingsTabView: View {
                                 onPlay: {
                                     if audioManager.currentlyPlayingRecording?.id == recording.id {
                                         audioManager.stopPlayback()
+                                        effectsProcessor.stop()
                                     } else {
-                                        audioManager.playRecording(recording)
+                                        playRecordingWithEffects(recording)
                                     }
+                                },
+                                onTap: {
+                                    selectedRecordingForDetail = recording
                                 },
                                 onLinkSection: {
                                     selectedRecordingForLink = recording
@@ -318,11 +370,39 @@ struct RecordingsTabView: View {
                                 }
                             )
                         }
+                        .buttonStyle(.plain)
+                        .listRowInsets(EdgeInsets(top: 5, leading: 24, bottom: 5, trailing: 24))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                recordingToDelete = recording
+                                showDeleteConfirmation = true
+                            } label: {
+                                Label("Delete", systemImage: "trash.fill")
+                            }
+                            
+                            if recording.linkedSectionId != nil {
+                                Button {
+                                    recording.linkedSectionId = nil
+                                } label: {
+                                    Label("Unlink", systemImage: "link.slash")
+                                }
+                                .tint(.orange)
+                            }
+                            
+                            Button {
+                                selectedRecordingForLink = recording
+                            } label: {
+                                Label(recording.linkedSectionId == nil ? "Link" : "Change Link", 
+                                      systemImage: recording.linkedSectionId == nil ? "link.badge.plus" : "link")
+                            }
+                            .tint(.purple)
+                        }
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 12)
-                    .padding(.bottom, 12)
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
         }
     }
@@ -330,6 +410,46 @@ struct RecordingsTabView: View {
     private func deleteRecording(_ recording: Recording) {
         if let index = project.recordings.firstIndex(where: { $0.id == recording.id }) {
             project.recordings.remove(at: index)
+        }
+    }
+    
+    private func getDocumentsDirectory() -> URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    }
+    
+    private func playRecordingWithEffects(_ recording: Recording) {
+        // Check if recording has individual effects
+        let hasEffects = recording.reverbEnabled || recording.delayEnabled || 
+                        recording.eqEnabled || recording.compressionEnabled
+        
+        if hasEffects {
+            // Apply recording's individual effects
+            effectsProcessor.settings.reverbEnabled = recording.reverbEnabled
+            effectsProcessor.settings.reverbMix = recording.reverbMix
+            effectsProcessor.settings.reverbSize = recording.reverbSize
+            
+            effectsProcessor.settings.delayEnabled = recording.delayEnabled
+            effectsProcessor.settings.delayTime = recording.delayTime
+            effectsProcessor.settings.delayFeedback = recording.delayFeedback
+            effectsProcessor.settings.delayMix = recording.delayMix
+            
+            effectsProcessor.settings.eqEnabled = recording.eqEnabled
+            effectsProcessor.settings.lowGain = recording.lowGain
+            effectsProcessor.settings.midGain = recording.midGain
+            effectsProcessor.settings.highGain = recording.highGain
+            
+            effectsProcessor.settings.compressionEnabled = recording.compressionEnabled
+            effectsProcessor.settings.compressionThreshold = recording.compressionThreshold
+            effectsProcessor.settings.compressionRatio = recording.compressionRatio
+            
+            effectsProcessor.applyEffects()
+            
+            let url = getDocumentsDirectory().appendingPathComponent(recording.fileName)
+            try? effectsProcessor.playAudio(url: url) {
+                // Playback finished
+            }
+        } else {
+            audioManager.playRecording(recording)
         }
     }
 }
@@ -370,37 +490,38 @@ struct ModernTakeCard: View {
     let linkedSection: SectionTemplate?
     let isPlaying: Bool
     let onPlay: () -> Void
+    let onTap: () -> Void
     let onLinkSection: () -> Void
     let onDelete: () -> Void
     
     var body: some View {
         HStack(spacing: 16) {
             // Play button with type indicator
-            Button(action: onPlay) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            isPlaying ? 
-                                LinearGradient(colors: [.green, .cyan], startPoint: .topLeading, endPoint: .bottomTrailing) :
-                                LinearGradient(colors: [recording.recordingType.color.opacity(0.3), recording.recordingType.color.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                        )
-                        .frame(width: 56, height: 56)
-                        .shadow(color: isPlaying ? Color.green.opacity(0.3) : recording.recordingType.color.opacity(0.2), radius: 8)
-                    
-                    if isPlaying {
-                        Image(systemName: "pause.fill")
-                            .font(.title3)
-                            .foregroundStyle(.white)
-                    } else {
-                        Image(systemName: "play.fill")
-                            .font(.title3)
-                            .foregroundStyle(.white)
-                            .offset(x: 2)
-                    }
+            ZStack {
+                Circle()
+                    .fill(
+                        isPlaying ? 
+                            LinearGradient(colors: [.green, .cyan], startPoint: .topLeading, endPoint: .bottomTrailing) :
+                            LinearGradient(colors: [recording.recordingType.color.opacity(0.3), recording.recordingType.color.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    )
+                    .frame(width: 56, height: 56)
+                    .shadow(color: isPlaying ? Color.green.opacity(0.3) : recording.recordingType.color.opacity(0.2), radius: 8)
+                
+                if isPlaying {
+                    Image(systemName: "pause.fill")
+                        .font(.title3)
+                        .foregroundStyle(.white)
+                } else {
+                    Image(systemName: "play.fill")
+                        .font(.title3)
+                        .foregroundStyle(.white)
+                        .offset(x: 2)
                 }
             }
-            .buttonStyle(.plain)
-            
+            .onTapGesture {
+                onPlay()
+            }
+        
             // Info section
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
@@ -468,52 +589,14 @@ struct ModernTakeCard: View {
             }
             
             Spacer()
-            
-            // Actions menu
-            Menu {
-                Button {
-                    onPlay()
-                } label: {
-                    Label(isPlaying ? "Pause" : "Play", systemImage: isPlaying ? "pause.fill" : "play.fill")
-                }
-                
-                Divider()
-                
-                Button {
-                    onLinkSection()
-                } label: {
-                    Label(linkedSection == nil ? "Link to Section" : "Change Section", systemImage: "link")
-                }
-                
-                if linkedSection != nil {
-                    Button {
-                        recording.linkedSectionId = nil
-                    } label: {
-                        Label("Unlink Section", systemImage: "link.circle.fill")
-                    }
-                }
-                
-                Divider()
-                
-                Button(role: .destructive) {
-                    onDelete()
-                } label: {
-                    Label("Delete", systemImage: "trash")
-                }
-            } label: {
-                Image(systemName: "ellipsis.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 44, height: 44)
-            }
         }
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(
-                    isPlaying ?
-                        Color.green.opacity(0.05) :
-                        Color.white.opacity(0.03)
+                    linkedSection != nil ?
+                        recording.recordingType.color.opacity(0.05) :
+                        (isPlaying ? Color.green.opacity(0.05) : Color.white.opacity(0.03))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
@@ -523,10 +606,10 @@ struct ModernTakeCard: View {
     }
     
     private var borderColor: Color {
-        if isPlaying {
+        if linkedSection != nil {
+            return recording.recordingType.color.opacity(0.6)
+        } else if isPlaying {
             return .green.opacity(0.5)
-        } else if linkedSection != nil {
-            return .purple.opacity(0.4)
         } else {
             return Color.white.opacity(0.1)
         }

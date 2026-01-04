@@ -34,7 +34,8 @@ struct LyricsTabView: View {
                         }
                     }
                     .padding(.horizontal, 24)
-                    .padding(.vertical, 20)
+                    .padding(.top, 20)  // Extra top padding to prevent overlap
+                    .padding(.bottom, 20)
                 }
             }
         }

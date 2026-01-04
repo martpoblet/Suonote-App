@@ -5,8 +5,8 @@ import SwiftData
 final class ChordEvent {
     var id: UUID
     var barIndex: Int
-    var beatOffset: Int
-    var duration: Int
+    var beatOffset: Double  // Changed to Double to support fractional beats
+    var duration: Double    // Duration in beats (0.5 = half beat, 1 = full beat, 2 = two beats)
     var root: String
     var quality: ChordQuality
     var extensions: [String]
@@ -17,8 +17,8 @@ final class ChordEvent {
     
     init(
         barIndex: Int,
-        beatOffset: Int,
-        duration: Int = 1,
+        beatOffset: Double,
+        duration: Double = 1.0,
         root: String,
         quality: ChordQuality = .major,
         extensions: [String] = [],

@@ -95,16 +95,15 @@ struct ChordPaletteView: View {
     }
     
     private func addChord(root: String, quality: ChordQuality) {
-        if let existing = section.chordEvents.first(where: { $0.barIndex == barIndex && $0.beatOffset == beatOffset }) {
+        if let existing = section.chordEvents.first(where: { $0.barIndex == barIndex && abs($0.beatOffset - Double(beatOffset)) < 0.01 }) {
             section.chordEvents.removeAll { $0.id == existing.id }
         }
         
-        let chord = ChordEvent(barIndex: barIndex, beatOffset: beatOffset, root: root, quality: quality)
-        chord.sectionTemplate = section
+        let chord = ChordEvent(barIndex: barIndex, beatOffset: Double(beatOffset), duration: 1.0, root: root, quality: quality)
         section.chordEvents.append(chord)
     }
     
     private func removeChord() {
-        section.chordEvents.removeAll { $0.barIndex == barIndex && $0.beatOffset == beatOffset }
+        section.chordEvents.removeAll { $0.barIndex == barIndex && abs($0.beatOffset - Double(beatOffset)) < 0.01 }
     }
 }

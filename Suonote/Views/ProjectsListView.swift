@@ -10,9 +10,16 @@ struct ProjectsListView: View {
     @State private var selectedTag: String?
     @State private var showingCreateSheet = false
     @State private var scrollOffset: CGFloat = 0
+    @State private var projectToDelete: Project?
+    @State private var showDeleteConfirmation = false
     
     var filteredProjects: [Project] {
         var projects = allProjects
+        
+        // Always exclude archived unless explicitly filtering for archived
+        if selectedStatus != .archived {
+            projects = projects.filter { $0.status != .archived }
+        }
         
         if !searchText.isEmpty {
             projects = projects.filter { project in
@@ -65,34 +72,44 @@ struct ProjectsListView: View {
                 // Projects grid
                 if filteredProjects.isEmpty {
                     emptyStateView
+                    .padding(.top, 16)
                 } else {
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            ForEach(filteredProjects) { project in
-                                NavigationLink(destination: ProjectDetailView(project: project)) {
-                                    ModernProjectCard(project: project)
+                    List {
+                        ForEach(filteredProjects) { project in
+                            NavigationLink(destination: ProjectDetailView(project: project)) {
+                                ModernProjectCard(project: project)
+                            }
+                            .listRowInsets(EdgeInsets(top: 6, leading: 24, bottom: 6, trailing: 24))
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button(role: .destructive) {
+                                    projectToDelete = project
+                                    showDeleteConfirmation = true
+                                } label: {
+                                    Label("Delete", systemImage: "trash.fill")
                                 }
-                                .buttonStyle(.plain)
-                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                    Button(role: .destructive) {
-                                        deleteProject(project)
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                    
-                                    Button {
-                                        archiveProject(project)
-                                    } label: {
-                                        Label(project.status == .archived ? "Unarchive" : "Archive", 
-                                              systemImage: project.status == .archived ? "tray.and.arrow.up" : "archivebox")
-                                    }
-                                    .tint(.orange)
+                                
+                                Button {
+                                    archiveProject(project)
+                                } label: {
+                                    Label(project.status == .archived ? "Unarchive" : "Archive", 
+                                          systemImage: project.status == .archived ? "tray.and.arrow.up.fill" : "archivebox.fill")
                                 }
+                                .tint(.orange)
+                                
+                                Button {
+                                    cloneProject(project)
+                                } label: {
+                                    Label("Clone", systemImage: "doc.on.doc.fill")
+                                }
+                                .tint(.blue)
                             }
                         }
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 20)
                     }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .contentMargins(.top, 16, for: .scrollContent)  // Add top padding
                 }
             }
             
@@ -111,13 +128,21 @@ struct ProjectsListView: View {
         .sheet(isPresented: $showingCreateSheet) {
             CreateProjectView()
         }
+        .alert("Delete Project?", isPresented: $showDeleteConfirmation, presenting: projectToDelete) { project in
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                deleteProject(project)
+            }
+        } message: { project in
+            Text("Are you sure you want to delete '\(project.title)'? This action cannot be undone.")
+        }
         .preferredColorScheme(.dark)
     }
     
     private var customHeader: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Your Ideas")
-                .font(.system(size: 44, weight: .bold, design: .rounded))
+                .font(.system(size: 44, weight: .bold))
                 .foregroundStyle(
                     LinearGradient(
                         colors: [.white, Color(white: 0.8)],
@@ -266,17 +291,60 @@ struct ProjectsListView: View {
     }
     
     private func deleteProject(_ project: Project) {
-        withAnimation {
-            modelContext.delete(project)
-            try? modelContext.save()
-        }
+        // The confirmation alert is handled by swipeActions' role: .destructive
+        modelContext.delete(project)
+        try? modelContext.save()
     }
     
     private func archiveProject(_ project: Project) {
-        withAnimation {
-            project.status = project.status == .archived ? .idea : .archived
-            project.updatedAt = Date()
-            try? modelContext.save()
+        project.status = project.status == .archived ? .idea : .archived
+        project.updatedAt = Date()
+        try? modelContext.save()
+    }
+    
+    private func cloneProject(_ project: Project) {
+        // Create clone in background to avoid animation conflicts
+        DispatchQueue.main.async {
+            let clonedProject = Project(
+                title: "\(project.title) (Copy)",
+                status: project.status,
+                tags: project.tags,
+                keyRoot: project.keyRoot,
+                keyMode: project.keyMode,
+                bpm: project.bpm,
+                timeTop: project.timeTop,
+                timeBottom: project.timeBottom
+            )
+            
+            // Clone arrangement items and sections
+            for item in project.arrangementItems {
+                if let originalSection = item.sectionTemplate {
+                    let clonedSection = SectionTemplate(
+                        name: originalSection.name,
+                        bars: originalSection.bars
+                    )
+                    
+                    // Clone chord events
+                    for chordEvent in originalSection.chordEvents {
+                        let clonedChord = ChordEvent(
+                            barIndex: chordEvent.barIndex,
+                            beatOffset: chordEvent.beatOffset,
+                            duration: chordEvent.duration,
+                            root: chordEvent.root,
+                            quality: chordEvent.quality,
+                            extensions: chordEvent.extensions
+                        )
+                        clonedSection.chordEvents.append(clonedChord)
+                    }
+                    
+                    let clonedArrangementItem = ArrangementItem(orderIndex: item.orderIndex)
+                    clonedArrangementItem.sectionTemplate = clonedSection
+                    clonedProject.arrangementItems.append(clonedArrangementItem)
+                }
+            }
+            
+            self.modelContext.insert(clonedProject)
+            try? self.modelContext.save()
         }
     }
 }
@@ -361,33 +429,26 @@ struct ModernProjectCard: View {
                 
                 // Tags
                 if !project.tags.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                            ForEach(project.tags.prefix(2), id: \.self) { tag in
-                                Text(tag)
-                                    .font(.caption2.weight(.medium))
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 3)
-                                    .background(Color.cyan.opacity(0.15))
-                                    .foregroundStyle(.cyan)
-                                    .clipShape(Capsule())
-                            }
-                            if project.tags.count > 2 {
-                                Text("+\(project.tags.count - 2)")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
+                    HStack(spacing: 6) {
+                        ForEach(project.tags.prefix(2), id: \.self) { tag in
+                            Text(tag)
+                                .font(.caption2.weight(.medium))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.cyan.opacity(0.15))
+                                .foregroundStyle(.cyan)
+                                .clipShape(Capsule())
+                        }
+                        if project.tags.count > 2 {
+                            Text("+\(project.tags.count - 2)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
             }
             
             Spacer()
-            
-            // Chevron
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
         }
         .padding(16)
         .background(

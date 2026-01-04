@@ -17,9 +17,6 @@ struct ActiveRecordingView: View {
     @State private var isInCountIn = false
     @State private var countInBeats = 0
     @State private var pulseScale: CGFloat = 1.0
-    @State private var metronomeEnabled = false
-    @State private var hapticEnabled = true
-    @State private var showingMetronomeSettings = false
     @State private var isReadyToRecord = true
     @State private var showingTypePicker = false
     
@@ -43,12 +40,23 @@ struct ActiveRecordingView: View {
             )
             .ignoresSafeArea()
             
-            // Pulse border overlay
+            // Pulse border overlay with blur
             if !isInCountIn && audioManager.isRecording {
-                RoundedRectangle(cornerRadius: 0)
-                    .stroke(currentBeat == 0 ? Color.red : Color.orange, lineWidth: 8)
+                RoundedRectangle(cornerRadius: 50)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                currentBeat == 0 ? Color.red : Color.orange,
+                                (currentBeat == 0 ? Color.red : Color.orange).opacity(0.3)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 12
+                    )
                     .scaleEffect(pulseScale)
-                    .opacity(0.6)
+                    .blur(radius: 8)
+                    .opacity(0.8)
                     .ignoresSafeArea()
                     .animation(.easeOut(duration: 0.1), value: pulseScale)
             }
@@ -80,9 +88,6 @@ struct ActiveRecordingView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .preferredColorScheme(.dark)
-        .sheet(isPresented: $showingMetronomeSettings) {
-            metronomeSettingsSheet
-        }
         .sheet(isPresented: $showingTypePicker) {
             RecordingTypePickerSheet(selectedType: $selectedRecordingType)
         }
@@ -125,16 +130,9 @@ struct ActiveRecordingView: View {
                 
                 Spacer()
                 
-                // Metronome settings button
-                Button {
-                    showingMetronomeSettings = true
-                } label: {
-                    Image(systemName: metronomeEnabled ? "metronome.fill" : "metronome")
-                        .font(.title3)
-                        .foregroundStyle(metronomeEnabled ? .orange : .white)
-                        .frame(width: 44, height: 44)
-                        .background(Circle().fill(Color.white.opacity(0.1)))
-                }
+                // Spacer for symmetry
+                Color.clear
+                    .frame(width: 44, height: 44)
             }
             .padding(.horizontal, 24)
         }
@@ -403,18 +401,20 @@ struct ActiveRecordingView: View {
         let interval = 60.0 / Double(project.bpm)
         let totalCountInBeats = project.timeTop * 1 // 1 bar count-in
         
-        // Start immediately
+        // Visual pulse for count-in
         countInBeats = 0
+        isInCountIn = true
         
+        // Timer for each count-in beat
         Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { timer in
-            countInBeats += 1
+            self.countInBeats += 1
             
-            if countInBeats >= totalCountInBeats {
+            if self.countInBeats >= totalCountInBeats {
                 timer.invalidate()
                 withAnimation {
-                    isInCountIn = false
+                    self.isInCountIn = false
                 }
-                // Start recording immediately without delay
+                // Start recording immediately
                 DispatchQueue.main.async {
                     self.startRecording()
                 }
@@ -432,172 +432,28 @@ struct ActiveRecordingView: View {
         let beatInterval = 60.0 / Double(project.bpm)
         beatTimer = Timer.scheduledTimer(withTimeInterval: beatInterval, repeats: true) { _ in
             withAnimation(.spring(response: 0.2)) {
-                currentBeat = (currentBeat + 1) % project.timeTop
-                if currentBeat == 0 {
-                    currentBar += 1
+                self.currentBeat = (self.currentBeat + 1) % self.project.timeTop
+                if self.currentBeat == 0 {
+                    self.currentBar += 1
                 }
             }
             
             // Visual pulse
-            pulseScale = 1.05
+            self.pulseScale = 1.08
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                pulseScale = 1.0
+                self.pulseScale = 1.0
             }
-            
-            // Haptic feedback
-            if hapticEnabled {
-                if currentBeat == 0 {
-                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-                } else {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                }
-            }
-            
-            // Audio click
-            if metronomeEnabled {
-                AudioServicesPlaySystemSound(currentBeat == 0 ? 1054 : 1053)
-            }
-            
-            // Simulate audio levels
-            audioLevels.removeFirst()
-            audioLevels.append(Float.random(in: 0.2...1.0))
         }
         
-        // Elapsed time timer
-        timeTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { timer in
-            if audioManager.isRecording {
-                elapsedTime += 0.1
-            } else {
-                timer.invalidate()
+        // Time timer
+        timeTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+            self.elapsedTime += 0.1
+            // Simulate audio levels
+            if self.audioLevels.count > 0 {
+                self.audioLevels.removeFirst()
+                self.audioLevels.append(Float.random(in: 0.2...1.0))
             }
         }
-    }
-    
-    private var metronomeSettingsSheet: some View {
-        NavigationStack {
-            VStack(spacing: 24) {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Metronome & Feedback")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                    
-                    // Haptic feedback toggle
-                    Toggle(isOn: $hapticEnabled) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "hand.tap.fill")
-                                .font(.title3)
-                                .foregroundStyle(.blue)
-                                .frame(width: 40)
-                            
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Vibration")
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(.white)
-                                
-                                Text("Feel the beat while recording")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .tint(.blue)
-                    
-                    Divider()
-                        .overlay(Color.white.opacity(0.1))
-                    
-                    // Audio metronome toggle
-                    VStack(alignment: .leading, spacing: 12) {
-                        Toggle(isOn: $metronomeEnabled) {
-                            HStack(spacing: 12) {
-                                Image(systemName: "speaker.wave.2.fill")
-                                    .font(.title3)
-                                    .foregroundStyle(.orange)
-                                    .frame(width: 40)
-                                
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Audio Click")
-                                        .font(.subheadline.weight(.semibold))
-                                        .foregroundStyle(.white)
-                                    
-                                    Text("Hear the metronome")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                        .tint(.orange)
-                        
-                        if metronomeEnabled {
-                            HStack(spacing: 8) {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .font(.caption)
-                                    .foregroundStyle(.yellow)
-                                
-                                Text("Warning: Click will be recorded. Use headphones!")
-                                    .font(.caption2)
-                                    .foregroundStyle(.yellow)
-                            }
-                            .padding(12)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(Color.yellow.opacity(0.1))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .stroke(Color.yellow.opacity(0.3), lineWidth: 1)
-                                    )
-                            )
-                        }
-                    }
-                }
-                .padding(20)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color.white.opacity(0.05))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                        )
-                )
-                
-                Spacer()
-                
-                Button {
-                    showingMetronomeSettings = false
-                } label: {
-                    Text("Done")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(
-                            Capsule()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [.purple, .blue],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                        )
-                }
-            }
-            .padding(24)
-            .background(
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.05, green: 0.05, blue: 0.15),
-                        Color(red: 0.1, green: 0.05, blue: 0.2),
-                        Color.black
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .navigationTitle("Recording Settings")
-            .navigationBarTitleDisplayMode(.inline)
-        }
-        .preferredColorScheme(.dark)
-        .presentationDetents([.medium])
     }
     
     private func cleanup() {

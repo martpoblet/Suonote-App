@@ -17,6 +17,25 @@ final class Recording {
     var linkedSectionId: UUID?
     private var _recordingType: String?
     
+    // Audio Effects Settings
+    var reverbEnabled: Bool = false
+    var reverbMix: Float = 0.5
+    var reverbSize: Float = 0.5
+    
+    var delayEnabled: Bool = false
+    var delayTime: Float = 0.3
+    var delayFeedback: Float = 0.3
+    var delayMix: Float = 0.3
+    
+    var eqEnabled: Bool = false
+    var lowGain: Float = 0
+    var midGain: Float = 0
+    var highGain: Float = 0
+    
+    var compressionEnabled: Bool = false
+    var compressionThreshold: Float = -20
+    var compressionRatio: Float = 4.0
+    
     var project: Project?
     
     var recordingType: RecordingType {

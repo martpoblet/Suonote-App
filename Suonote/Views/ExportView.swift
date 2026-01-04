@@ -280,7 +280,7 @@ class MIDIExporter {
             guard let section = item.sectionTemplate else { continue }
             
             for chord in section.chordEvents.sorted(by: { ($0.barIndex, $0.beatOffset) < ($1.barIndex, $1.beatOffset) }) {
-                let chordTick = currentTick + UInt32(chord.barIndex * project.timeTop + chord.beatOffset) * ticksPerBeat
+                let chordTick = currentTick + UInt32(Double(chord.barIndex * project.timeTop) + chord.beatOffset) * ticksPerBeat
                 let deltaTime = chordTick - currentTick
                 
                 // Note on

@@ -2,6 +2,7 @@ import Foundation
 import AVFoundation
 import SwiftData
 import Combine
+import UIKit
 
 class AudioRecordingManager: NSObject, ObservableObject {
     @Published var isRecording = false
@@ -119,17 +120,28 @@ class AudioRecordingManager: NSObject, ObservableObject {
         let interval = 1.0 / beatsPerSecond
         
         var beatCount = 0
-        let totalBeats = countInBars * (project?.timeTop ?? 4)
+        let totalCountInBeats = countInBars * (project?.timeTop ?? 4)
         
         metronomeTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] timer in
-            guard let self = self else { return }
-            
-            if beatCount >= totalBeats && self.isRecording {
+            guard let self = self else { 
                 timer.invalidate()
                 return
             }
             
-            self.playClickSound(isAccent: beatCount % (self.project?.timeTop ?? 4) == 0)
+            // Play click sound for both count-in and recording
+            let beatsPerBar = self.project?.timeTop ?? 4
+            let isAccent = beatCount % beatsPerBar == 0
+            self.playClickSound(isAccent: isAccent)
+            
+            // Trigger haptic feedback if recording has started
+            if beatCount >= totalCountInBeats && self.isRecording {
+                if isAccent {
+                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                } else {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                }
+            }
+            
             beatCount += 1
         }
     }
