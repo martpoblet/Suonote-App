@@ -19,6 +19,8 @@ struct ComposeTabView: View {
     @State private var showingChordPalette = false
     @State private var selectedChordSlot: ChordSlot?
     @State private var draggingChord: ChordDragInfo?
+    @State private var draggingArrangementItemId: UUID?
+    @State private var lastTimelineReorderTargetId: UUID?
     @State private var showingKeyPicker = false
     @State private var showingExport = false
     @State private var showingEditSheet = false
@@ -74,7 +76,7 @@ struct ComposeTabView: View {
                         // Editor de sección(es)
                         if showAllSections {
                             // Mostrar todas las secciones expandidas con drag & drop
-                            ForEach(sortedItems) { item in
+                            ForEach(Array(sortedItems.enumerated()), id: \.element.id) { _, item in
                                 if let section = item.sectionTemplate {
                                     sectionEditor(section, recordings: recordingsBySectionId[section.id] ?? [])
                                         .id(section.id)
@@ -319,7 +321,7 @@ struct ComposeTabView: View {
                     )
                     
                     // Section cards - draggable
-                    ForEach(items) { item in
+                    ForEach(Array(items.enumerated()), id: \.element.id) { _, item in
                         if let section = item.sectionTemplate {
                             SectionTimelineCard(
                                 section: section,
@@ -336,11 +338,113 @@ struct ComposeTabView: View {
                                 },
                                 linkedRecordingsCount: recordingsBySectionId[section.id]?.count ?? 0
                             )
+                            .onDrag {
+                                draggingArrangementItemId = item.id
+                                return NSItemProvider(object: item.id.uuidString as NSString)
+                            }
+                            .onDrop(of: [UTType.text], delegate: arrangementDropDelegate(for: item))
                         }
                     }
                 }
                 .padding(.vertical, 4)
             }
+        }
+    }
+
+    private func handleArrangementDrop(
+        _ providers: [NSItemProvider],
+        targetItem: ArrangementItem
+    ) -> Bool {
+        let handled = loadArrangementItemId(from: providers) { sourceId in
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                moveArrangementItem(sourceId: sourceId, targetId: targetItem.id)
+            }
+            draggingArrangementItemId = nil
+            lastTimelineReorderTargetId = nil
+        }
+        return handled
+    }
+
+    private func handleArrangementHover(targetItem: ArrangementItem) {
+        guard let sourceId = draggingArrangementItemId,
+              sourceId != targetItem.id else {
+            return
+        }
+
+        if lastTimelineReorderTargetId == targetItem.id {
+            return
+        }
+        lastTimelineReorderTargetId = targetItem.id
+
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
+            moveArrangementItem(sourceId: sourceId, targetId: targetItem.id, shouldSave: false)
+        }
+    }
+
+    private func arrangementDropDelegate(for item: ArrangementItem) -> ArrangementDropDelegate {
+        ArrangementDropDelegate(
+            targetItem: item,
+            onItemHovered: { target in
+                handleArrangementHover(targetItem: target)
+            },
+            onDrop: { target, providers in
+                handleArrangementDrop(providers, targetItem: target)
+            },
+            onExit: { lastTimelineReorderTargetId = nil }
+        )
+    }
+
+    private func loadArrangementItemId(
+        from providers: [NSItemProvider],
+        perform: @escaping (UUID) -> Void
+    ) -> Bool {
+        guard let provider = providers.first(where: { $0.canLoadObject(ofClass: NSString.self) }) else {
+            return false
+        }
+
+        provider.loadObject(ofClass: NSString.self) { object, _ in
+            let stringValue: String?
+            if let value = object as? String {
+                stringValue = value
+            } else if let value = object as? NSString {
+                stringValue = value as String
+            } else {
+                stringValue = nil
+            }
+
+            guard let stringValue,
+                  let id = UUID(uuidString: stringValue) else {
+                return
+            }
+
+            DispatchQueue.main.async {
+                perform(id)
+            }
+        }
+
+        return true
+    }
+
+    private func moveArrangementItem(sourceId: UUID, targetId: UUID, shouldSave: Bool = true) {
+        guard sourceId != targetId else { return }
+
+        var ordered = project.arrangementItems.sorted { $0.orderIndex < $1.orderIndex }
+        guard let sourceIndex = ordered.firstIndex(where: { $0.id == sourceId }),
+              let targetIndex = ordered.firstIndex(where: { $0.id == targetId }) else {
+            return
+        }
+
+        let movedItem = ordered.remove(at: sourceIndex)
+        let destinationIndex = min(targetIndex, ordered.count)
+        ordered.insert(movedItem, at: destinationIndex)
+
+        for (newIndex, item) in ordered.enumerated() {
+            item.orderIndex = newIndex
+        }
+
+        project.arrangementItems = ordered
+        if shouldSave {
+            try? modelContext.save()
         }
     }
     
@@ -558,6 +662,33 @@ struct SectionTimelineCard: View {
     }
 }
 
+struct ArrangementDropDelegate: DropDelegate {
+    let targetItem: ArrangementItem
+    let onItemHovered: (ArrangementItem) -> Void
+    let onDrop: (ArrangementItem, [NSItemProvider]) -> Bool
+    let onExit: () -> Void
+
+    func validateDrop(info: DropInfo) -> Bool {
+        info.hasItemsConforming(to: [UTType.text])
+    }
+
+    func dropEntered(info: DropInfo) {
+        onItemHovered(targetItem)
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func dropExited(info: DropInfo) {
+        onExit()
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        onDrop(targetItem, info.itemProviders(for: [UTType.text]))
+    }
+}
+
 struct ChordSlot: Identifiable {
     let id = UUID()
     let barIndex: Int
@@ -679,6 +810,10 @@ struct SwipeActionRow<Content: View>: View {
         return min(1, revealWidth / actionsWidth)
     }
     
+    private var effectiveRevealWidth: CGFloat {
+        min(revealWidth, actionsWidth)
+    }
+    
     var body: some View {
         ZStack(alignment: .trailing) {
             actionButtons
@@ -732,8 +867,8 @@ struct SwipeActionRow<Content: View>: View {
     }
     
     private func buttonProgress(for index: Int) -> CGFloat {
-        let start = min(0.8, CGFloat(index) * 0.4)
-        let raw = (revealProgress - start) / max(0.001, (1 - start))
+        let threshold = CGFloat(index) * (buttonSize + buttonSpacing)
+        let raw = (effectiveRevealWidth - threshold) / buttonSize
         return max(0, min(1, raw))
     }
     
@@ -807,6 +942,8 @@ struct BarRow: View {
     @Binding var draggingChord: ChordDragInfo?
     @State private var isBarDropTargeted = false
     
+    private let slotSpacing: CGFloat = 6
+    
     var body: some View {
         let slots = slotsForBar(barIndex)
         
@@ -820,6 +957,12 @@ struct BarRow: View {
     
     private var swipeActions: [SwipeActionItem] {
         var items: [SwipeActionItem] = []
+        items.append(
+            SwipeActionItem(systemImage: "doc.on.doc.fill", tint: .blue, role: nil) {
+                cloneBar()
+            }
+        )
+        
         if section.bars > 1 {
             items.append(
                 SwipeActionItem(systemImage: "trash.fill", tint: .red, role: .destructive) {
@@ -827,12 +970,6 @@ struct BarRow: View {
                 }
             )
         }
-        
-        items.append(
-            SwipeActionItem(systemImage: "doc.on.doc.fill", tint: .blue, role: nil) {
-                cloneBar()
-            }
-        )
         
         return items
     }
@@ -923,13 +1060,15 @@ struct BarRow: View {
         let hasEmptySlot = slots.contains { $0.chord == nil }
         
         return GeometryReader { geometry in
-            HStack(spacing: 0) {
+            let totalSpacing = slotSpacing * CGFloat(max(indexedSlots.count - 1, 0))
+            let availableWidth = max(0, geometry.size.width - totalSpacing)
+            
+            HStack(spacing: slotSpacing) {
                 ForEach(indexedSlots, id: \.offset) { _, slot in
-                    slotView(slot: slot, totalWidth: geometry.size.width)
+                    slotView(slot: slot, totalWidth: availableWidth)
                 }
-                
-                Spacer(minLength: 0)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(height: 50)
         .contentShape(Rectangle())
@@ -963,6 +1102,21 @@ struct BarRow: View {
             )
             .frame(width: widthForDuration(chord.duration, totalWidth: totalWidth))
             .frame(height: 50)
+            .contextMenu {
+                if canDuplicateChord(chord) {
+                    Button {
+                        duplicateChord(chord)
+                    } label: {
+                        Label("Duplicate", systemImage: "doc.on.doc.fill")
+                    }
+                }
+                
+                Button(role: .destructive) {
+                    deleteChord(chord)
+                } label: {
+                    Label("Delete", systemImage: "trash.fill")
+                }
+            }
             .id("\(barIndex)-\(slot.beatOffset)-\(chord.id)")
         } else {
             let showBlocked = isBarDropTargeted && !canDropInBar()
@@ -1033,6 +1187,46 @@ struct BarRow: View {
     private func widthForDuration(_ duration: Double, totalWidth: CGFloat) -> CGFloat {
         let beatWidth = totalWidth / CGFloat(beatsPerBar)
         return beatWidth * CGFloat(duration)
+    }
+    
+    private func duplicateChord(_ chord: ChordEvent) {
+        guard let targetBeat = duplicateTargetBeat(for: chord) else {
+            return
+        }
+        
+        let clonedChord = ChordEvent(
+            barIndex: barIndex,
+            beatOffset: targetBeat,
+            duration: chord.duration,
+            root: chord.root,
+            quality: chord.quality,
+            extensions: chord.extensions,
+            slashRoot: chord.slashRoot
+        )
+        clonedChord.sectionTemplate = section
+        section.chordEvents.append(clonedChord)
+    }
+    
+    private func deleteChord(_ chord: ChordEvent) {
+        if let index = section.chordEvents.firstIndex(where: { $0.id == chord.id }) {
+            section.chordEvents.remove(at: index)
+        }
+    }
+    
+    private func canDuplicateChord(_ chord: ChordEvent) -> Bool {
+        duplicateTargetBeat(for: chord) != nil
+    }
+    
+    private func duplicateTargetBeat(for chord: ChordEvent) -> Double? {
+        let chordEnd = chord.beatOffset + chord.duration
+        let barEnd = Double(beatsPerBar)
+        guard chordEnd < barEnd - 0.0001 else { return nil }
+        
+        return nextAvailableBeat(
+            for: chord.duration,
+            startingAt: chordEnd,
+            excluding: nil
+        )
     }
     
     private func canDropInBar() -> Bool {
@@ -1151,12 +1345,46 @@ struct BarRow: View {
         return min(endPositions.max() ?? 0, Double(beatsPerBar))
     }
     
+    private func nextAvailableBeat(
+        for duration: Double,
+        startingAt startBeat: Double,
+        excluding excluded: ChordEvent?
+    ) -> Double? {
+        let maxStart = Double(beatsPerBar) - duration
+        guard maxStart >= 0 else { return nil }
+        guard startBeat <= maxStart else { return nil }
+        
+        var beat = max(0, startBeat)
+        beat = (beat * 2).rounded(.up) / 2
+        
+        while beat <= maxStart + 0.0001 {
+            if canPlaceDuration(duration, targetBeatOffset: beat, excluding: excluded) {
+                return beat
+            }
+            beat += 0.5
+        }
+        
+        return nil
+    }
+    
     private func canPlaceChord(
         _ chord: ChordEvent,
         targetBeatOffset: Double,
         excluding excluded: ChordEvent?
     ) -> Bool {
-        let endBeat = targetBeatOffset + chord.duration
+        canPlaceDuration(
+            chord.duration,
+            targetBeatOffset: targetBeatOffset,
+            excluding: excluded
+        )
+    }
+    
+    private func canPlaceDuration(
+        _ duration: Double,
+        targetBeatOffset: Double,
+        excluding excluded: ChordEvent?
+    ) -> Bool {
+        let endBeat = targetBeatOffset + duration
         guard endBeat <= Double(beatsPerBar) else { return false }
         
         let chordsInBar = section.chordEvents.filter { event in
