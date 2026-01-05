@@ -52,19 +52,10 @@ struct RecordingDetailView: View {
                         dismiss()
                     }
                 }
-                
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        playWithEffects()
-                    } label: {
-                        Image(systemName: isPlaying ? "stop.circle.fill" : "play.circle.fill")
-                            .font(.title2)
-                            .foregroundStyle(recording.recordingType.color)
-                    }
-                }
             }
         }
         .preferredColorScheme(.dark)
+        .presentationDetents([.large])
         .sheet(isPresented: $showingTypePicker) {
             RecordingTypePickerSheet(selectedType: Binding(
                 get: { recording.recordingType },
@@ -118,6 +109,14 @@ struct RecordingDetailView: View {
                 }
                 
                 Spacer()
+                
+                Button {
+                    playWithEffects()
+                } label: {
+                    Image(systemName: isPlaying ? "stop.circle.fill" : "play.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(recording.recordingType.color)
+                }
             }
         }
     }
@@ -256,7 +255,7 @@ struct RecordingDetailView: View {
                             get: { recording.delayTime },
                             set: { recording.delayTime = $0 }
                         ),
-                        range: 0.1...2.0,
+                        range: 0.1...0.8,
                         format: "%.2fs"
                     )
                     
@@ -431,6 +430,7 @@ struct RecordingDetailView: View {
             effectsProcessor.stop()
             isPlaying = false
         } else {
+            loadEffectsFromRecording()
             let url = getDocumentsDirectory().appendingPathComponent(recording.fileName)
             try? effectsProcessor.playAudio(url: url) {
                 isPlaying = false

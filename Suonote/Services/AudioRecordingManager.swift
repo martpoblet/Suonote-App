@@ -14,7 +14,7 @@ class AudioRecordingManager: NSObject, ObservableObject {
     private var metronomeTimer: Timer?
     
     private var project: Project?
-    private var isAudioSessionConfigured = false
+    private static var isAudioSessionConfigured = false
     private var recordingStartTime: Date?
     private var countInBars = 1
     private var clickEnabled = true
@@ -22,12 +22,12 @@ class AudioRecordingManager: NSObject, ObservableObject {
     
     func setup(project: Project) {
         self.project = project
-        guard !isAudioSessionConfigured else { return }
+        guard !Self.isAudioSessionConfigured else { return }
         
         do {
             try AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
             try AVAudioSession.sharedInstance().setActive(true)
-            isAudioSessionConfigured = true
+            Self.isAudioSessionConfigured = true
         } catch {
             print("Failed to setup audio session: \(error)")
         }

@@ -4,6 +4,7 @@ struct ChordDiagramView: View {
     let root: String
     let quality: ChordQuality
     let extensions: [String]
+    let accentColor: Color
     @State private var selectedInstrument: ChordInstrument = .piano
     
     enum ChordInstrument: String, CaseIterable {
@@ -12,6 +13,13 @@ struct ChordDiagramView: View {
     }
     
     var body: some View {
+        let chordNotes = ChordNoteCalculator.notes(
+            root: root,
+            quality: quality,
+            extensions: extensions
+        )
+        let display = root + quality.symbol + extensions.joined()
+        
         VStack(spacing: 20) {
             // Instrument selector
             Picker("Instrument", selection: $selectedInstrument) {
@@ -20,73 +28,33 @@ struct ChordDiagramView: View {
                 }
             }
             .pickerStyle(.segmented)
+            .tint(accentColor)
             .padding(.horizontal, 24)
             
             // Diagram
             switch selectedInstrument {
             case .piano:
-                PianoChordDiagram(root: root, quality: quality)
+                PianoChordDiagram(notes: chordNotes, accentColor: accentColor)
             case .guitar:
-                GuitarChordDiagram(root: root, quality: quality)
+                GuitarChordDiagram(root: root, quality: quality, accentColor: accentColor)
             }
+            
+            ChordNoteChips(display: display, notes: chordNotes, accentColor: accentColor)
         }
     }
 }
 
 // MARK: - Piano Diagram
 
-struct PianoChordDiagram: View {
-    let root: String
-    let quality: ChordQuality
+private struct PianoChordDiagram: View {
+    let notes: [String]
+    let accentColor: Color
     
     private let whiteKeys = ["C", "D", "E", "F", "G", "A", "B"]
     private let blackKeyPositions = [1, 2, 4, 5, 6] // Positions after C, D, F, G, A
     
-    private var chordNotes: [String] {
-        getChordNotes(root: root, quality: quality)
-    }
-    
-    private func getChordNotes(root: String, quality: ChordQuality) -> [String] {
-        let notes = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-        guard let rootIndex = notes.firstIndex(of: root) else { return [] }
-        
-        var intervals: [Int] = []
-        switch quality {
-        case .major:
-            intervals = [0, 4, 7]
-        case .minor:
-            intervals = [0, 3, 7]
-        case .diminished:
-            intervals = [0, 3, 6]
-        case .augmented:
-            intervals = [0, 4, 8]
-        case .dominant7:
-            intervals = [0, 4, 7, 10]
-        case .major7:
-            intervals = [0, 4, 7, 11]
-        case .minor7:
-            intervals = [0, 3, 7, 10]
-        case .sus2:
-            intervals = [0, 2, 7]
-        case .sus4:
-            intervals = [0, 5, 7]
-        }
-        
-        return intervals.map { notes[(rootIndex + $0) % 12] }
-    }
-    
     private func isNoteInChord(_ note: String) -> Bool {
-        // Check if the note is directly in the chord notes
-        if chordNotes.contains(note) {
-            return true
-        }
-        
-        // For sharps, check enharmonic equivalents
-        if note.contains("#") {
-            return chordNotes.contains(note)
-        }
-        
-        return false
+        notes.contains(note)
     }
     
     var body: some View {
@@ -107,7 +75,7 @@ struct PianoChordDiagram: View {
                             let isActive = isNoteInChord(note)
                             
                             RoundedRectangle(cornerRadius: 4)
-                                .fill(isActive ? Color.purple.opacity(0.3) : Color.white)
+                                .fill(isActive ? accentColor.opacity(0.3) : Color.white)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 4)
                                         .stroke(Color.black, lineWidth: 1)
@@ -117,7 +85,7 @@ struct PianoChordDiagram: View {
                                         Spacer()
                                         if isActive {
                                             Circle()
-                                                .fill(Color.purple)
+                                                .fill(accentColor)
                                                 .frame(width: 12, height: 12)
                                                 .padding(.bottom, 8)
                                         }
@@ -135,7 +103,7 @@ struct PianoChordDiagram: View {
                                 let isActive = isNoteInChord(blackNote)
                                 
                                 RoundedRectangle(cornerRadius: 3)
-                                    .fill(isActive ? Color.purple : Color.black)
+                                    .fill(isActive ? accentColor : Color.black)
                                     .frame(width: keyWidth * 0.6, height: keyHeight * 0.6)
                                     .overlay(
                                         VStack {
@@ -159,47 +127,16 @@ struct PianoChordDiagram: View {
             }
             .frame(height: 140)
             .padding(.horizontal, 24)
-            
-            // Note names
-            HStack(spacing: 8) {
-                Text(root + quality.symbol)
-                    .font(.headline.weight(.bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [.purple, .blue],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                    )
-                
-                ForEach(chordNotes, id: \.self) { note in
-                    Text(note)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule()
-                                .fill(Color.purple.opacity(0.3))
-                                .overlay(Capsule().stroke(Color.purple, lineWidth: 1))
-                        )
-                }
-            }
         }
     }
 }
 
 // MARK: - Guitar Diagram
 
-struct GuitarChordDiagram: View {
+private struct GuitarChordDiagram: View {
     let root: String
     let quality: ChordQuality
+    let accentColor: Color
     
     private var fingerPositions: [Int?] {
         getGuitarFingeringPosition(root: root, quality: quality)
@@ -219,7 +156,7 @@ struct GuitarChordDiagram: View {
                             if pos == 0 {
                                 Text("O")
                                     .font(.caption.weight(.bold))
-                                    .foregroundStyle(.green)
+                                    .foregroundStyle(accentColor)
                             } else {
                                 Text("")
                             }
@@ -273,7 +210,7 @@ struct GuitarChordDiagram: View {
                                         .frame(height: CGFloat(position - 1) * 37.5 + 10)
                                     
                                     Circle()
-                                        .fill(Color.purple)
+                                        .fill(accentColor)
                                         .frame(width: 20, height: 20)
                                         .overlay(
                                             Circle()
@@ -362,8 +299,112 @@ struct GuitarChordDiagram: View {
     }
 }
 
+private struct ChordNoteChips: View {
+    let display: String
+    let notes: [String]
+    let accentColor: Color
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(display)
+                .font(.headline.weight(.bold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [accentColor.opacity(0.8), accentColor],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                )
+            
+            ForEach(notes, id: \.self) { note in
+                Text(note)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(accentColor.opacity(0.25))
+                            .overlay(Capsule().stroke(accentColor, lineWidth: 1))
+                    )
+            }
+        }
+    }
+}
+
+private enum ChordNoteCalculator {
+    static func notes(root: String, quality: ChordQuality, extensions: [String]) -> [String] {
+        let noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+        guard let rootIndex = noteNames.firstIndex(of: root) else { return [] }
+        
+        var intervals = Set(baseIntervals(for: quality))
+        
+        if extensions.contains("sus2") {
+            intervals.remove(3)
+            intervals.remove(4)
+            intervals.insert(2)
+        }
+        
+        if extensions.contains("sus4") {
+            intervals.remove(3)
+            intervals.remove(4)
+            intervals.insert(5)
+        }
+        
+        for ext in extensions {
+            switch ext {
+            case "7":
+                intervals.insert(10)
+            case "9":
+                intervals.insert(14)
+            case "11":
+                intervals.insert(17)
+            case "13":
+                intervals.insert(21)
+            case "add9":
+                intervals.insert(14)
+            default:
+                break
+            }
+        }
+        
+        return intervals
+            .sorted()
+            .map { noteNames[(rootIndex + $0) % 12] }
+    }
+    
+    private static func baseIntervals(for quality: ChordQuality) -> [Int] {
+        switch quality {
+        case .major:
+            return [0, 4, 7]
+        case .minor:
+            return [0, 3, 7]
+        case .diminished:
+            return [0, 3, 6]
+        case .augmented:
+            return [0, 4, 8]
+        case .dominant7:
+            return [0, 4, 7, 10]
+        case .major7:
+            return [0, 4, 7, 11]
+        case .minor7:
+            return [0, 3, 7, 10]
+        case .sus2:
+            return [0, 2, 7]
+        case .sus4:
+            return [0, 5, 7]
+        }
+    }
+}
+
 #Preview {
-    ChordDiagramView(root: "C", quality: .major, extensions: [])
+    ChordDiagramView(root: "C", quality: .major, extensions: [], accentColor: .purple)
         .preferredColorScheme(.dark)
         .background(Color.black)
 }

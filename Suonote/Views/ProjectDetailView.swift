@@ -12,7 +12,6 @@ struct ProjectDetailView: View {
     @State private var selectedTab: ProjectTab = .compose
     @State private var showingEditSheet = false
     @State private var showingStatusPicker = false
-    @Namespace private var animation  // Para animaciones fluidas del tab bar
     
     private enum ProjectTab: Int, CaseIterable {
         case compose
@@ -34,52 +33,51 @@ struct ProjectDetailView: View {
             case .record: return "waveform.circle.fill"
             }
         }
+
+        var tintColor: Color {
+            switch self {
+            case .compose: return SectionColor.purple.color
+            case .lyrics: return SectionColor.pink.color
+            case .record: return SectionColor.red.color
+            }
+        }
     }
     
     // MARK: - Body
     var body: some View {
         ZStack {
-            // MARK: Background Gradient
-            LinearGradient(
-                colors: [
-                    Color(red: 0.05, green: 0.05, blue: 0.15),
-                    Color(red: 0.1, green: 0.05, blue: 0.2),
-                    Color.black
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            ProjectBackgroundView()
             
             // MARK: Tab Content
             /// Contenido dinámico según la tab seleccionada
             TabView(selection: $selectedTab) {
-                ComposeTabView(project: project)
+                ProjectTabContainer {
+                    ComposeTabView(project: project)
+                }
                     .tag(ProjectTab.compose)
-                    .tabItem { EmptyView() }
+                    .tabItem {
+                        Label(ProjectTab.compose.title, systemImage: ProjectTab.compose.icon)
+                    }
                 
-                LyricsTabView(project: project)
+                ProjectTabContainer {
+                    LyricsTabView(project: project)
+                }
                     .tag(ProjectTab.lyrics)
-                    .tabItem { EmptyView() }
+                    .tabItem {
+                        Label(ProjectTab.lyrics.title, systemImage: ProjectTab.lyrics.icon)
+                    }
                 
-                RecordingsTabView(project: project)
+                ProjectTabContainer {
+                    RecordingsTabView(project: project)
+                }
                     .tag(ProjectTab.record)
-                    .tabItem { EmptyView() }
+                    .tabItem {
+                        Label(ProjectTab.record.title, systemImage: ProjectTab.record.icon)
+                    }
             }
             .tabViewStyle(.automatic)
-            .toolbar(.hidden, for: .tabBar)
+            .tint(selectedTab.tintColor)
             .padding(.top, 1)  // Small padding to prevent overlap
-            
-            // MARK: Floating Tab Bar (Bottom)
-            /// Barra de navegación flotante en la parte inferior
-            VStack {
-                Spacer()
-                
-                customTabBar
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 16)
-            }
-            .ignoresSafeArea(edges: .bottom)
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -128,6 +126,7 @@ struct ProjectDetailView: View {
         .sheet(isPresented: $showingStatusPicker) {
             StatusPickerSheet(project: project)
         }
+        .toolbarBackground(.hidden, for: .navigationBar)
         .preferredColorScheme(.dark)
     }
     
@@ -155,82 +154,37 @@ struct ProjectDetailView: View {
         }
     }
     
-    // MARK: - Custom Tab Bar View
+}
+
+struct ProjectBackgroundView: View {
+    static let gradient = LinearGradient(
+        colors: [
+            Color(red: 0.05, green: 0.05, blue: 0.15),
+            Color(red: 0.1, green: 0.05, blue: 0.2),
+            Color.black
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
     
-    /// Barra de tabs personalizada con animación fluida
-    private var customTabBar: some View {
-        HStack(spacing: 0) {
-            ForEach(ProjectTab.allCases, id: \.self) { tab in
-                Button {
-                    selectedTab = tab
-                } label: {
-                    VStack(spacing: 8) {
-                        Image(systemName: tab.icon)
-                            .font(.title3.weight(selectedTab == tab ? .semibold : .regular))
-                            .foregroundStyle(selectedTab == tab ? .white : .white.opacity(0.5))
-                        
-                        Text(tab.title)
-                            .font(.caption.weight(selectedTab == tab ? .semibold : .regular))
-                            .foregroundStyle(selectedTab == tab ? .white : .white.opacity(0.5))
-                        
-                        if selectedTab == tab {
-                            Capsule()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [.purple, .blue],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .frame(height: 3)
-                                .matchedGeometryEffect(id: "tab", in: animation)
-                                .transition(.opacity)
-                        } else {
-                            Capsule()
-                                .fill(Color.clear)
-                                .frame(height: 3)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.plain)
-            }
+    var body: some View {
+        Self.gradient
+            .ignoresSafeArea()
+    }
+}
+
+struct ProjectTabContainer<Content: View>: View {
+    let content: Content
+    
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+    
+    var body: some View {
+        ZStack {
+            ProjectBackgroundView()
+            content
         }
-        .animation(.easeOut(duration: 0.15), value: selectedTab)
-        .padding(8)
-        .background(
-            ZStack {
-                // Blur background
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                
-                // Gradient overlay for better contrast
-                LinearGradient(
-                    colors: [
-                        Color.black.opacity(0.3),
-                        Color.black.opacity(0.5)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                
-                // Border
-                RoundedRectangle(cornerRadius: 20)
-                    .stroke(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.3),
-                                Color.white.opacity(0.1)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ),
-                        lineWidth: 1
-                    )
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 20))
-        )
-        .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
     }
 }
 
@@ -799,7 +753,7 @@ struct BPMSelector: View {
     private var bpmDisplay: some View {
         HStack {
             Text("\(bpm)")
-                .font(.system(size: 72, weight: .bold, design: .rounded))
+                .font(.system(size: 72, weight: .bold))
                 .foregroundStyle(
                     LinearGradient(
                         colors: gradientColors,

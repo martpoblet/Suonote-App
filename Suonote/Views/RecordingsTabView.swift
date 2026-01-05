@@ -18,6 +18,7 @@ struct RecordingsTabView: View {
     @State private var selectedRecordingForDetail: Recording?
     @State private var recordingToDelete: Recording?
     @State private var showDeleteConfirmation = false
+    @State private var playingRecordingId: UUID?
     
     enum RecordingSortOrder: String, CaseIterable {
         case dateDescending = "Newest First"
@@ -124,9 +125,17 @@ struct RecordingsTabView: View {
                     // Recording updated
                 }
             )
+            .presentationDetents([.large])
         }
         .onAppear {
             audioManager.setup(project: project)
+        }
+        .onReceive(audioManager.$currentlyPlayingRecording) { current in
+            if let current {
+                playingRecordingId = current.id
+            } else if !effectsProcessor.isPlaying {
+                playingRecordingId = nil
+            }
         }
         .alert("Delete Recording?", isPresented: $showDeleteConfirmation, presenting: recordingToDelete) { recording in
             Button("Cancel", role: .cancel) {}
@@ -361,14 +370,9 @@ struct RecordingsTabView: View {
                             ModernTakeCard(
                                 recording: recording,
                                 linkedSection: recording.linkedSectionId.flatMap { sectionMap[$0] },
-                                isPlaying: audioManager.currentlyPlayingRecording?.id == recording.id,
+                                isPlaying: playingRecordingId == recording.id,
                                 onPlay: {
-                                    if audioManager.currentlyPlayingRecording?.id == recording.id {
-                                        audioManager.stopPlayback()
-                                        effectsProcessor.stop()
-                                    } else {
-                                        playRecordingWithEffects(recording)
-                                    }
+                                    togglePlayback(for: recording)
                                 },
                                 onTap: {
                                     selectedRecordingForDetail = recording
@@ -390,14 +394,14 @@ struct RecordingsTabView: View {
                                 recordingToDelete = recording
                                 showDeleteConfirmation = true
                             } label: {
-                                Label("Delete", systemImage: "trash.fill")
+                                Image(systemName: "trash.fill")
                             }
                             
                             if recording.linkedSectionId != nil {
                                 Button {
                                     recording.linkedSectionId = nil
                                 } label: {
-                                    Label("Unlink", systemImage: "link.slash")
+                                    Image(systemName: "xmark.circle.fill")
                                 }
                                 .tint(.orange)
                             }
@@ -405,8 +409,7 @@ struct RecordingsTabView: View {
                             Button {
                                 selectedRecordingForLink = recording
                             } label: {
-                                Label(recording.linkedSectionId == nil ? "Link" : "Change Link", 
-                                      systemImage: recording.linkedSectionId == nil ? "link.badge.plus" : "link")
+                                Image(systemName: recording.linkedSectionId == nil ? "link.circle.fill" : "link.circle")
                             }
                             .tint(.purple)
                         }
@@ -428,7 +431,23 @@ struct RecordingsTabView: View {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
     
+    private func togglePlayback(for recording: Recording) {
+        if playingRecordingId == recording.id {
+            stopPlayback()
+        } else {
+            playRecordingWithEffects(recording)
+        }
+    }
+    
+    private func stopPlayback() {
+        audioManager.stopPlayback()
+        effectsProcessor.stop()
+        playingRecordingId = nil
+    }
+    
     private func playRecordingWithEffects(_ recording: Recording) {
+        stopPlayback()
+        
         // Check if recording has individual effects
         let hasEffects = recording.reverbEnabled || recording.delayEnabled || 
                         recording.eqEnabled || recording.compressionEnabled
@@ -456,11 +475,13 @@ struct RecordingsTabView: View {
             effectsProcessor.applyEffects()
             
             let url = getDocumentsDirectory().appendingPathComponent(recording.fileName)
+            playingRecordingId = recording.id
             try? effectsProcessor.playAudio(url: url) {
-                // Playback finished
+                playingRecordingId = nil
             }
         } else {
             audioManager.playRecording(recording)
+            playingRecordingId = recording.id
         }
     }
 }
@@ -564,7 +585,7 @@ struct ModernTakeCard: View {
                     } else {
                         Button(action: onLinkSection) {
                             HStack(spacing: 4) {
-                                Image(systemName: "link.badge.plus")
+                                Image(systemName: "link.circle.fill")
                                     .font(.caption2)
                                 Text("Link Section")
                                     .font(.caption.weight(.medium))
@@ -579,6 +600,21 @@ struct ModernTakeCard: View {
                             )
                         }
                         .buttonStyle(.plain)
+                    }
+                }
+                
+                if !activeEffects.isEmpty {
+                    HStack(spacing: 6) {
+                        ForEach(activeEffects) { effect in
+                            Image(systemName: effect.icon)
+                                .font(.caption2)
+                                .foregroundStyle(effect.color)
+                                .padding(6)
+                                .background(
+                                    Circle()
+                                        .fill(effect.color.opacity(0.15))
+                                )
+                        }
                     }
                 }
                 
@@ -628,6 +664,28 @@ struct ModernTakeCard: View {
     
     private var borderWidth: CGFloat {
         isPlaying || linkedSection != nil ? 1.5 : 1
+    }
+    
+    private struct EffectBadge: Identifiable {
+        let id: String
+        let icon: String
+        let color: Color
+    }
+    
+    private var activeEffects: [EffectBadge] {
+        var effects: [EffectBadge] = []
+        
+        if recording.reverbEnabled {
+            effects.append(EffectBadge(id: "reverb", icon: "waveform.path.ecg", color: .purple))
+        }
+        if recording.delayEnabled {
+            effects.append(EffectBadge(id: "delay", icon: "arrow.triangle.2.circlepath", color: .blue))
+        }
+        if recording.eqEnabled {
+            effects.append(EffectBadge(id: "eq", icon: "slider.horizontal.3", color: .green))
+        }
+        
+        return effects
     }
     
     private func formatDuration(_ duration: TimeInterval) -> String {

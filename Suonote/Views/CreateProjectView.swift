@@ -127,7 +127,7 @@ struct CreateProjectView: View {
                             VStack(spacing: 16) {
                                 HStack {
                                     Text("\(bpm)")
-                                        .font(.system(size: 72, weight: .bold, design: .rounded))
+                                        .font(.system(size: 72, weight: .bold))
                                         .foregroundStyle(
                                             LinearGradient(
                                                 colors: [.white, .white.opacity(0.7)],

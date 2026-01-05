@@ -231,7 +231,7 @@ struct ImmersiveLyricsEditor: View {
                     }
                     
                     TextEditor(text: $section.lyricsText)
-                        .font(.system(size: 20, weight: .regular, design: .rounded))
+                        .font(.system(size: 20, weight: .regular))
                         .foregroundStyle(.white)
                         .scrollContentBackground(.hidden)
                         .focused($isTextEditorFocused)

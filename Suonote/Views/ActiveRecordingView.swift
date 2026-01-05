@@ -146,7 +146,7 @@ struct ActiveRecordingView: View {
                     .foregroundStyle(.secondary)
                 
                 Text("\(4 - countInBeats)")
-                    .font(.system(size: 120, weight: .bold, design: .rounded))
+                    .font(.system(size: 120, weight: .bold))
                     .foregroundStyle(.white)
                     .monospacedDigit()
                     .contentTransition(.numericText())
@@ -200,7 +200,7 @@ struct ActiveRecordingView: View {
             HStack(spacing: 40) {
                 VStack(spacing: 8) {
                     Text("\(project.bpm)")
-                        .font(.system(size: 48, weight: .bold, design: .rounded))
+                        .font(.system(size: 48, weight: .bold))
                         .foregroundStyle(.white)
                     Text("BPM")
                         .font(.subheadline)
@@ -209,7 +209,7 @@ struct ActiveRecordingView: View {
                 
                 VStack(spacing: 8) {
                     Text("\(project.timeTop)/\(project.timeBottom)")
-                        .font(.system(size: 48, weight: .bold, design: .rounded))
+                        .font(.system(size: 48, weight: .bold))
                         .foregroundStyle(.white)
                     Text("Time")
                         .font(.subheadline)
@@ -289,7 +289,7 @@ struct ActiveRecordingView: View {
             
             // Time display
             Text(formatTime(elapsedTime))
-                .font(.system(size: 56, weight: .medium, design: .rounded))
+                .font(.system(size: 56, weight: .medium))
                 .foregroundStyle(.white)
                 .monospacedDigit()
             
@@ -307,7 +307,7 @@ struct ActiveRecordingView: View {
                             .foregroundStyle(.secondary)
                         
                         Text("\(currentBar + 1)")
-                            .font(.system(size: 40, weight: .bold, design: .rounded))
+                            .font(.system(size: 40, weight: .bold))
                             .foregroundStyle(.white)
                             .monospacedDigit()
                     }

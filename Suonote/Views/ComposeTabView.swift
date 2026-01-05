@@ -21,7 +21,7 @@ struct ComposeTabView: View {
     @State private var showingKeyPicker = false
     @State private var showingExport = false
     @State private var showingEditSheet = false
-    @State private var showingSectionEditor = false
+    @State private var editingSection: SectionTemplate?
     @StateObject private var audioManager = AudioRecordingManager()
     
     // View mode: true = all sections, false = single section
@@ -96,7 +96,7 @@ struct ComposeTabView: View {
                         }
                     }
                     .padding(24)
-                    .padding(.bottom, 100)  // Espacio para tab bar flotante
+                    .padding(.bottom, 24)
                 }
             }
         }
@@ -132,10 +132,8 @@ struct ComposeTabView: View {
         .sheet(isPresented: $showingEditSheet) {
             EditProjectSheet(project: project)
         }
-        .sheet(isPresented: $showingSectionEditor) {
-            if let section = selectedSection {
-                SectionEditorSheet(section: section)
-            }
+        .sheet(item: $editingSection) { section in
+            SectionEditorSheet(section: section)
         }
     }
     
@@ -220,6 +218,7 @@ struct ComposeTabView: View {
             } label: {
                 Image(systemName: "plus.circle.fill")
                     .font(.title2)
+                    .padding(8)
                     .foregroundStyle(
                         LinearGradient(
                             colors: [.purple, .blue],
@@ -381,7 +380,7 @@ struct ComposeTabView: View {
                 Spacer()
                 
                 Button {
-                    showingSectionEditor = true
+                    editingSection = section
                 } label: {
                     Image(systemName: "pencil.circle.fill")
                         .font(.title2)
@@ -588,55 +587,9 @@ struct ChordGridView: View {
     let section: SectionTemplate
     let project: Project
     @Binding var selectedChordSlot: ChordSlot?
+    @State private var draggedChordId: UUID?
     
     private var beatsPerBar: Int { project.timeTop }
-    
-    // Cache expensive calculations
-    private var maxBarIndex: Int {
-        section.chordEvents.map { $0.barIndex }.max() ?? 0
-    }
-    
-    // Calculate total beats used in a bar
-    private func beatsUsedInBar(_ barIndex: Int) -> Double {
-        let chordsInBar = section.chordEvents.filter { $0.barIndex == barIndex }
-        guard !chordsInBar.isEmpty else { return 0 }
-        
-        // Calculate end position of each chord and find the maximum
-        let endPositions = chordsInBar.map { $0.beatOffset + $0.duration }
-        return endPositions.max() ?? 0
-    }
-    
-    // Check if we can add more beats to this bar
-    private func canAddToBar(_ barIndex: Int, duration: Double, startBeat: Double) -> Bool {
-        return startBeat + duration <= Double(beatsPerBar)
-    }
-    
-    // Get all chord slots for a bar, including next available slot
-    private func slotsForBar(_ barIndex: Int) -> [(beatOffset: Double, chord: ChordEvent?)] {
-        var slots: [(beatOffset: Double, chord: ChordEvent?)] = []
-        let chordsInBar = section.chordEvents.filter { $0.barIndex == barIndex }.sorted { $0.beatOffset < $1.beatOffset }
-        
-        var currentBeat: Double = 0.0
-        
-        for chord in chordsInBar {
-            // Add filled slot
-            slots.append((beatOffset: chord.beatOffset, chord: chord))
-            currentBeat = chord.beatOffset + chord.duration
-        }
-        
-        // Add next empty slot if there's space
-        if currentBeat < Double(beatsPerBar) {
-            slots.append((beatOffset: currentBeat, chord: nil))
-        }
-        
-        return slots
-    }
-    
-    // Calculate width for a slot based on duration
-    private func widthForDuration(_ duration: Double, totalWidth: CGFloat) -> CGFloat {
-        let beatWidth = totalWidth / CGFloat(beatsPerBar)
-        return beatWidth * CGFloat(duration)
-    }
     
     var body: some View {
         VStack(spacing: 12) {
@@ -648,9 +601,7 @@ struct ChordGridView: View {
                     barIndex: barIndex,
                     beatsPerBar: beatsPerBar,
                     selectedChordSlot: $selectedChordSlot,
-                    slotsForBar: slotsForBar,
-                    beatsUsedInBar: beatsUsedInBar,
-                    widthForDuration: widthForDuration
+                    draggedChordId: $draggedChordId
                 )
             }
             
@@ -688,129 +639,30 @@ struct BarRow: View {
     let barIndex: Int
     let beatsPerBar: Int
     @Binding var selectedChordSlot: ChordSlot?
-    
-    let slotsForBar: (Int) -> [(beatOffset: Double, chord: ChordEvent?)]
-    let beatsUsedInBar: (Int) -> Double
-    let widthForDuration: (Double, CGFloat) -> CGFloat
+    @Binding var draggedChordId: UUID?
     
     var body: some View {
         let slots = slotsForBar(barIndex)
         
         if !slots.isEmpty {
-            VStack(spacing: 8) {
-                // Bar label with beat counter
-                HStack {
-                    Text("Bar \(barIndex + 1)")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    
-                    Spacer()
-                    
-                    let used = beatsUsedInBar(barIndex)
-                    if used > 0 {
-                        Text("\(String(format: "%.1f", used))/\(beatsPerBar) beats")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                
-                // Chord grid - fixed width slots
-                GeometryReader { geometry in
-                    HStack(spacing: 0) {
-                        ForEach(Array(slots.enumerated()), id: \.offset) { index, slot in
-                            if let chord = slot.chord {
-                                // Filled slot with chord
-                                ChordSlotButton(
-                                    section: section,
-                                    project: project,
-                                    barIndex: barIndex,
-                                    beatOffset: slot.beatOffset,
-                                    isHalf: chord.duration < 1.0,
-                                    selectedSlot: $selectedChordSlot
-                                )
-                                .frame(width: widthForDuration(chord.duration, geometry.size.width))
-                                .id("\(barIndex)-\(slot.beatOffset)-\(chord.id)")
-                            } else {
-                                // Empty slot for next chord
-                                Button {
-                                    selectedChordSlot = ChordSlot(
-                                        barIndex: barIndex,
-                                        beatOffset: slot.beatOffset,
-                                        isHalf: false,
-                                        sectionId: section.id
-                                    )
-                                } label: {
-                                    VStack(spacing: 4) {
-                                        Image(systemName: "plus.circle.fill")
-                                            .font(.title3)
-                                        Text("Add")
-                                            .font(.caption2.weight(.medium))
-                                    }
-                                    .foregroundStyle(section.color)
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 44)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
-                                            .foregroundStyle(section.color.opacity(0.4))
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                                .frame(width: widthForDuration(0.5, geometry.size.width))
-                                .id("\(barIndex)-\(slot.beatOffset)-empty")
-                            }
+            barContent(slots: slots)
+                .id("bar-\(barIndex)")
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    if section.bars > 1 {
+                        Button(role: .destructive) {
+                            deleteBar()
+                        } label: {
+                            Image(systemName: "trash.fill")
                         }
-                        
-                        Spacer(minLength: 0)
                     }
-                }
-                .frame(height: 50)
-            }
-            .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(section.color.opacity(0.08))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(section.color.opacity(0.2), lineWidth: 1)
-                    )
-            )
-            .id("bar-\(barIndex)")
-            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                // Delete bar
-                if section.bars > 1 {
-                    Button(role: .destructive) {
-                        deleteBar()
+                    
+                    Button {
+                        cloneBar()
                     } label: {
-                        Label("Delete", systemImage: "trash.fill")
+                        Image(systemName: "doc.on.doc.fill")
                     }
+                    .tint(.blue)
                 }
-                
-                // Clone bar
-                Button {
-                    cloneBar()
-                } label: {
-                    Label("Clone", systemImage: "doc.on.doc.fill")
-                }
-                .tint(.blue)
-            }
-            .contextMenu {
-                // Clone bar
-                Button {
-                    cloneBar()
-                } label: {
-                    Label("Clone Bar", systemImage: "doc.on.doc")
-                }
-                
-                // Delete bar (only if there's more than 1 bar)
-                if section.bars > 1 {
-                    Button(role: .destructive) {
-                        deleteBar()
-                    } label: {
-                        Label("Delete Bar", systemImage: "trash")
-                    }
-                }
-            }
         }
     }
     
@@ -856,6 +708,178 @@ struct BarRow: View {
         // Decrease bar count
         section.bars -= 1
     }
+    
+    private func barContent(slots: [(beatOffset: Double, chord: ChordEvent?)]) -> some View {
+        VStack(spacing: 8) {
+            barHeader
+            barGrid(slots: slots)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(section.color.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(section.color.opacity(0.2), lineWidth: 1)
+                )
+        )
+        .contentShape(Rectangle())
+        .onDrop(of: [.text], isTargeted: nil) { _ in
+            handleChordDrop()
+        }
+        .contextMenu {
+            // Clone bar
+            Button {
+                cloneBar()
+            } label: {
+                Label("Clone Bar", systemImage: "doc.on.doc")
+            }
+            
+            // Delete bar (only if there's more than 1 bar)
+            if section.bars > 1 {
+                Button(role: .destructive) {
+                    deleteBar()
+                } label: {
+                    Label("Delete Bar", systemImage: "trash")
+                }
+            }
+        }
+    }
+
+    private var barHeader: some View {
+        let used = beatsUsedInBar(barIndex)
+        return HStack {
+            Text("Bar \(barIndex + 1)")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            
+            Spacer()
+            
+            if used > 0 {
+                Text("\(String(format: "%.1f", used))/\(beatsPerBar) beats")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+    
+    private func barGrid(slots: [(beatOffset: Double, chord: ChordEvent?)]) -> some View {
+        let indexedSlots = Array(slots.enumerated())
+        
+        return GeometryReader { geometry in
+            HStack(spacing: 0) {
+                ForEach(indexedSlots, id: \.offset) { _, slot in
+                    slotView(slot: slot, totalWidth: geometry.size.width)
+                }
+                
+                Spacer(minLength: 0)
+            }
+        }
+        .frame(height: 50)
+    }
+    
+    @ViewBuilder
+    private func slotView(
+        slot: (beatOffset: Double, chord: ChordEvent?),
+        totalWidth: CGFloat
+    ) -> some View {
+        if let chord = slot.chord {
+            ChordSlotButton(
+                section: section,
+                project: project,
+                barIndex: barIndex,
+                beatOffset: slot.beatOffset,
+                isHalf: chord.duration < 1.0,
+                selectedSlot: $selectedChordSlot,
+                draggedChordId: $draggedChordId
+            )
+            .frame(width: widthForDuration(chord.duration, totalWidth: totalWidth))
+            .id("\(barIndex)-\(slot.beatOffset)-\(chord.id)")
+        } else {
+            Button {
+                selectedChordSlot = ChordSlot(
+                    barIndex: barIndex,
+                    beatOffset: slot.beatOffset,
+                    isHalf: false,
+                    sectionId: section.id
+                )
+            } label: {
+                VStack(spacing: 4) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title3)
+                    Text("Add")
+                        .font(.caption2.weight(.medium))
+                }
+                .foregroundStyle(section.color)
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
+                        .foregroundStyle(section.color.opacity(0.4))
+                )
+            }
+            .buttonStyle(.plain)
+            .frame(width: widthForDuration(0.5, totalWidth: totalWidth))
+            .id("\(barIndex)-\(slot.beatOffset)-empty")
+        }
+    }
+    
+    private func beatsUsedInBar(_ barIndex: Int) -> Double {
+        let chordsInBar = section.chordEvents.filter { $0.barIndex == barIndex }
+        guard !chordsInBar.isEmpty else { return 0 }
+        let endPositions = chordsInBar.map { $0.beatOffset + $0.duration }
+        return endPositions.max() ?? 0
+    }
+    
+    private func slotsForBar(_ barIndex: Int) -> [(beatOffset: Double, chord: ChordEvent?)] {
+        var slots: [(beatOffset: Double, chord: ChordEvent?)] = []
+        let chordsInBar = section.chordEvents
+            .filter { $0.barIndex == barIndex }
+            .sorted { $0.beatOffset < $1.beatOffset }
+        
+        var currentBeat: Double = 0.0
+        for chord in chordsInBar {
+            slots.append((beatOffset: chord.beatOffset, chord: chord))
+            currentBeat = chord.beatOffset + chord.duration
+        }
+        
+        if currentBeat < Double(beatsPerBar) {
+            slots.append((beatOffset: currentBeat, chord: nil))
+        }
+        
+        return slots
+    }
+    
+    private func widthForDuration(_ duration: Double, totalWidth: CGFloat) -> CGFloat {
+        let beatWidth = totalWidth / CGFloat(beatsPerBar)
+        return beatWidth * CGFloat(duration)
+    }
+
+    private func handleChordDrop() -> Bool {
+        guard let draggedId = draggedChordId,
+              let chord = section.chordEvents.first(where: { $0.id == draggedId }) else {
+            return false
+        }
+        
+        let nextBeat = nextAvailableBeat(excluding: chord)
+        guard nextBeat + chord.duration <= Double(beatsPerBar) else {
+            return false
+        }
+        
+        chord.barIndex = barIndex
+        chord.beatOffset = nextBeat
+        draggedChordId = nil
+        return true
+    }
+    
+    private func nextAvailableBeat(excluding chord: ChordEvent?) -> Double {
+        let chordsInBar = section.chordEvents.filter { event in
+            event.barIndex == barIndex && event.id != chord?.id
+        }
+        let endPositions = chordsInBar.map { $0.beatOffset + $0.duration }
+        return endPositions.max() ?? 0
+    }
 }
 
 struct ChordSlotButton: View {
@@ -865,6 +889,7 @@ struct ChordSlotButton: View {
     let beatOffset: Double
     let isHalf: Bool
     @Binding var selectedSlot: ChordSlot?
+    @Binding var draggedChordId: UUID?
     @Environment(\.modelContext) private var modelContext
     
     private var chord: ChordEvent? {
@@ -907,6 +932,10 @@ struct ChordSlotButton: View {
                         )
                 }
                 .buttonStyle(.plain)
+                .onDrag {
+                    draggedChordId = chord.id
+                    return NSItemProvider(object: chord.id.uuidString as NSString)
+                }
                 .contextMenu {
                     // Edit chord
                     Button {
@@ -1246,6 +1275,8 @@ struct ChordPaletteSheet: View {
     private let roots = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
     private let commonExtensions = ["7", "9", "11", "13", "sus2", "sus4", "add9"]
     
+    private var accentColor: Color { section.color }
+    
     // Use cached values instead of computed properties for better performance
     private var lastChord: ChordEvent? { cachedLastChord }
     private var smartSuggestions: [ChordSuggestion] { cachedSmartSuggestions }
@@ -1322,7 +1353,19 @@ struct ChordPaletteSheet: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") { addChord() }
+                    Button {
+                        addChord()
+                    } label: {
+                        Text("Add")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(accentColor)
+                            )
+                    }
                 }
             }
         }
@@ -1345,8 +1388,8 @@ struct ChordPaletteSheet: View {
             HStack {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(chordDisplay)
-                        .font(.system(size: 56, weight: .bold, design: .rounded))
-                        .foregroundStyle(Color.purple)
+                        .font(.system(size: 56, weight: .bold))
+                        .foregroundStyle(accentColor)
                     
                     Text("Bar \(slot.barIndex + 1) • Beat \(slot.beatOffset + 1)")
                         .font(.caption)
@@ -1373,7 +1416,7 @@ struct ChordPaletteSheet: View {
                     .padding(.vertical, 8)
                     .background(
                         Capsule()
-                            .fill(showingDiagram ? Color.purple.opacity(0.3) : Color.purple)
+                            .fill(showingDiagram ? accentColor.opacity(0.3) : accentColor)
                     )
                 }
             }
@@ -1382,7 +1425,8 @@ struct ChordPaletteSheet: View {
                 ChordDiagramView(
                     root: selectedRoot,
                     quality: selectedQuality,
-                    extensions: selectedExtensions
+                    extensions: selectedExtensions,
+                    accentColor: accentColor
                 )
             }
         }
@@ -1397,7 +1441,9 @@ struct ChordPaletteSheet: View {
                 }
             } label: {
                 HStack {
-                    Text("💡 Suggestions")
+                    Image(systemName: "lightbulb.fill")
+                        .foregroundStyle(accentColor)
+                    Text("Suggestions")
                         .font(.headline)
                         .foregroundStyle(.white)
                     
@@ -1416,6 +1462,7 @@ struct ChordPaletteSheet: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                    .tint(accentColor)
                     
                     switch selectedTab {
                     case .smart:
@@ -1431,10 +1478,10 @@ struct ChordPaletteSheet: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.purple.opacity(0.1))
+                .fill(accentColor.opacity(0.1))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.purple.opacity(0.3), lineWidth: 1)
+                        .stroke(accentColor.opacity(0.3), lineWidth: 1)
                 )
         )
     }
@@ -1457,7 +1504,7 @@ struct ChordPaletteSheet: View {
                             .frame(maxWidth: .infinity)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(selectedRoot == root ? Color.purple : Color.white.opacity(0.05))
+                                    .fill(selectedRoot == root ? accentColor : Color.white.opacity(0.05))
                             )
                     }
                 }
@@ -1483,7 +1530,7 @@ struct ChordPaletteSheet: View {
                             .frame(maxWidth: .infinity)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(selectedQuality == quality ? Color.blue : Color.white.opacity(0.05))
+                                    .fill(selectedQuality == quality ? accentColor : Color.white.opacity(0.05))
                             )
                     }
                 }
@@ -1513,7 +1560,7 @@ struct ChordPaletteSheet: View {
                             .frame(maxWidth: .infinity)
                             .background(
                                 RoundedRectangle(cornerRadius: 10)
-                                    .fill(selectedExtensions.contains(ext) ? Color.cyan : Color.white.opacity(0.05))
+                                    .fill(selectedExtensions.contains(ext) ? accentColor : Color.white.opacity(0.05))
                             )
                             .opacity((selectedExtensions.count >= 2 && !selectedExtensions.contains(ext)) ? 0.5 : 1.0)
                     }
@@ -1563,7 +1610,7 @@ struct ChordPaletteSheet: View {
                         .frame(height: 65)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(duration == dur ? Color.purple : Color.white.opacity(0.05))
+                                .fill(duration == dur ? accentColor : Color.white.opacity(0.05))
                         )
                     }
                     .disabled(!isAvailable)
@@ -1580,7 +1627,7 @@ struct ChordPaletteSheet: View {
                 } label: {
                     Image(systemName: "minus.circle.fill")
                         .font(.title2)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(accentColor)
                 }
                 .disabled(duration <= 0.5)
                 
@@ -1588,7 +1635,7 @@ struct ChordPaletteSheet: View {
                 
                 VStack(spacing: 4) {
                     Text(String(format: "%.1f", duration))
-                        .font(.system(size: 36, weight: .bold, design: .rounded))
+                        .font(.system(size: 36, weight: .bold))
                         .foregroundStyle(.white)
                         .monospacedDigit()
                     
@@ -1606,7 +1653,7 @@ struct ChordPaletteSheet: View {
                 } label: {
                     Image(systemName: "plus.circle.fill")
                         .font(.title2)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(accentColor)
                 }
                 .disabled(duration >= maxAvailableDuration)
             }
@@ -1634,7 +1681,7 @@ struct ChordPaletteSheet: View {
                 .padding(.vertical, 16)
                 .background(
                     Capsule()
-                        .fill(Color.purple)
+                        .fill(accentColor)
                 )
         }
     }
@@ -1662,7 +1709,7 @@ struct ChordPaletteSheet: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(smartSuggestions) { suggestion in
-                        SuggestionChip(suggestion: suggestion) {
+                        SuggestionChip(suggestion: suggestion, accentColor: accentColor) {
                             applySuggestion(suggestion)
                         }
                     }
@@ -1675,7 +1722,7 @@ struct ChordPaletteSheet: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(diatonicChords) { suggestion in
-                    SuggestionChip(suggestion: suggestion) {
+                    SuggestionChip(suggestion: suggestion, accentColor: accentColor) {
                         applySuggestion(suggestion)
                     }
                 }
@@ -1702,7 +1749,11 @@ struct ChordPaletteSheet: View {
                                     .padding(.vertical, 6)
                                     .background(
                                         Capsule()
-                                            .fill(Color.white.opacity(0.1))
+                                            .fill(accentColor.opacity(0.2))
+                                            .overlay(
+                                                Capsule()
+                                                    .stroke(accentColor.opacity(0.4), lineWidth: 1)
+                                            )
                                     )
                                     .onTapGesture {
                                         applySuggestion(chord)
@@ -1715,6 +1766,10 @@ struct ChordPaletteSheet: View {
                 .background(
                     RoundedRectangle(cornerRadius: 10)
                         .fill(Color.white.opacity(0.05))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(accentColor.opacity(0.2), lineWidth: 1)
+                        )
                 )
             }
         }
@@ -1768,6 +1823,7 @@ struct ChordPaletteSheet: View {
 
 struct SuggestionChip: View {
     let suggestion: ChordSuggestion
+    let accentColor: Color
     let action: () -> Void
     
     var body: some View {
@@ -1786,10 +1842,10 @@ struct SuggestionChip: View {
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.purple.opacity(0.2))
+                    .fill(accentColor.opacity(0.2))
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.purple.opacity(suggestion.confidence), lineWidth: 1.5)
+                            .stroke(accentColor.opacity(suggestion.confidence), lineWidth: 1.5)
                     )
             )
         }
@@ -1886,7 +1942,7 @@ struct SectionEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     
     @State private var tempName: String = ""
-    @State private var tempBars: Int = 4
+    @State private var selectedColor: SectionColor = .purple
     
     var body: some View {
         NavigationStack {
@@ -1908,6 +1964,32 @@ struct SectionEditorSheet: View {
                                 )
                         )
                         .foregroundStyle(.white)
+                }
+                
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Color")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                    
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 12) {
+                        ForEach(SectionColor.allCases) { color in
+                            Button {
+                                selectedColor = color
+                            } label: {
+                                ZStack {
+                                    Circle()
+                                        .fill(color.color)
+                                        .frame(width: 50, height: 50)
+                                    
+                                    if selectedColor == color {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.title3)
+                                            .foregroundStyle(.white)
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 
                 Spacer()
@@ -1954,15 +2036,22 @@ struct SectionEditorSheet: View {
             }
         }
         .preferredColorScheme(.dark)
-        .presentationDetents([.height(300)])
+        .presentationDetents([.medium])
         .onAppear {
             tempName = section.name
+            selectedColor = colorFromHex(section.colorHex)
         }
     }
     
     private func saveChanges() {
         section.name = tempName
+        section.colorHex = selectedColor.hex
         dismiss()
+    }
+    
+    private func colorFromHex(_ hex: String?) -> SectionColor {
+        guard let hex else { return .purple }
+        return SectionColor.allCases.first { $0.hex == hex } ?? .purple
     }
 }
 
