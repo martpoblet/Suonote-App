@@ -18,6 +18,7 @@ struct ComposeTabView: View {
     @State private var showingSectionCreator = false
     @State private var showingChordPalette = false
     @State private var selectedChordSlot: ChordSlot?
+    @State private var draggingChord: ChordDragInfo?
     @State private var showingKeyPicker = false
     @State private var showingExport = false
     @State private var showingEditSheet = false
@@ -26,7 +27,6 @@ struct ComposeTabView: View {
     
     // View mode: true = all sections, false = single section
     @State private var showAllSections = true
-    @State private var draggedItem: ArrangementItem?
     @State private var expandedRecordingSections: Set<UUID> = []
     
     private func recordingsBySectionId() -> [UUID: [Recording]] {
@@ -78,15 +78,6 @@ struct ComposeTabView: View {
                                 if let section = item.sectionTemplate {
                                     sectionEditor(section, recordings: recordingsBySectionId[section.id] ?? [])
                                         .id(section.id)
-                                        .onDrag {
-                                            self.draggedItem = item
-                                            return NSItemProvider(object: item.id.uuidString as NSString)
-                                        }
-                                        .onDrop(of: [.text], delegate: DropViewDelegate(
-                                            destinationItem: item,
-                                            items: $project.arrangementItems,
-                                            draggedItem: $draggedItem
-                                        ))
                                 }
                             }
                         } else if let section = selectedSection {
@@ -345,15 +336,6 @@ struct ComposeTabView: View {
                                 },
                                 linkedRecordingsCount: recordingsBySectionId[section.id]?.count ?? 0
                             )
-                            .onDrag {
-                                self.draggedItem = item
-                                return NSItemProvider(object: item.id.uuidString as NSString)
-                            }
-                            .onDrop(of: [.text], delegate: DropViewDelegate(
-                                destinationItem: item,
-                                items: $project.arrangementItems,
-                                draggedItem: $draggedItem
-                            ))
                         }
                     }
                 }
@@ -396,7 +378,8 @@ struct ComposeTabView: View {
             ChordGridView(
                 section: section,
                 project: project,
-                selectedChordSlot: $selectedChordSlot
+                selectedChordSlot: $selectedChordSlot,
+                draggingChord: $draggingChord
             )
         }
         .padding(20)
@@ -583,10 +566,17 @@ struct ChordSlot: Identifiable {
     let sectionId: UUID  // Track which section this slot belongs to
 }
 
+struct ChordDragInfo: Equatable {
+    let sourceSectionId: UUID
+    let chordId: UUID
+    let duration: Double
+}
+
 struct ChordGridView: View {
     let section: SectionTemplate
     let project: Project
     @Binding var selectedChordSlot: ChordSlot?
+    @Binding var draggingChord: ChordDragInfo?
     
     private var beatsPerBar: Int { project.timeTop }
     private let barRowHeight: CGFloat = 104
@@ -601,24 +591,19 @@ struct ChordGridView: View {
     var body: some View {
         VStack(spacing: 12) {
             // Show only the bars defined in section.bars
-            List {
+            LazyVStack(spacing: barRowSpacing) {
                 ForEach(0..<section.bars, id: \.self) { barIndex in
                     BarRow(
                         section: section,
+                        project: project,
                         barIndex: barIndex,
                         beatsPerBar: beatsPerBar,
-                        selectedChordSlot: $selectedChordSlot
+                        selectedChordSlot: $selectedChordSlot,
+                        draggingChord: $draggingChord
                     )
                     .frame(height: barRowHeight)
-                    .listRowInsets(EdgeInsets())
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
                 }
             }
-            .listStyle(.plain)
-            .listRowSpacing(barRowSpacing)
-            .scrollContentBackground(.hidden)
-            .scrollDisabled(true)
             .frame(height: barsListHeight)
             
             // Add Bar button
@@ -648,36 +633,208 @@ struct ChordGridView: View {
     }
 }
 
+struct SwipeActionItem: Identifiable {
+    let id = UUID()
+    let systemImage: String
+    let tint: Color
+    let role: ButtonRole?
+    let action: () -> Void
+}
+
+struct SwipeActionRow<Content: View>: View {
+    let actions: [SwipeActionItem]
+    let content: Content
+    
+    private let buttonSize: CGFloat = 40
+    private let buttonSpacing: CGFloat = 12
+    private let actionGap: CGFloat = 24
+    @State private var baseOffset: CGFloat = 0
+    @State private var dragTranslation: CGFloat = 0
+    
+    init(actions: [SwipeActionItem], @ViewBuilder content: () -> Content) {
+        self.actions = actions
+        self.content = content()
+    }
+    
+    private var actionsWidth: CGFloat {
+        guard !actions.isEmpty else { return 0 }
+        return (CGFloat(actions.count) * buttonSize) + (CGFloat(max(actions.count - 1, 0)) * buttonSpacing)
+    }
+    
+    private var maxOffset: CGFloat {
+        guard !actions.isEmpty else { return 0 }
+        return actionsWidth + actionGap
+    }
+    
+    private var dragOffset: CGFloat {
+        clampOffset(baseOffset + dragTranslation)
+    }
+    
+    private var revealWidth: CGFloat {
+        max(0, -dragOffset)
+    }
+    
+    private var revealProgress: CGFloat {
+        guard actionsWidth > 0 else { return 0 }
+        return min(1, revealWidth / actionsWidth)
+    }
+    
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            actionButtons
+            
+            content
+                .offset(x: dragOffset)
+                .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.85), value: baseOffset)
+                .gesture(
+                    HorizontalPanGesture(
+                        onChanged: { translation in
+                            dragTranslation = translation
+                        },
+                        onEnded: { translation in
+                            let proposedOffset = clampOffset(baseOffset + translation)
+                            if proposedOffset <= -maxOffset * 0.5 {
+                                baseOffset = -maxOffset
+                            } else {
+                                baseOffset = 0
+                            }
+                            dragTranslation = 0
+                        }
+                    )
+                )
+        }
+        .clipped()
+    }
+    
+    private var actionButtons: some View {
+        HStack(spacing: buttonSpacing) {
+            ForEach(Array(actions.enumerated()), id: \.element.id) { index, item in
+                let progress = buttonProgress(for: index)
+                Button(role: item.role) {
+                    item.action()
+                    baseOffset = 0
+                } label: {
+                    Image(systemName: item.systemImage)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: buttonSize, height: buttonSize)
+                        .background(Circle().fill(item.tint))
+                }
+                .scaleEffect(progress, anchor: .trailing)
+                .opacity(progress)
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.trailing, 12)
+        .frame(width: actionsWidth, alignment: .trailing)
+        .opacity(revealProgress == 0 ? 0 : 1)
+        .animation(.easeOut(duration: 0.18), value: revealProgress)
+    }
+    
+    private func buttonProgress(for index: Int) -> CGFloat {
+        let start = min(0.8, CGFloat(index) * 0.4)
+        let raw = (revealProgress - start) / max(0.001, (1 - start))
+        return max(0, min(1, raw))
+    }
+    
+    private func clampOffset(_ offset: CGFloat) -> CGFloat {
+        max(-maxOffset, min(0, offset))
+    }
+}
+
+@MainActor
+struct HorizontalPanGesture: UIGestureRecognizerRepresentable {
+    typealias UIGestureRecognizerType = UIPanGestureRecognizer
+    var onChanged: (CGFloat) -> Void
+    var onEnded: (CGFloat) -> Void
+    
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator {
+        Coordinator(self)
+    }
+    
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let recognizer = UIPanGestureRecognizer()
+        recognizer.maximumNumberOfTouches = 1
+        return recognizer
+    }
+    
+    func updateUIGestureRecognizer(_ recognizer: UIPanGestureRecognizer, context: Context) {
+        recognizer.cancelsTouchesInView = false
+        recognizer.delegate = context.coordinator
+    }
+    
+    func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
+        let translation = recognizer.translation(in: recognizer.view).x
+        switch recognizer.state {
+        case .began, .changed:
+            onChanged(translation)
+        case .ended, .cancelled, .failed:
+            onEnded(translation)
+        default:
+            break
+        }
+    }
+    
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        private let parent: HorizontalPanGesture
+        
+        init(_ parent: HorizontalPanGesture) {
+            self.parent = parent
+        }
+        
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return true }
+            let velocity = pan.velocity(in: pan.view)
+            return abs(velocity.x) > abs(velocity.y) * 1.3
+        }
+        
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            false
+        }
+    }
+}
+
 // MARK: - Bar Row Component
 struct BarRow: View {
     let section: SectionTemplate
+    let project: Project
     let barIndex: Int
     let beatsPerBar: Int
     @Binding var selectedChordSlot: ChordSlot?
+    @Binding var draggingChord: ChordDragInfo?
+    @State private var isBarDropTargeted = false
     
     var body: some View {
         let slots = slotsForBar(barIndex)
         
         if !slots.isEmpty {
-            barContent(slots: slots)
-                .id("bar-\(barIndex)")
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    if section.bars > 1 {
-                        Button(role: .destructive) {
-                            deleteBar()
-                        } label: {
-                            Image(systemName: "trash.fill")
-                        }
-                    }
-                    
-                    Button {
-                        cloneBar()
-                    } label: {
-                        Image(systemName: "doc.on.doc.fill")
-                    }
-                    .tint(.blue)
-                }
+            SwipeActionRow(actions: swipeActions) {
+                barContent(slots: slots)
+                    .id("bar-\(barIndex)")
+            }
         }
+    }
+    
+    private var swipeActions: [SwipeActionItem] {
+        var items: [SwipeActionItem] = []
+        if section.bars > 1 {
+            items.append(
+                SwipeActionItem(systemImage: "trash.fill", tint: .red, role: .destructive) {
+                    deleteBar()
+                }
+            )
+        }
+        
+        items.append(
+            SwipeActionItem(systemImage: "doc.on.doc.fill", tint: .blue, role: nil) {
+                cloneBar()
+            }
+        )
+        
+        return items
     }
     
     private func cloneBar() {
@@ -723,12 +880,15 @@ struct BarRow: View {
         section.bars -= 1
     }
     
-    private func barContent(slots: [(beatOffset: Double, chord: ChordEvent?)]) -> some View {
+    private func barContent(
+        slots: [(beatOffset: Double, duration: Double, chord: ChordEvent?)]
+    ) -> some View {
         VStack(spacing: 8) {
             barHeader
             barGrid(slots: slots)
         }
         .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(section.color.opacity(0.08))
@@ -737,7 +897,6 @@ struct BarRow: View {
                         .stroke(section.color.opacity(0.2), lineWidth: 1)
                 )
         )
-        .contentShape(Rectangle())
     }
 
     private var barHeader: some View {
@@ -757,8 +916,11 @@ struct BarRow: View {
         }
     }
     
-    private func barGrid(slots: [(beatOffset: Double, chord: ChordEvent?)]) -> some View {
+    private func barGrid(
+        slots: [(beatOffset: Double, duration: Double, chord: ChordEvent?)]
+    ) -> some View {
         let indexedSlots = Array(slots.enumerated())
+        let hasEmptySlot = slots.contains { $0.chord == nil }
         
         return GeometryReader { geometry in
             HStack(spacing: 0) {
@@ -770,11 +932,24 @@ struct BarRow: View {
             }
         }
         .frame(height: 50)
+        .contentShape(Rectangle())
+        .overlay(alignment: .trailing) {
+            if isBarDropTargeted && !canDropInBar() && !hasEmptySlot {
+                Image(systemName: "xmark.octagon.fill")
+                    .font(.title3)
+                    .foregroundStyle(.red)
+                    .padding(.trailing, 8)
+            }
+        }
+        .onDrop(of: [UTType.text], isTargeted: $isBarDropTargeted) { providers in
+            guard canDropInBar() else { return false }
+            return handleBarDrop(providers)
+        }
     }
     
     @ViewBuilder
     private func slotView(
-        slot: (beatOffset: Double, chord: ChordEvent?),
+        slot: (beatOffset: Double, duration: Double, chord: ChordEvent?),
         totalWidth: CGFloat
     ) -> some View {
         if let chord = slot.chord {
@@ -783,36 +958,39 @@ struct BarRow: View {
                 barIndex: barIndex,
                 beatOffset: slot.beatOffset,
                 isHalf: chord.duration < 1.0,
-                selectedSlot: $selectedChordSlot
+                selectedSlot: $selectedChordSlot,
+                draggingChord: $draggingChord
             )
             .frame(width: widthForDuration(chord.duration, totalWidth: totalWidth))
+            .frame(height: 50)
             .id("\(barIndex)-\(slot.beatOffset)-\(chord.id)")
         } else {
+            let showBlocked = isBarDropTargeted && !canDropInBar()
             Button {
                 selectedChordSlot = ChordSlot(
                     barIndex: barIndex,
                     beatOffset: slot.beatOffset,
-                    isHalf: false,
+                    isHalf: slot.duration < 1.0,
                     sectionId: section.id
                 )
             } label: {
                 VStack(spacing: 4) {
-                    Image(systemName: "plus.circle.fill")
+                    Image(systemName: showBlocked ? "xmark.octagon.fill" : "plus.circle.fill")
                         .font(.title3)
                     Text("Add")
                         .font(.caption2.weight(.medium))
                 }
-                .foregroundStyle(section.color)
+                .foregroundStyle(showBlocked ? .red : section.color)
                 .frame(maxWidth: .infinity)
-                .frame(height: 44)
+                .frame(height: 50)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
                         .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
-                        .foregroundStyle(section.color.opacity(0.4))
+                        .foregroundStyle(showBlocked ? Color.red.opacity(0.6) : section.color.opacity(0.4))
                 )
             }
             .buttonStyle(.plain)
-            .frame(width: widthForDuration(0.5, totalWidth: totalWidth))
+            .frame(width: widthForDuration(slot.duration, totalWidth: totalWidth))
             .id("\(barIndex)-\(slot.beatOffset)-empty")
         }
     }
@@ -820,24 +998,33 @@ struct BarRow: View {
     private func beatsUsedInBar(_ barIndex: Int) -> Double {
         let chordsInBar = section.chordEvents.filter { $0.barIndex == barIndex }
         guard !chordsInBar.isEmpty else { return 0 }
-        let endPositions = chordsInBar.map { $0.beatOffset + $0.duration }
-        return endPositions.max() ?? 0
+        let total = chordsInBar.reduce(0.0) { $0 + $1.duration }
+        return min(total, Double(beatsPerBar))
     }
     
-    private func slotsForBar(_ barIndex: Int) -> [(beatOffset: Double, chord: ChordEvent?)] {
-        var slots: [(beatOffset: Double, chord: ChordEvent?)] = []
+    private func slotsForBar(
+        _ barIndex: Int
+    ) -> [(beatOffset: Double, duration: Double, chord: ChordEvent?)] {
+        var slots: [(beatOffset: Double, duration: Double, chord: ChordEvent?)] = []
         let chordsInBar = section.chordEvents
             .filter { $0.barIndex == barIndex }
             .sorted { $0.beatOffset < $1.beatOffset }
         
-        var currentBeat: Double = 0.0
         for chord in chordsInBar {
-            slots.append((beatOffset: chord.beatOffset, chord: chord))
-            currentBeat = chord.beatOffset + chord.duration
+            slots.append((beatOffset: chord.beatOffset, duration: chord.duration, chord: chord))
         }
         
+        let currentBeat = chordsInBar.map { $0.beatOffset + $0.duration }.max() ?? 0
         if currentBeat < Double(beatsPerBar) {
-            slots.append((beatOffset: currentBeat, chord: nil))
+            let remaining = Double(beatsPerBar) - currentBeat
+            let addDuration = min(1.0, remaining)
+            slots.append(
+                (
+                    beatOffset: currentBeat,
+                    duration: addDuration,
+                    chord: nil
+                )
+            )
         }
         
         return slots
@@ -846,6 +1033,152 @@ struct BarRow: View {
     private func widthForDuration(_ duration: Double, totalWidth: CGFloat) -> CGFloat {
         let beatWidth = totalWidth / CGFloat(beatsPerBar)
         return beatWidth * CGFloat(duration)
+    }
+    
+    private func canDropInBar() -> Bool {
+        guard let dragInfo = draggingChord,
+              let sourceSection = sectionById(dragInfo.sourceSectionId),
+              let chord = sourceSection.chordEvents.first(where: { $0.id == dragInfo.chordId }) else {
+            return true
+        }
+        
+        let excludeChord = sourceSection.id == section.id ? chord : nil
+        let targetBeatOffset = nextAvailableBeat(excluding: excludeChord)
+        
+        return canPlaceChord(
+            chord,
+            targetBeatOffset: targetBeatOffset,
+            excluding: excludeChord
+        )
+    }
+    
+    private func handleBarDrop(_ providers: [NSItemProvider]) -> Bool {
+        return loadChordPayload(from: providers) { payload in
+            guard let sourceSection = sectionById(payload.sourceSectionId),
+                  let chord = sourceSection.chordEvents.first(where: { $0.id == payload.chordId }) else {
+                return
+            }
+            
+            let excludeChord = sourceSection.id == section.id ? chord : nil
+            let targetBeatOffset = nextAvailableBeat(excluding: excludeChord)
+            
+            moveChord(
+                chordId: payload.chordId,
+                sourceSectionId: payload.sourceSectionId,
+                targetBeatOffset: targetBeatOffset
+            )
+            draggingChord = nil
+        }
+    }
+    
+    private func loadChordPayload(
+        from providers: [NSItemProvider],
+        perform: @escaping ((sourceSectionId: UUID, chordId: UUID)) -> Void
+    ) -> Bool {
+        guard let provider = providers.first(where: { $0.canLoadObject(ofClass: NSString.self) }) else {
+            return false
+        }
+        
+        provider.loadObject(ofClass: NSString.self) { object, _ in
+            let stringValue: String?
+            if let value = object as? String {
+                stringValue = value
+            } else if let value = object as? NSString {
+                stringValue = value as String
+            } else {
+                stringValue = nil
+            }
+            
+            guard let stringValue,
+                  let payload = parseChordPayload(stringValue) else {
+                return
+            }
+            
+            DispatchQueue.main.async {
+                perform(payload)
+            }
+        }
+        
+        return true
+    }
+    
+    private func parseChordPayload(_ value: String) -> (sourceSectionId: UUID, chordId: UUID)? {
+        let parts = value.split(separator: "|")
+        guard parts.count == 2,
+              let sectionId = UUID(uuidString: String(parts[0])),
+              let chordId = UUID(uuidString: String(parts[1])) else {
+            return nil
+        }
+        return (sectionId, chordId)
+    }
+    
+    private func moveChord(
+        chordId: UUID,
+        sourceSectionId: UUID,
+        targetBeatOffset: Double
+    ) {
+        guard let sourceSection = sectionById(sourceSectionId),
+              let chord = sourceSection.chordEvents.first(where: { $0.id == chordId }) else {
+            return
+        }
+        
+        let excludeChord = sourceSection.id == section.id ? chord : nil
+        guard canPlaceChord(
+            chord,
+            targetBeatOffset: targetBeatOffset,
+            excluding: excludeChord
+        ) else {
+            return
+        }
+        
+        if sourceSection.id != section.id {
+            if let index = sourceSection.chordEvents.firstIndex(where: { $0.id == chord.id }) {
+                sourceSection.chordEvents.remove(at: index)
+            }
+            chord.sectionTemplate = section
+            section.chordEvents.append(chord)
+        }
+        
+        chord.barIndex = barIndex
+        chord.beatOffset = targetBeatOffset
+    }
+    
+    private func nextAvailableBeat(excluding excluded: ChordEvent?) -> Double {
+        let chordsInBar = section.chordEvents.filter { event in
+            event.barIndex == barIndex && event.id != excluded?.id
+        }
+        let endPositions = chordsInBar.map { $0.beatOffset + $0.duration }
+        return min(endPositions.max() ?? 0, Double(beatsPerBar))
+    }
+    
+    private func canPlaceChord(
+        _ chord: ChordEvent,
+        targetBeatOffset: Double,
+        excluding excluded: ChordEvent?
+    ) -> Bool {
+        let endBeat = targetBeatOffset + chord.duration
+        guard endBeat <= Double(beatsPerBar) else { return false }
+        
+        let chordsInBar = section.chordEvents.filter { event in
+            event.barIndex == barIndex && event.id != excluded?.id
+        }
+        
+        for existing in chordsInBar {
+            let existingStart = existing.beatOffset
+            let existingEnd = existing.beatOffset + existing.duration
+            let overlaps = max(existingStart, targetBeatOffset) < min(existingEnd, endBeat)
+            if overlaps {
+                return false
+            }
+        }
+        
+        return true
+    }
+    
+    private func sectionById(_ id: UUID) -> SectionTemplate? {
+        project.arrangementItems
+            .compactMap { $0.sectionTemplate }
+            .first { $0.id == id }
     }
 
 }
@@ -856,6 +1189,7 @@ struct ChordSlotButton: View {
     let beatOffset: Double
     let isHalf: Bool
     @Binding var selectedSlot: ChordSlot?
+    @Binding var draggingChord: ChordDragInfo?
     
     private var chord: ChordEvent? {
         section.chordEvents.first { chord in
@@ -866,43 +1200,67 @@ struct ChordSlotButton: View {
     var body: some View {
         Group {
             if let chord = chord {
-                Button {
-                    selectedSlot = ChordSlot(
-                        barIndex: barIndex,
-                        beatOffset: beatOffset,
-                        isHalf: isHalf,
-                        sectionId: section.id
-                    )
-                } label: {
-                    chordPill(text: chord.display)
-                }
-                .buttonStyle(.plain)
+                chordPill(text: chord.display)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        selectedSlot = ChordSlot(
+                            barIndex: barIndex,
+                            beatOffset: beatOffset,
+                            isHalf: isHalf,
+                            sectionId: section.id
+                        )
+                    }
+                    .onDrag {
+                        draggingChord = ChordDragInfo(
+                            sourceSectionId: section.id,
+                            chordId: chord.id,
+                            duration: chord.duration
+                        )
+                        return NSItemProvider(object: dragPayload(for: chord) as NSString)
+                    } preview: {
+                        chordPillPreview(text: chord.display)
+                            .padding(4)
+                    }
             }
         }
     }
 
+    private func dragPayload(for chord: ChordEvent) -> String {
+        "\(section.id.uuidString)|\(chord.id.uuidString)"
+    }
+    
     private func chordPill(text: String) -> some View {
-        Text(text)
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(.white)
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
+        chordPillBase(text: text)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                section.color.opacity(0.7),
-                                section.color.opacity(0.5)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
+    }
+    
+    private func chordPillPreview(text: String) -> some View {
+        chordPillBase(text: text)
+            .fixedSize()
+    }
+    
+    private func chordPillBase(text: String) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            section.color.opacity(0.7),
+                            section.color.opacity(0.5)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
                     )
-            )
+                )
+            
+            Text(text)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+        }
     }
 }
 
@@ -1137,14 +1495,15 @@ struct ChordPaletteSheet: View {
     @Environment(\.dismiss) private var dismiss
     
     @State private var selectedRoot: String
-    @State private var selectedQuality: ChordQuality = .major
-    @State private var selectedExtensions: [String] = []
-    @State private var duration: Double = 1.0  // Changed to Double for half-beats
+    @State private var selectedQuality: ChordQuality
+    @State private var selectedExtensions: [String]
+    @State private var duration: Double  // Changed to Double for half-beats
     @State private var showingSuggestions = true
     @State private var showingDiagram = false
     @State private var selectedTab: SuggestionTab = .smart
     
     // Cached values to avoid recalculation
+    private let existingChord: ChordEvent?
     private let cachedLastChord: ChordEvent?
     private let cachedSmartSuggestions: [ChordSuggestion]
     private let cachedDiatonicChords: [ChordSuggestion]
@@ -1195,7 +1554,15 @@ struct ChordPaletteSheet: View {
         self.section = section
         self.slot = slot
         self.project = project
-        _selectedRoot = State(initialValue: project.keyRoot)
+        
+        let existingChord = section.chordEvents.first { chord in
+            chord.barIndex == slot.barIndex && chord.beatOffset == slot.beatOffset
+        }
+        self.existingChord = existingChord
+        
+        _selectedRoot = State(initialValue: existingChord?.root ?? project.keyRoot)
+        _selectedQuality = State(initialValue: existingChord?.quality ?? .major)
+        _selectedExtensions = State(initialValue: existingChord?.extensions ?? [])
         
         // Calculate and cache expensive values once during initialization
         self.cachedLastChord = section.chordEvents.filter { 
@@ -1237,7 +1604,8 @@ struct ChordPaletteSheet: View {
             maxDuration = currentBarEndBeat - Double(slot.barIndex * project.timeTop) - slot.beatOffset
         }
         
-        _duration = State(initialValue: min(1.0, maxDuration))
+        let startingDuration = existingChord?.duration ?? min(1.0, maxDuration)
+        _duration = State(initialValue: min(startingDuration, maxDuration))
     }
     
     var body: some View {
@@ -1251,10 +1619,13 @@ struct ChordPaletteSheet: View {
                     extensionsSection
                     durationSection
                     addChordButton
+                    if existingChord != nil {
+                        removeChordButton
+                    }
                 }
                 .padding(24)
             }
-            .navigationTitle("Add Chord")
+            .navigationTitle(existingChord == nil ? "Add Chord" : "Edit Chord")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -1264,7 +1635,7 @@ struct ChordPaletteSheet: View {
                     Button {
                         addChord()
                     } label: {
-                        Text("Add")
+                        Text(existingChord == nil ? "Add" : "Save")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 12)
@@ -1582,7 +1953,7 @@ struct ChordPaletteSheet: View {
         Button {
             addChord()
         } label: {
-            Text("Add Chord")
+            Text(existingChord == nil ? "Add Chord" : "Save Chord")
                 .font(.headline)
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
@@ -1590,6 +1961,22 @@ struct ChordPaletteSheet: View {
                 .background(
                     Capsule()
                         .fill(accentColor)
+                )
+        }
+    }
+    
+    private var removeChordButton: some View {
+        Button(role: .destructive) {
+            removeChord()
+        } label: {
+            Text("Remove Chord")
+                .font(.headline)
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(
+                    Capsule()
+                        .fill(Color.red)
                 )
         }
     }
@@ -1705,6 +2092,13 @@ struct ChordPaletteSheet: View {
         
         section.chordEvents.append(chord)
         
+        dismiss()
+    }
+    
+    private func removeChord() {
+        section.chordEvents.removeAll {
+            $0.barIndex == slot.barIndex && $0.beatOffset == slot.beatOffset
+        }
         dismiss()
     }
     
@@ -2101,41 +2495,5 @@ struct ViewAllSectionsCard: View {
             )
         }
         .buttonStyle(.plain)
-    }
-}
-
-// MARK: - Drop Delegate for Reordering
-struct DropViewDelegate: DropDelegate {
-    let destinationItem: ArrangementItem
-    @Binding var items: [ArrangementItem]
-    @Binding var draggedItem: ArrangementItem?
-    
-    func dropEntered(info: DropInfo) {
-        guard let draggedItem = draggedItem else { return }
-        
-        if draggedItem != destinationItem {
-            let from = items.firstIndex(of: draggedItem)!
-            let to = items.firstIndex(of: destinationItem)!
-            
-            if items[to].id != draggedItem.id {
-                withAnimation(.spring(response: 0.3)) {
-                    items.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
-                    
-                    // Update order indices
-                    for (index, item) in items.enumerated() {
-                        item.orderIndex = index
-                    }
-                }
-            }
-        }
-    }
-    
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        return DropProposal(operation: .move)
-    }
-    
-    func performDrop(info: DropInfo) -> Bool {
-        draggedItem = nil
-        return true
     }
 }
