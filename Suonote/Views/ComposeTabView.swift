@@ -689,6 +689,40 @@ struct ArrangementDropDelegate: DropDelegate {
     }
 }
 
+struct ChordSlotDropDelegate: DropDelegate {
+    let targetChord: ChordEvent
+    let onItemHovered: (ChordEvent) -> Void
+    let onDrop: (ChordEvent, [NSItemProvider]) -> Bool
+    let onExit: () -> Void
+
+    func validateDrop(info: DropInfo) -> Bool {
+        info.hasItemsConforming(to: [UTType.text])
+    }
+
+    func dropEntered(info: DropInfo) {
+        onItemHovered(targetChord)
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func dropExited(info: DropInfo) {
+        onExit()
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        onDrop(targetChord, info.itemProviders(for: [UTType.text]))
+    }
+}
+
+struct BarSlot: Identifiable {
+    let id: String
+    let beatOffset: Double
+    let duration: Double
+    let chord: ChordEvent?
+}
+
 struct ChordSlot: Identifiable {
     let id = UUID()
     let barIndex: Int
@@ -941,6 +975,7 @@ struct BarRow: View {
     @Binding var selectedChordSlot: ChordSlot?
     @Binding var draggingChord: ChordDragInfo?
     @State private var isBarDropTargeted = false
+    @State private var lastChordReorderTargetId: UUID?
     
     private let slotSpacing: CGFloat = 6
     
@@ -1018,7 +1053,7 @@ struct BarRow: View {
     }
     
     private func barContent(
-        slots: [(beatOffset: Double, duration: Double, chord: ChordEvent?)]
+        slots: [BarSlot]
     ) -> some View {
         VStack(spacing: 8) {
             barHeader
@@ -1054,17 +1089,16 @@ struct BarRow: View {
     }
     
     private func barGrid(
-        slots: [(beatOffset: Double, duration: Double, chord: ChordEvent?)]
+        slots: [BarSlot]
     ) -> some View {
-        let indexedSlots = Array(slots.enumerated())
         let hasEmptySlot = slots.contains { $0.chord == nil }
         
         return GeometryReader { geometry in
-            let totalSpacing = slotSpacing * CGFloat(max(indexedSlots.count - 1, 0))
+            let totalSpacing = slotSpacing * CGFloat(max(slots.count - 1, 0))
             let availableWidth = max(0, geometry.size.width - totalSpacing)
             
             HStack(spacing: slotSpacing) {
-                ForEach(indexedSlots, id: \.offset) { _, slot in
+                ForEach(slots) { slot in
                     slotView(slot: slot, totalWidth: availableWidth)
                 }
             }
@@ -1080,15 +1114,11 @@ struct BarRow: View {
                     .padding(.trailing, 8)
             }
         }
-        .onDrop(of: [UTType.text], isTargeted: $isBarDropTargeted) { providers in
-            guard canDropInBar() else { return false }
-            return handleBarDrop(providers)
-        }
     }
     
     @ViewBuilder
     private func slotView(
-        slot: (beatOffset: Double, duration: Double, chord: ChordEvent?),
+        slot: BarSlot,
         totalWidth: CGFloat
     ) -> some View {
         if let chord = slot.chord {
@@ -1117,7 +1147,7 @@ struct BarRow: View {
                     Label("Delete", systemImage: "trash.fill")
                 }
             }
-            .id("\(barIndex)-\(slot.beatOffset)-\(chord.id)")
+            .onDrop(of: [UTType.text], delegate: chordSlotDropDelegate(for: chord))
         } else {
             let showBlocked = isBarDropTargeted && !canDropInBar()
             Button {
@@ -1145,7 +1175,10 @@ struct BarRow: View {
             }
             .buttonStyle(.plain)
             .frame(width: widthForDuration(slot.duration, totalWidth: totalWidth))
-            .id("\(barIndex)-\(slot.beatOffset)-empty")
+            .onDrop(of: [UTType.text], isTargeted: $isBarDropTargeted) { providers in
+                guard canDropInBar() else { return false }
+                return handleBarDrop(providers)
+            }
         }
     }
     
@@ -1158,14 +1191,21 @@ struct BarRow: View {
     
     private func slotsForBar(
         _ barIndex: Int
-    ) -> [(beatOffset: Double, duration: Double, chord: ChordEvent?)] {
-        var slots: [(beatOffset: Double, duration: Double, chord: ChordEvent?)] = []
+    ) -> [BarSlot] {
+        var slots: [BarSlot] = []
         let chordsInBar = section.chordEvents
             .filter { $0.barIndex == barIndex }
             .sorted { $0.beatOffset < $1.beatOffset }
         
         for chord in chordsInBar {
-            slots.append((beatOffset: chord.beatOffset, duration: chord.duration, chord: chord))
+            slots.append(
+                BarSlot(
+                    id: chord.id.uuidString,
+                    beatOffset: chord.beatOffset,
+                    duration: chord.duration,
+                    chord: chord
+                )
+            )
         }
         
         let currentBeat = chordsInBar.map { $0.beatOffset + $0.duration }.max() ?? 0
@@ -1173,7 +1213,8 @@ struct BarRow: View {
             let remaining = Double(beatsPerBar) - currentBeat
             let addDuration = min(1.0, remaining)
             slots.append(
-                (
+                BarSlot(
+                    id: "empty-\(barIndex)-\(currentBeat)",
                     beatOffset: currentBeat,
                     duration: addDuration,
                     chord: nil
@@ -1210,6 +1251,7 @@ struct BarRow: View {
     private func deleteChord(_ chord: ChordEvent) {
         if let index = section.chordEvents.firstIndex(where: { $0.id == chord.id }) {
             section.chordEvents.remove(at: index)
+            compactBarChords(in: section, barIndex: barIndex)
         }
     }
     
@@ -1264,6 +1306,61 @@ struct BarRow: View {
             draggingChord = nil
         }
     }
+
+    private func handleChordSlotHover(targetChord: ChordEvent) {
+        guard let dragInfo = draggingChord,
+              dragInfo.chordId != targetChord.id,
+              let sourceSection = sectionById(dragInfo.sourceSectionId),
+              let sourceChord = sourceSection.chordEvents.first(where: { $0.id == dragInfo.chordId }),
+              sourceSection.id == section.id,
+              sourceChord.barIndex == barIndex else {
+            return
+        }
+
+        if lastChordReorderTargetId == targetChord.id {
+            return
+        }
+
+        let didMove = withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
+            moveChordToTargetIndex(
+                sourceSectionId: dragInfo.sourceSectionId,
+                chordId: dragInfo.chordId,
+                targetChordId: targetChord.id
+            )
+        }
+        if didMove {
+            lastChordReorderTargetId = targetChord.id
+        }
+    }
+
+    private func handleChordSlotDrop(
+        _ providers: [NSItemProvider],
+        targetChord: ChordEvent
+    ) -> Bool {
+        let handled = loadChordPayload(from: providers) { payload in
+            _ = moveChordToTargetIndex(
+                sourceSectionId: payload.sourceSectionId,
+                chordId: payload.chordId,
+                targetChordId: targetChord.id
+            )
+            draggingChord = nil
+            lastChordReorderTargetId = nil
+        }
+        return handled
+    }
+
+    private func chordSlotDropDelegate(for chord: ChordEvent) -> ChordSlotDropDelegate {
+        ChordSlotDropDelegate(
+            targetChord: chord,
+            onItemHovered: { target in
+                handleChordSlotHover(targetChord: target)
+            },
+            onDrop: { target, providers in
+                handleChordSlotDrop(providers, targetChord: target)
+            },
+            onExit: { lastChordReorderTargetId = nil }
+        )
+    }
     
     private func loadChordPayload(
         from providers: [NSItemProvider],
@@ -1316,6 +1413,8 @@ struct BarRow: View {
             return
         }
         
+        let originalBarIndex = chord.barIndex
+        
         let excludeChord = sourceSection.id == section.id ? chord : nil
         guard canPlaceChord(
             chord,
@@ -1335,6 +1434,91 @@ struct BarRow: View {
         
         chord.barIndex = barIndex
         chord.beatOffset = targetBeatOffset
+        
+        if originalBarIndex != barIndex {
+            compactBarChords(in: sourceSection, barIndex: originalBarIndex)
+        }
+        
+        compactBarChords(in: section, barIndex: barIndex)
+    }
+
+    private func moveChordToTargetIndex(
+        sourceSectionId: UUID,
+        chordId: UUID,
+        targetChordId: UUID
+    ) -> Bool {
+        guard let sourceSection = sectionById(sourceSectionId),
+              let sourceChord = sourceSection.chordEvents.first(where: { $0.id == chordId }) else {
+            return false
+        }
+
+        let originalBarIndex = sourceChord.barIndex
+        let isSameSection = sourceSection.id == section.id
+        let isSameBar = isSameSection && sourceChord.barIndex == barIndex
+
+        let ordered = section.chordEvents
+            .filter { $0.barIndex == barIndex }
+            .sorted { $0.beatOffset < $1.beatOffset }
+
+        guard let targetIndex = ordered.firstIndex(where: { $0.id == targetChordId }) else {
+            return false
+        }
+
+        var working = ordered
+        var sourceIndex: Int?
+        if isSameBar, let index = working.firstIndex(where: { $0.id == sourceChord.id }) {
+            sourceIndex = index
+            working.remove(at: index)
+        }
+
+        let destinationIndex: Int
+        if let sourceIndex {
+            destinationIndex = sourceIndex < targetIndex ? min(targetIndex, working.count) : targetIndex
+        } else {
+            destinationIndex = targetIndex
+        }
+
+        if !isSameBar {
+            let totalDuration = working.reduce(0.0) { $0 + $1.duration } + sourceChord.duration
+            guard totalDuration <= Double(beatsPerBar) + 0.0001 else {
+                return false
+            }
+        }
+
+        if !isSameSection {
+            if let index = sourceSection.chordEvents.firstIndex(where: { $0.id == sourceChord.id }) {
+                sourceSection.chordEvents.remove(at: index)
+            }
+            sourceChord.sectionTemplate = section
+            section.chordEvents.append(sourceChord)
+        }
+
+        working.insert(sourceChord, at: destinationIndex)
+
+        var beat = 0.0
+        for chord in working {
+            chord.barIndex = barIndex
+            chord.beatOffset = beat
+            beat += chord.duration
+        }
+
+        if originalBarIndex != barIndex {
+            compactBarChords(in: sourceSection, barIndex: originalBarIndex)
+        }
+
+        return true
+    }
+
+    private func compactBarChords(in section: SectionTemplate, barIndex: Int) {
+        let chords = section.chordEvents
+            .filter { $0.barIndex == barIndex }
+            .sorted { $0.beatOffset < $1.beatOffset }
+
+        var beat = 0.0
+        for chord in chords {
+            chord.beatOffset = beat
+            beat += chord.duration
+        }
     }
     
     private func nextAvailableBeat(excluding excluded: ChordEvent?) -> Double {
