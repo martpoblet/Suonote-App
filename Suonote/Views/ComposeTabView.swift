@@ -587,23 +587,39 @@ struct ChordGridView: View {
     let section: SectionTemplate
     let project: Project
     @Binding var selectedChordSlot: ChordSlot?
-    @State private var draggedChordId: UUID?
     
     private var beatsPerBar: Int { project.timeTop }
+    private let barRowHeight: CGFloat = 104
+    private let barRowSpacing: CGFloat = 12
+    
+    private var barsListHeight: CGFloat {
+        let count = CGFloat(section.bars)
+        guard count > 0 else { return 0 }
+        return (count * barRowHeight) + (max(0, count - 1) * barRowSpacing)
+    }
     
     var body: some View {
         VStack(spacing: 12) {
             // Show only the bars defined in section.bars
-            ForEach(0..<section.bars, id: \.self) { barIndex in
-                BarRow(
-                    section: section,
-                    project: project,
-                    barIndex: barIndex,
-                    beatsPerBar: beatsPerBar,
-                    selectedChordSlot: $selectedChordSlot,
-                    draggedChordId: $draggedChordId
-                )
+            List {
+                ForEach(0..<section.bars, id: \.self) { barIndex in
+                    BarRow(
+                        section: section,
+                        barIndex: barIndex,
+                        beatsPerBar: beatsPerBar,
+                        selectedChordSlot: $selectedChordSlot
+                    )
+                    .frame(height: barRowHeight)
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                }
             }
+            .listStyle(.plain)
+            .listRowSpacing(barRowSpacing)
+            .scrollContentBackground(.hidden)
+            .scrollDisabled(true)
+            .frame(height: barsListHeight)
             
             // Add Bar button
             Button {
@@ -635,11 +651,9 @@ struct ChordGridView: View {
 // MARK: - Bar Row Component
 struct BarRow: View {
     let section: SectionTemplate
-    let project: Project
     let barIndex: Int
     let beatsPerBar: Int
     @Binding var selectedChordSlot: ChordSlot?
-    @Binding var draggedChordId: UUID?
     
     var body: some View {
         let slots = slotsForBar(barIndex)
@@ -724,26 +738,6 @@ struct BarRow: View {
                 )
         )
         .contentShape(Rectangle())
-        .onDrop(of: [.text], isTargeted: nil) { _ in
-            handleChordDrop()
-        }
-        .contextMenu {
-            // Clone bar
-            Button {
-                cloneBar()
-            } label: {
-                Label("Clone Bar", systemImage: "doc.on.doc")
-            }
-            
-            // Delete bar (only if there's more than 1 bar)
-            if section.bars > 1 {
-                Button(role: .destructive) {
-                    deleteBar()
-                } label: {
-                    Label("Delete Bar", systemImage: "trash")
-                }
-            }
-        }
     }
 
     private var barHeader: some View {
@@ -786,12 +780,10 @@ struct BarRow: View {
         if let chord = slot.chord {
             ChordSlotButton(
                 section: section,
-                project: project,
                 barIndex: barIndex,
                 beatOffset: slot.beatOffset,
                 isHalf: chord.duration < 1.0,
-                selectedSlot: $selectedChordSlot,
-                draggedChordId: $draggedChordId
+                selectedSlot: $selectedChordSlot
             )
             .frame(width: widthForDuration(chord.duration, totalWidth: totalWidth))
             .id("\(barIndex)-\(slot.beatOffset)-\(chord.id)")
@@ -856,41 +848,14 @@ struct BarRow: View {
         return beatWidth * CGFloat(duration)
     }
 
-    private func handleChordDrop() -> Bool {
-        guard let draggedId = draggedChordId,
-              let chord = section.chordEvents.first(where: { $0.id == draggedId }) else {
-            return false
-        }
-        
-        let nextBeat = nextAvailableBeat(excluding: chord)
-        guard nextBeat + chord.duration <= Double(beatsPerBar) else {
-            return false
-        }
-        
-        chord.barIndex = barIndex
-        chord.beatOffset = nextBeat
-        draggedChordId = nil
-        return true
-    }
-    
-    private func nextAvailableBeat(excluding chord: ChordEvent?) -> Double {
-        let chordsInBar = section.chordEvents.filter { event in
-            event.barIndex == barIndex && event.id != chord?.id
-        }
-        let endPositions = chordsInBar.map { $0.beatOffset + $0.duration }
-        return endPositions.max() ?? 0
-    }
 }
 
 struct ChordSlotButton: View {
     let section: SectionTemplate
-    let project: Project
     let barIndex: Int
     let beatOffset: Double
     let isHalf: Bool
     @Binding var selectedSlot: ChordSlot?
-    @Binding var draggedChordId: UUID?
-    @Environment(\.modelContext) private var modelContext
     
     private var chord: ChordEvent? {
         section.chordEvents.first { chord in
@@ -909,92 +874,35 @@ struct ChordSlotButton: View {
                         sectionId: section.id
                     )
                 } label: {
-                    Text(chord.display)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            section.color.opacity(0.7),
-                                            section.color.opacity(0.5)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                        )
+                    chordPill(text: chord.display)
                 }
                 .buttonStyle(.plain)
-                .onDrag {
-                    draggedChordId = chord.id
-                    return NSItemProvider(object: chord.id.uuidString as NSString)
-                }
-                .contextMenu {
-                    // Edit chord
-                    Button {
-                        selectedSlot = ChordSlot(
-                            barIndex: barIndex,
-                            beatOffset: beatOffset,
-                            isHalf: isHalf,
-                            sectionId: section.id
-                        )
-                    } label: {
-                        Label("Edit", systemImage: "pencil")
-                    }
-                    
-                    // Clone chord
-                    Button {
-                        cloneChord(chord)
-                    } label: {
-                        Label("Clone", systemImage: "doc.on.doc")
-                    }
-                    
-                    // Delete chord
-                    Button(role: .destructive) {
-                        deleteChord(chord)
-                    } label: {
-                        Label("Delete", systemImage: "trash")
-                    }
-                }
             }
         }
     }
-    
-    private func cloneChord(_ chord: ChordEvent) {
-        // Find next available position
-        _ = section.chordEvents
-            .filter { $0.barIndex == barIndex }
-            .sorted { $0.beatOffset < $1.beatOffset }
-        
-        let nextBeatOffset = chord.beatOffset + chord.duration
-        let beatsPerBar = Double(project.timeTop)
-        
-        // If there's space in current bar
-        if nextBeatOffset + chord.duration <= beatsPerBar {
-            let clonedChord = ChordEvent(
-                barIndex: barIndex,
-                beatOffset: nextBeatOffset,
-                duration: chord.duration,
-                root: chord.root,
-                quality: chord.quality,
-                extensions: chord.extensions,
-                slashRoot: chord.slashRoot
+
+    private func chordPill(text: String) -> some View {
+        Text(text)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                section.color.opacity(0.7),
+                                section.color.opacity(0.5)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
             )
-            section.chordEvents.append(clonedChord)
-        }
-    }
-    
-    private func deleteChord(_ chord: ChordEvent) {
-        if let index = section.chordEvents.firstIndex(where: { $0.id == chord.id }) {
-            section.chordEvents.remove(at: index)
-        }
     }
 }
 
