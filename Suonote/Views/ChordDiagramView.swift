@@ -285,7 +285,9 @@ private struct GuitarChordDiagram: View {
             qualityKey = "major"
         case .minor:
             qualityKey = "minor"
-        case .diminished, .augmented, .dominant7, .major7, .minor7, .sus2, .sus4:
+        case .diminished, .augmented, .dominant7, .major7, .minor7, .sus2, .sus4, 
+             .minorMajor7, .diminished7, .halfDiminished7, .augmented7, 
+             .dominant9, .major9, .minor9:
             // For other qualities, default to major shape
             qualityKey = "major"
         }
@@ -380,26 +382,8 @@ private enum ChordNoteCalculator {
     }
     
     private static func baseIntervals(for quality: ChordQuality) -> [Int] {
-        switch quality {
-        case .major:
-            return [0, 4, 7]
-        case .minor:
-            return [0, 3, 7]
-        case .diminished:
-            return [0, 3, 6]
-        case .augmented:
-            return [0, 4, 8]
-        case .dominant7:
-            return [0, 4, 7, 10]
-        case .major7:
-            return [0, 4, 7, 11]
-        case .minor7:
-            return [0, 3, 7, 10]
-        case .sus2:
-            return [0, 2, 7]
-        case .sus4:
-            return [0, 5, 7]
-        }
+        // Use the intervals property from ChordQuality
+        return quality.intervals
     }
 }
 

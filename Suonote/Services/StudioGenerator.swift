@@ -780,6 +780,8 @@ struct StudioGenerator {
     }
 
     private static func simpleIntervals(for quality: ChordQuality) -> [Int] {
+        // Use the intervals property from ChordQuality directly
+        // But for backward compatibility with the pattern generation, only use triads
         switch quality {
         case .major: return [0, 4, 7]
         case .minor: return [0, 3, 7]
@@ -788,8 +790,15 @@ struct StudioGenerator {
         case .dominant7: return [0, 4, 7]
         case .major7: return [0, 4, 7]
         case .minor7: return [0, 3, 7]
+        case .minorMajor7: return [0, 3, 7]
+        case .diminished7: return [0, 3, 6]
+        case .halfDiminished7: return [0, 3, 6]
+        case .augmented7: return [0, 4, 8]
         case .sus2: return [0, 2, 7]
         case .sus4: return [0, 5, 7]
+        case .dominant9: return [0, 4, 7]
+        case .major9: return [0, 4, 7]
+        case .minor9: return [0, 3, 7]
         }
     }
 

@@ -1,5 +1,38 @@
 import Foundation
 
+// MARK: - Music Theory Constants
+
+enum MusicTheory {
+    static let chromaticScale = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+    
+    // Intervals in semitones
+    enum Interval: Int {
+        case unison = 0
+        case minorSecond = 1
+        case majorSecond = 2
+        case minorThird = 3
+        case majorThird = 4
+        case perfectFourth = 5
+        case tritone = 6
+        case perfectFifth = 7
+        case minorSixth = 8
+        case majorSixth = 9
+        case minorSeventh = 10
+        case majorSeventh = 11
+        case octave = 12
+    }
+    
+    // Scale formulas (intervals from root)
+    enum ScaleFormula {
+        static let major = [0, 2, 4, 5, 7, 9, 11]
+        static let naturalMinor = [0, 2, 3, 5, 7, 8, 10]
+        static let harmonicMinor = [0, 2, 3, 5, 7, 8, 11]
+        static let melodicMinor = [0, 2, 3, 5, 7, 9, 11]
+        static let dorian = [0, 2, 3, 5, 7, 9, 10]
+        static let mixolydian = [0, 2, 4, 5, 7, 9, 10]
+    }
+}
+
 struct ChordSuggestion: Identifiable {
     let id = UUID()
     let root: String
@@ -7,9 +40,19 @@ struct ChordSuggestion: Identifiable {
     let extensions: [String]
     let reason: String
     let confidence: Double
+    let romanNumeral: String?
     
     var display: String {
         root + quality.symbol + extensions.joined()
+    }
+    
+    init(root: String, quality: ChordQuality, extensions: [String] = [], reason: String, confidence: Double, romanNumeral: String? = nil) {
+        self.root = root
+        self.quality = quality
+        self.extensions = extensions
+        self.reason = reason
+        self.confidence = confidence
+        self.romanNumeral = romanNumeral
     }
 }
 
@@ -18,20 +61,33 @@ class ChordSuggestionEngine {
     // MARK: - Scale Degrees
     
     private static func scaleDegreesForKey(root: String, mode: KeyMode) -> [String] {
-        let notes = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-        guard let rootIndex = notes.firstIndex(of: root) else { return [] }
+        guard let rootIndex = MusicTheory.chromaticScale.firstIndex(of: root) else { return [] }
         
         let intervals: [Int]
         switch mode {
         case .major:
-            intervals = [0, 2, 4, 5, 7, 9, 11] // Major scale
+            intervals = MusicTheory.ScaleFormula.major
         case .minor:
-            intervals = [0, 2, 3, 5, 7, 8, 10] // Natural minor scale
+            intervals = MusicTheory.ScaleFormula.naturalMinor
         }
         
         return intervals.map { offset in
-            notes[(rootIndex + offset) % 12]
+            MusicTheory.chromaticScale[(rootIndex + offset) % 12]
         }
+    }
+    
+    // MARK: - Note Utilities
+    
+    static func transpose(note: String, semitones: Int) -> String {
+        guard let index = MusicTheory.chromaticScale.firstIndex(of: note) else { return note }
+        let newIndex = (index + semitones + 12) % 12
+        return MusicTheory.chromaticScale[newIndex]
+    }
+    
+    static func intervalBetween(from: String, to: String) -> Int {
+        guard let fromIndex = MusicTheory.chromaticScale.firstIndex(of: from),
+              let toIndex = MusicTheory.chromaticScale.firstIndex(of: to) else { return 0 }
+        return (toIndex - fromIndex + 12) % 12
     }
     
     // MARK: - Diatonic Chords
@@ -44,28 +100,49 @@ class ChordSuggestionEngine {
             // Major key: I, ii, iii, IV, V, vi, vii°
             let qualities: [ChordQuality] = [.major, .minor, .minor, .major, .major, .minor, .diminished]
             let romanNumerals = ["I", "ii", "iii", "IV", "V", "vi", "vii°"]
+            let functionNames = ["Tonic", "Supertonic", "Mediant", "Subdominant", "Dominant", "Submediant", "Leading Tone"]
             
             for (index, degree) in scaleDegrees.enumerated() {
+                let confidence: Double = {
+                    switch index {
+                    case 0, 3, 4: return 1.0  // I, IV, V - primary chords
+                    case 5: return 0.9        // vi - very common
+                    case 1: return 0.8        // ii - common pre-dominant
+                    default: return 0.7
+                    }
+                }()
+                
                 chords.append(ChordSuggestion(
                     root: degree,
                     quality: qualities[index],
                     extensions: [],
-                    reason: "Diatonic chord \(romanNumerals[index])",
-                    confidence: index == 0 || index == 3 || index == 4 ? 1.0 : 0.8
+                    reason: "\(romanNumerals[index]) - \(functionNames[index])",
+                    confidence: confidence,
+                    romanNumeral: romanNumerals[index]
                 ))
             }
         } else {
             // Minor key: i, ii°, III, iv, v, VI, VII
             let qualities: [ChordQuality] = [.minor, .diminished, .major, .minor, .minor, .major, .major]
             let romanNumerals = ["i", "ii°", "III", "iv", "v", "VI", "VII"]
+            let functionNames = ["Tonic", "Supertonic", "Relative Major", "Subdominant", "Dominant", "Submediant", "Subtonic"]
             
             for (index, degree) in scaleDegrees.enumerated() {
+                let confidence: Double = {
+                    switch index {
+                    case 0, 3, 4: return 1.0  // i, iv, v
+                    case 5, 6: return 0.9     // VI, VII - common in minor
+                    default: return 0.7
+                    }
+                }()
+                
                 chords.append(ChordSuggestion(
                     root: degree,
                     quality: qualities[index],
                     extensions: [],
-                    reason: "Diatonic chord \(romanNumerals[index])",
-                    confidence: index == 0 || index == 3 || index == 4 ? 1.0 : 0.8
+                    reason: "\(romanNumerals[index]) - \(functionNames[index])",
+                    confidence: confidence,
+                    romanNumeral: romanNumerals[index]
                 ))
             }
         }
@@ -79,33 +156,76 @@ class ChordSuggestionEngine {
         let diatonic = diatonicChords(forKey: root, mode: mode)
         var extended: [ChordSuggestion] = []
         
-        // Add 7th chords
-        for chord in diatonic.prefix(5) {
+        // Add 7th chords (dominant, major7, minor7)
+        for (index, chord) in diatonic.enumerated() {
+            let seventh: ChordQuality
+            let reason: String
+            
+            switch (mode, index) {
+            case (.major, 0), (.major, 3):  // I and IV in major
+                seventh = .major7
+                reason = "Major 7th chord"
+            case (.major, 4):  // V in major
+                seventh = .dominant7
+                reason = "Dominant 7th"
+            case (_, _) where chord.quality == .minor:  // Any minor chord
+                seventh = .minor7
+                reason = "Minor 7th chord"
+            default:
+                seventh = .dominant7
+                reason = "7th chord"
+            }
+            
+            if index < 6 {  // Skip vii° for 7th extensions
+                extended.append(ChordSuggestion(
+                    root: chord.root,
+                    quality: seventh,
+                    extensions: [],
+                    reason: reason,
+                    confidence: 0.75
+                ))
+            }
+        }
+        
+        // Add suspended chords on I, IV, V (very common)
+        let suspendedIndices = [0, 3, 4]
+        for index in suspendedIndices where index < diatonic.count {
+            let chord = diatonic[index]
+            
             extended.append(ChordSuggestion(
                 root: chord.root,
-                quality: chord.quality,
-                extensions: ["7"],
-                reason: "Common 7th chord",
-                confidence: 0.7
+                quality: .sus4,
+                extensions: [],
+                reason: "Sus4 - creates tension",
+                confidence: 0.65
+            ))
+            
+            extended.append(ChordSuggestion(
+                root: chord.root,
+                quality: .sus2,
+                extensions: [],
+                reason: "Sus2 - open sound",
+                confidence: 0.6
             ))
         }
         
-        // Add suspended chords on I, IV, V
-        let suspendedDegrees = [diatonic[0], diatonic[3], diatonic[4]]
-        for chord in suspendedDegrees {
+        // Add 9th extensions to I, ii, V
+        let ninthIndices = [0, 1, 4]
+        for index in ninthIndices where index < diatonic.count {
+            let chord = diatonic[index]
             extended.append(ChordSuggestion(
                 root: chord.root,
-                quality: .major,
-                extensions: ["sus4"],
-                reason: "Suspended chord",
-                confidence: 0.6
+                quality: chord.quality,
+                extensions: ["9"],
+                reason: "Add9 - richer harmony",
+                confidence: 0.7
             ))
         }
         
         return extended
     }
     
-    // MARK: - Smart Suggestions
+    // MARK: - Smart Suggestions (Context-Aware)
     
     static func suggestNextChord(
         after lastChord: ChordEvent?,
@@ -115,39 +235,81 @@ class ChordSuggestionEngine {
         let diatonic = diatonicChords(forKey: keyRoot, mode: mode)
         
         guard let last = lastChord else {
-            // No previous chord - suggest tonic and dominant
+            // No previous chord - suggest strong opening chords
             return [
-                diatonic[0], // I or i
-                diatonic[4], // V
-                diatonic[3]  // IV or iv
-            ]
+                diatonic[0],  // I or i (tonic)
+                diatonic[4],  // V (dominant - strong opener)
+                diatonic[3],  // IV or iv (subdominant)
+                diatonic[5]   // vi or VI (alternative)
+            ].compactMap { $0 }
         }
         
         var suggestions: [ChordSuggestion] = []
         
         // Find the last chord in the scale
-        if let lastIndex = diatonic.firstIndex(where: { $0.root == last.root }) {
+        if let lastIndex = diatonic.firstIndex(where: { $0.root == last.root && $0.quality == last.quality }) {
+            // Use music theory progressions based on functional harmony
             switch lastIndex {
-            case 0: // I/i - can go anywhere, but commonly to IV, V, vi
-                suggestions = [diatonic[3], diatonic[4], diatonic[5]]
-            case 1: // ii - commonly to V
-                suggestions = [diatonic[4], diatonic[0]]
-            case 2: // iii - to vi or IV
-                suggestions = [diatonic[5], diatonic[3]]
-            case 3: // IV - to I, V, or ii
-                suggestions = [diatonic[0], diatonic[4], diatonic[1]]
-            case 4: // V - strong pull to I
-                suggestions = [diatonic[0], diatonic[5]]
-            case 5: // vi - to IV, ii, or V
-                suggestions = [diatonic[3], diatonic[1], diatonic[4]]
-            case 6: // vii° - to I
-                suggestions = [diatonic[0]]
+            case 0: // I/i (Tonic) - can go anywhere, common: IV, V, vi/VI
+                suggestions = [
+                    ChordSuggestion(root: diatonic[3].root, quality: diatonic[3].quality, reason: "IV - Subdominant movement", confidence: 0.95),
+                    ChordSuggestion(root: diatonic[4].root, quality: diatonic[4].quality, reason: "V - Dominant movement", confidence: 0.95),
+                    ChordSuggestion(root: diatonic[5].root, quality: diatonic[5].quality, reason: "vi/VI - Deceptive resolution", confidence: 0.85),
+                    ChordSuggestion(root: diatonic[1].root, quality: diatonic[1].quality, reason: "ii - Pre-dominant", confidence: 0.75)
+                ]
+                
+            case 1: // ii/ii° (Supertonic) - commonly to V or back to I
+                suggestions = [
+                    ChordSuggestion(root: diatonic[4].root, quality: diatonic[4].quality, reason: "V - Strong cadence", confidence: 1.0),
+                    ChordSuggestion(root: diatonic[0].root, quality: diatonic[0].quality, reason: "I - Direct resolution", confidence: 0.7),
+                    ChordSuggestion(root: diatonic[3].root, quality: diatonic[3].quality, reason: "IV - Plagal motion", confidence: 0.65)
+                ]
+                
+            case 2: // iii/III (Mediant) - to vi, IV, or bridge
+                suggestions = [
+                    ChordSuggestion(root: diatonic[5].root, quality: diatonic[5].quality, reason: "vi/VI - Parallel minor", confidence: 0.9),
+                    ChordSuggestion(root: diatonic[3].root, quality: diatonic[3].quality, reason: "IV - Descending", confidence: 0.85),
+                    ChordSuggestion(root: diatonic[0].root, quality: diatonic[0].quality, reason: "I - Resolution", confidence: 0.75)
+                ]
+                
+            case 3: // IV/iv (Subdominant) - to I, V, or ii
+                suggestions = [
+                    ChordSuggestion(root: diatonic[0].root, quality: diatonic[0].quality, reason: "I - Plagal cadence", confidence: 0.95),
+                    ChordSuggestion(root: diatonic[4].root, quality: diatonic[4].quality, reason: "V - Authentic cadence prep", confidence: 0.95),
+                    ChordSuggestion(root: diatonic[1].root, quality: diatonic[1].quality, reason: "ii - Pre-dominant chain", confidence: 0.75),
+                    ChordSuggestion(root: diatonic[5].root, quality: diatonic[5].quality, reason: "vi - Deceptive", confidence: 0.7)
+                ]
+                
+            case 4: // V/v (Dominant) - strong pull to I
+                suggestions = [
+                    ChordSuggestion(root: diatonic[0].root, quality: diatonic[0].quality, reason: "I - Perfect cadence", confidence: 1.0),
+                    ChordSuggestion(root: diatonic[5].root, quality: diatonic[5].quality, reason: "vi/VI - Deceptive cadence", confidence: 0.85),
+                    ChordSuggestion(root: diatonic[3].root, quality: diatonic[3].quality, reason: "IV - Extended resolution", confidence: 0.65)
+                ]
+                
+            case 5: // vi/VI (Submediant) - to IV, ii, or V
+                suggestions = [
+                    ChordSuggestion(root: diatonic[3].root, quality: diatonic[3].quality, reason: "IV - Descending bass", confidence: 0.9),
+                    ChordSuggestion(root: diatonic[1].root, quality: diatonic[1].quality, reason: "ii - Circle progression", confidence: 0.85),
+                    ChordSuggestion(root: diatonic[4].root, quality: diatonic[4].quality, reason: "V - Direct to dominant", confidence: 0.8),
+                    ChordSuggestion(root: diatonic[0].root, quality: diatonic[0].quality, reason: "I - Back to tonic", confidence: 0.75)
+                ]
+                
+            case 6: // vii°/VII (Leading Tone / Subtonic) - to I
+                suggestions = [
+                    ChordSuggestion(root: diatonic[0].root, quality: diatonic[0].quality, reason: "I - Leading tone resolution", confidence: 1.0),
+                    ChordSuggestion(root: diatonic[5].root, quality: diatonic[5].quality, reason: "vi/VI - Alternative", confidence: 0.6)
+                ]
+                
             default:
-                suggestions = [diatonic[0]]
+                suggestions = [diatonic[0], diatonic[4]].compactMap { $0 }
             }
         } else {
-            // Last chord not in key, suggest tonic
-            suggestions = [diatonic[0], diatonic[4]]
+            // Last chord not in key - suggest tonic and dominant
+            suggestions = [
+                ChordSuggestion(root: diatonic[0].root, quality: diatonic[0].quality, reason: "I - Return to key", confidence: 0.95),
+                ChordSuggestion(root: diatonic[4].root, quality: diatonic[4].quality, reason: "V - Establish tonality", confidence: 0.85)
+            ]
         }
         
         return suggestions
@@ -160,19 +322,64 @@ class ChordSuggestionEngine {
         
         if mode == .major {
             return [
-                ("I-V-vi-IV", [chords[0], chords[4], chords[5], chords[3]]),
-                ("I-IV-V", [chords[0], chords[3], chords[4]]),
-                ("vi-IV-I-V", [chords[5], chords[3], chords[0], chords[4]]),
-                ("I-vi-IV-V", [chords[0], chords[5], chords[3], chords[4]]),
-                ("ii-V-I", [chords[1], chords[4], chords[0]])
+                ("I-V-vi-IV (Pop)", [chords[0], chords[4], chords[5], chords[3]]),
+                ("I-IV-V (Classic)", [chords[0], chords[3], chords[4]]),
+                ("vi-IV-I-V (Sensitive)", [chords[5], chords[3], chords[0], chords[4]]),
+                ("I-vi-IV-V (50s Doo-Wop)", [chords[0], chords[5], chords[3], chords[4]]),
+                ("ii-V-I (Jazz)", [chords[1], chords[4], chords[0]]),
+                ("I-IV-vi-V (Ascending)", [chords[0], chords[3], chords[5], chords[4]]),
+                ("vi-ii-V-I (Circle)", [chords[5], chords[1], chords[4], chords[0]])
             ]
         } else {
             return [
-                ("i-VI-III-VII", [chords[0], chords[5], chords[2], chords[6]]),
-                ("i-iv-v", [chords[0], chords[3], chords[4]]),
-                ("i-VI-VII", [chords[0], chords[5], chords[6]]),
-                ("i-III-VII-iv", [chords[0], chords[2], chords[6], chords[3]])
+                ("i-VI-III-VII (Andalusian)", [chords[0], chords[5], chords[2], chords[6]]),
+                ("i-iv-v (Natural Minor)", [chords[0], chords[3], chords[4]]),
+                ("i-VI-VII (Modal)", [chords[0], chords[5], chords[6]]),
+                ("i-III-VII-iv (Dorian Feel)", [chords[0], chords[2], chords[6], chords[3]]),
+                ("i-VII-VI-VII (Epic)", [chords[0], chords[6], chords[5], chords[6]]),
+                ("i-VI-iv-V (Dramatic)", [chords[0], chords[5], chords[3], chords[4]])
             ]
         }
+    }
+    
+    // MARK: - Chord Analysis
+    
+    /// Analyzes a chord progression and provides insights
+    static func analyzeProgression(_ chords: [ChordEvent], inKey root: String, mode: KeyMode) -> ProgressionAnalysis {
+        let diatonic = diatonicChords(forKey: root, mode: mode)
+        var analysis = ProgressionAnalysis()
+        
+        for chord in chords {
+            if let match = diatonic.first(where: { $0.root == chord.root }) {
+                analysis.diatonicChords += 1
+                if let romanNumeral = match.romanNumeral {
+                    analysis.romanNumerals.append(romanNumeral)
+                }
+            } else {
+                analysis.nonDiatonicChords += 1
+                analysis.romanNumerals.append("?")
+            }
+        }
+        
+        analysis.totalChords = chords.count
+        return analysis
+    }
+}
+
+// MARK: - Supporting Types
+
+struct ProgressionAnalysis {
+    var totalChords: Int = 0
+    var diatonicChords: Int = 0
+    var nonDiatonicChords: Int = 0
+    var romanNumerals: [String] = []
+    
+    var diatonicPercentage: Double {
+        guard totalChords > 0 else { return 0 }
+        return Double(diatonicChords) / Double(totalChords) * 100
+    }
+    
+    var romanNumeralString: String {
+        romanNumerals.joined(separator: " - ")
     }
 }
