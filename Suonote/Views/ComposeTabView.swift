@@ -134,6 +134,7 @@ struct ComposeTabView: View {
         HStack(spacing: DesignSystem.Spacing.sm) {
             // Key button
             Button {
+                haptic(.selection)
                 showingKeyPicker = true
             } label: {
                 HStack(spacing: DesignSystem.Spacing.xs) {
@@ -151,10 +152,11 @@ struct ComposeTabView: View {
                 )
                 .foregroundStyle(DesignSystem.Colors.primary)
             }
-            .animatedPress()
+            .buttonStyle(.haptic(.light))
             
             // Time signature button
             Button {
+                haptic(.selection)
                 showingEditSheet = true
             } label: {
                 HStack(spacing: DesignSystem.Spacing.xs) {
@@ -172,10 +174,11 @@ struct ComposeTabView: View {
                 )
                 .foregroundStyle(DesignSystem.Colors.warning)
             }
-            .animatedPress()
+            .buttonStyle(.haptic(.light))
             
             // BPM button with tempo description
             Button {
+                haptic(.selection)
                 showingEditSheet = true
             } label: {
                 HStack(spacing: DesignSystem.Spacing.xs) {
@@ -198,12 +201,13 @@ struct ComposeTabView: View {
                 )
                 .foregroundStyle(DesignSystem.Colors.accent)
             }
-            .animatedPress()
+            .buttonStyle(.haptic(.light))
             
             Spacer()
             
             // Export button
             Button {
+                haptic(.light)
                 showingExport = true
             } label: {
                 Image(systemName: DesignSystem.Icons.export)
@@ -215,10 +219,11 @@ struct ComposeTabView: View {
                             .fill(DesignSystem.Colors.surface)
                     )
             }
-            .animatedPress()
+            .buttonStyle(.haptic(.light))
             
             // Add section button
             Button {
+                haptic(.medium)
                 withAnimation(DesignSystem.Animations.smoothSpring) {
                     showingSectionCreator = true
                 }
@@ -228,7 +233,7 @@ struct ComposeTabView: View {
                     .padding(DesignSystem.Spacing.xs)
                     .foregroundStyle(DesignSystem.Colors.primaryGradient)
             }
-            .animatedPress()
+            .buttonStyle(.haptic(.medium))
         }
         .padding(.horizontal, DesignSystem.Spacing.xl)
         .padding(.vertical, DesignSystem.Spacing.sm)
@@ -293,6 +298,7 @@ struct ComposeTabView: View {
                                 onDelete: {
                                     deleteArrangementItem(item)
                                 },
+                                project: project,
                                 linkedRecordingsCount: recordingsBySectionId[section.id]?.count ?? 0
                             )
                             .onDrag {
@@ -543,6 +549,7 @@ struct SectionTimelineCard: View {
     let isSelected: Bool
     let onSelect: () -> Void
     let onDelete: () -> Void
+    let project: Project
     
     @State private var showingDeleteConfirmation = false
     
@@ -554,7 +561,10 @@ struct SectionTimelineCard: View {
     }
     
     var body: some View {
-        Button(action: onSelect) {
+        Button(action: {
+            haptic(.selection)
+            onSelect()
+        }) {
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                 HStack {
                     // Section number badge
@@ -582,15 +592,22 @@ struct SectionTimelineCard: View {
                     .lineLimit(1)
                 
                 // Metadata with badges
-                HStack(spacing: DesignSystem.Spacing.xxs) {
-                    Badge("\(section.bars) bars", color: sectionColor)
-                    
-                    if linkedRecordingsCount > 0 {
-                        Badge("\(linkedRecordingsCount) 🎙", color: DesignSystem.Colors.accent)
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxs) {
+                    HStack(spacing: DesignSystem.Spacing.xxs) {
+                        Badge("\(section.bars) bars", color: sectionColor)
+                        
+                        if linkedRecordingsCount > 0 {
+                            Badge("\(linkedRecordingsCount) 🎙", color: DesignSystem.Colors.accent)
+                        }
                     }
                     
-                    if section.chordEvents.isEmpty {
-                        Badge("Empty", color: DesignSystem.Colors.warning.opacity(0.5))
+                    HStack(spacing: DesignSystem.Spacing.xxs) {
+                        if section.chordEvents.isEmpty {
+                            Badge("Empty", color: DesignSystem.Colors.warning.opacity(0.5))
+                        } else {
+                            ChordCountBadge(count: section.chordEvents.count, color: sectionColor)
+                            ProgressionAnalysisBadge(section: section, project: project)
+                        }
                     }
                 }
             }

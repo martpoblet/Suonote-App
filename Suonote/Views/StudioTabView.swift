@@ -81,13 +81,13 @@ struct StudioTabView: View {
     var body: some View {
         VStack(spacing: 0) {
             studioHeader
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
+                .padding(.horizontal, DesignSystem.Spacing.lg)
+                .padding(.top, DesignSystem.Spacing.sm)
 
-            Divider().overlay(Color.white.opacity(0.1))
+            Divider().overlay(DesignSystem.Colors.border)
 
             ScrollView {
-                LazyVStack(spacing: 20) {
+                LazyVStack(spacing: DesignSystem.Spacing.lg) {
                     if sortedTracks.isEmpty {
                         StudioEmptyState(
                             accentColor: project.studioStyle?.accentColor ?? SectionColor.purple.color,
@@ -143,8 +143,8 @@ struct StudioTabView: View {
                         }
                     }
                 }
-                .padding(20)
-                .padding(.bottom, 32)
+                .padding(DesignSystem.Spacing.lg)
+                .padding(.bottom, DesignSystem.Spacing.xxl)
             }
         }
         .onAppear {
@@ -223,78 +223,86 @@ struct StudioTabView: View {
     }
 
     private var studioHeader: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: DesignSystem.Spacing.sm) {
+            // Style Picker Button
             Button {
                 showingStylePicker = true
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: DesignSystem.Spacing.xxs) {
                     Image(systemName: project.studioStyle?.icon ?? "sparkles")
                     Text(project.studioStyle?.title ?? "Pick Style")
-                        .font(.subheadline.weight(.semibold))
+                        .font(DesignSystem.Typography.callout)
                 }
                 .foregroundStyle(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, DesignSystem.Spacing.sm)
+                .padding(.vertical, DesignSystem.Spacing.xxs)
                 .background(
                     Capsule()
-                        .fill((project.studioStyle?.accentColor ?? SectionColor.purple.color).opacity(0.2))
+                        .fill((project.studioStyle?.accentColor ?? DesignSystem.Colors.primary).opacity(0.2))
                         .overlay(
                             Capsule()
-                                .stroke((project.studioStyle?.accentColor ?? SectionColor.purple.color), lineWidth: 1)
+                                .stroke(project.studioStyle?.accentColor ?? DesignSystem.Colors.primary, lineWidth: 1)
                         )
                 )
             }
+            .animatedPress()
 
             Spacer()
 
+            // Add Track Button
             Button {
                 promptAddTrack()
             } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "plus.circle.fill")
+                HStack(spacing: DesignSystem.Spacing.xxs) {
+                    Image(systemName: DesignSystem.Icons.add)
                     Text("Add Track")
                 }
-                .font(.subheadline.weight(.semibold))
+                .font(DesignSystem.Typography.callout)
                 .foregroundStyle(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, DesignSystem.Spacing.sm)
+                .padding(.vertical, DesignSystem.Spacing.xxs)
                 .background(
                     Capsule()
-                        .fill((project.studioStyle?.accentColor ?? SectionColor.purple.color))
+                        .fill(project.studioStyle?.accentColor ?? DesignSystem.Colors.primary)
                 )
             }
+            .animatedPress()
 
+            // Regenerate Button (conditional)
             if hasGeneratedTracks {
                 Button {
                     showingRegenerateDialog = true
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: DesignSystem.Spacing.xxs) {
                         Image(systemName: "sparkles")
                         Text("Regenerate")
                     }
-                    .font(.subheadline.weight(.semibold))
+                    .font(DesignSystem.Typography.callout)
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, DesignSystem.Spacing.sm)
+                    .padding(.vertical, DesignSystem.Spacing.xxs)
                     .background(
                         Capsule()
-                            .fill(Color.white.opacity(0.15))
+                            .fill(DesignSystem.Colors.surface)
                     )
                 }
+                .animatedPress()
                 .disabled(project.studioStyle == nil)
             }
 
+            // Add Recording Button
             Button {
                 showingRecordingPicker = true
             } label: {
-                Image(systemName: "waveform.badge.plus")
+                Image(systemName: DesignSystem.Icons.waveform)
                     .font(.title3)
                     .foregroundStyle(.white)
-                    .padding(8)
+                    .padding(DesignSystem.Spacing.xxs)
                     .background(
-                        Circle().fill(Color.white.opacity(0.1))
+                        Circle().fill(DesignSystem.Colors.surface)
                     )
             }
+            .animatedPress()
             .disabled(project.recordings.isEmpty)
             .opacity(project.recordings.isEmpty ? 0.5 : 1.0)
         }

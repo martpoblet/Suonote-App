@@ -85,7 +85,7 @@ struct RecordingsTabView: View {
             recordingHeader
             
             Divider()
-                .overlay(Color.white.opacity(0.1))
+                .overlay(DesignSystem.Colors.border)
             
             // Lista de takes
             takesListView
@@ -148,29 +148,29 @@ struct RecordingsTabView: View {
     }
     
     private var recordingHeader: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: DesignSystem.Spacing.md) {
             // Record button
             Button {
                 showingRecordingScreen = true
             } label: {
-                HStack(spacing: 12) {
+                HStack(spacing: DesignSystem.Spacing.sm) {
                     ZStack {
                         Circle()
-                            .fill(Color.red.opacity(0.2))
+                            .fill(DesignSystem.Colors.error.opacity(0.2))
                             .frame(width: 48, height: 48)
                         
                         Circle()
-                            .fill(Color.red)
+                            .fill(DesignSystem.Colors.error)
                             .frame(width: 20, height: 20)
                     }
                     
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxxs) {
                         Text("Start Recording")
-                            .font(.headline)
+                            .font(DesignSystem.Typography.body)
                             .foregroundStyle(.white)
                         
                         Text("Take \(project.recordings.count + 1) • \(selectedRecordingType.rawValue)")
-                            .font(.caption)
+                            .font(DesignSystem.Typography.caption)
                             .foregroundStyle(.secondary)
                     }
                     
@@ -179,45 +179,38 @@ struct RecordingsTabView: View {
                     Image(systemName: "chevron.right")
                         .foregroundStyle(.secondary)
                 }
-                .padding(16)
+                .padding(DesignSystem.Spacing.md)
                 .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color.white.opacity(0.05))
+                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                        .fill(DesignSystem.Colors.surface)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(Color.red.opacity(0.3), lineWidth: 1)
+                            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                                .stroke(DesignSystem.Colors.error.opacity(0.3), lineWidth: 1)
                         )
                 )
             }
+            .animatedPress()
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 24)  // Extra top padding to prevent overlap
-        .padding(.bottom, 16)
+        .padding(.horizontal, DesignSystem.Spacing.xl)
+        .padding(.top, DesignSystem.Spacing.xl)
+        .padding(.bottom, DesignSystem.Spacing.md)
     }
     
     private var takesListView: some View {
         let recordings = filteredAndSortedRecordings
         let sectionMap = sectionsById
         
-        return VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
             HStack {
                 Text("Takes")
-                    .font(.title3.bold())
+                    .font(DesignSystem.Typography.title3)
                     .foregroundStyle(.white)
                 
-                Text("\(recordings.count)")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(
-                        Capsule()
-                            .fill(Color.white.opacity(0.1))
-                    )
+                Badge("\(recordings.count)", color: DesignSystem.Colors.surface)
                 
                 Spacer()
                 
-                HStack(spacing: 16) {
+                HStack(spacing: DesignSystem.Spacing.md) {
                     // Filter menu
                     Menu {
                     // Type Filter
@@ -276,32 +269,33 @@ struct RecordingsTabView: View {
                         }
                     }
                 } label: {
-                    VStack(spacing: 4) {
+                    VStack(spacing: DesignSystem.Spacing.xxs) {
                         Image(systemName: "line.3.horizontal.decrease.circle.fill")
                             .font(.system(size: 20))
                         Text("Filter")
-                            .font(.caption2.weight(.medium))
+                            .font(DesignSystem.Typography.caption)
                     }
                     .foregroundStyle(.white)
                     .frame(width: 70, height: 60)
                     .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.white.opacity(0.1))
+                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
+                            .fill(DesignSystem.Colors.surface)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.white.opacity(0.3), lineWidth: 1.5)
+                                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
+                                    .stroke(DesignSystem.Colors.border, lineWidth: 1.5)
                             )
                     )
                 }
+                .animatedPress()
                 }
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 8)
+            .padding(.horizontal, DesignSystem.Spacing.xl)
+            .padding(.top, DesignSystem.Spacing.xxs)
             
             // Active Filters Display
             if filterType != nil || showLinkedOnly {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: DesignSystem.Spacing.xxs) {
                         if let type = filterType {
                             FilterChipView(
                                 icon: type.icon,
@@ -315,50 +309,29 @@ struct RecordingsTabView: View {
                             FilterChipView(
                                 icon: "link",
                                 text: "Linked",
-                                color: .purple,
+                                color: DesignSystem.Colors.primary,
                                 onRemove: { showLinkedOnly = false }
                             )
                         }
                     }
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, DesignSystem.Spacing.xl)
                 }
             }
             
             if recordings.isEmpty {
                 Spacer()
                 
-                VStack(spacing: 16) {
-                    Image(systemName: "waveform.circle")
-                        .font(.system(size: 48))
-                        .foregroundStyle(.secondary)
-                        .symbolEffect(.pulse)
-                    
-                    VStack(spacing: 6) {
-                        Text(project.recordings.isEmpty ? "No recordings yet" : "No recordings match filters")
-                            .font(.headline)
-                            .foregroundStyle(.white)
-                        
-                        Text(project.recordings.isEmpty ? "Tap 'Start Recording' to begin" : "Try adjusting your filters")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    
+                EmptyStateView(
+                    icon: "waveform.circle",
+                    title: project.recordings.isEmpty ? "No recordings yet" : "No recordings match filters",
+                    message: project.recordings.isEmpty ? "Tap 'Start Recording' to begin" : "Try adjusting your filters",
+                    actionTitle: project.recordings.isEmpty ? nil : "Clear Filters"
+                ) {
                     if !project.recordings.isEmpty {
-                        Button("Clear Filters") {
-                            filterType = nil
-                            showLinkedOnly = false
-                        }
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.blue)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(
-                            Capsule()
-                                .fill(Color.blue.opacity(0.15))
-                        )
+                        filterType = nil
+                        showLinkedOnly = false
                     }
                 }
-                .frame(maxWidth: .infinity)
                 
                 Spacer()
             } else {
@@ -386,7 +359,12 @@ struct RecordingsTabView: View {
                             )
                         }
                         .buttonStyle(.plain)
-                        .listRowInsets(EdgeInsets(top: 5, leading: 24, bottom: 5, trailing: 24))
+                        .listRowInsets(EdgeInsets(
+                            top: DesignSystem.Spacing.xxs,
+                            leading: DesignSystem.Spacing.xl,
+                            bottom: DesignSystem.Spacing.xxs,
+                            trailing: DesignSystem.Spacing.xl
+                        ))
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
