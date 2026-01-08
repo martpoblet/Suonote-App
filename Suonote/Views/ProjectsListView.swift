@@ -45,41 +45,37 @@ struct ProjectsListView: View {
     
     var body: some View {
         ZStack {
-            // Animated gradient background
-            LinearGradient(
-                colors: [
-                    Color(red: 0.05, green: 0.05, blue: 0.15),
-                    Color(red: 0.1, green: 0.05, blue: 0.2),
-                    Color.black
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            // Background usando Design System
+            ProjectBackgroundView()
             
             VStack(spacing: 0) {
                 // Custom header
                 customHeader
-                    .padding(.horizontal, 24)
-                    .padding(.top, 8)
+                    .padding(.horizontal, DesignSystem.Spacing.xl)
+                    .padding(.top, DesignSystem.Spacing.xs)
                 
                 // Filter chips
                 if !allProjects.isEmpty {
                     filterChipsView
-                        .padding(.top, 16)
+                        .padding(.top, DesignSystem.Spacing.md)
                 }
                 
                 // Projects grid
                 if filteredProjects.isEmpty {
                     emptyStateView
-                    .padding(.top, 16)
+                        .padding(.top, DesignSystem.Spacing.md)
                 } else {
                     List {
                         ForEach(filteredProjects) { project in
                             NavigationLink(destination: ProjectDetailView(project: project)) {
                                 ModernProjectCard(project: project)
                             }
-                            .listRowInsets(EdgeInsets(top: 6, leading: 24, bottom: 6, trailing: 24))
+                            .listRowInsets(EdgeInsets(
+                                top: DesignSystem.Spacing.xs,
+                                leading: DesignSystem.Spacing.xl,
+                                bottom: DesignSystem.Spacing.xs,
+                                trailing: DesignSystem.Spacing.xl
+                            ))
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -87,7 +83,7 @@ struct ProjectsListView: View {
                                     projectToDelete = project
                                     showDeleteConfirmation = true
                                 } label: {
-                                    Label("Delete", systemImage: "trash.fill")
+                                    Label("Delete", systemImage: DesignSystem.Icons.delete)
                                 }
                                 
                                 Button {
@@ -96,7 +92,7 @@ struct ProjectsListView: View {
                                     Label(project.status == .archived ? "Unarchive" : "Archive", 
                                           systemImage: project.status == .archived ? "tray.and.arrow.up.fill" : "archivebox.fill")
                                 }
-                                .tint(.orange)
+                                .tint(DesignSystem.Colors.warning)
                                 
                                 Button {
                                     cloneProject(project)
@@ -140,25 +136,19 @@ struct ProjectsListView: View {
     }
     
     private var customHeader: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
             Text("Your Ideas")
                 .font(.system(size: 44, weight: .bold))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.white, Color(white: 0.8)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .foregroundStyle(DesignSystem.Colors.primaryGradient)
             
             if !allProjects.isEmpty {
                 Text("\(allProjects.count) project\(allProjects.count == 1 ? "" : "s")")
-                    .font(.subheadline)
+                    .font(DesignSystem.Typography.callout)
                     .foregroundStyle(.secondary)
             }
             
-            // Search bar
-            HStack(spacing: 12) {
+            // Search bar con glassmorphism
+            HStack(spacing: DesignSystem.Spacing.sm) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
                 
@@ -168,29 +158,24 @@ struct ProjectsListView: View {
                 
                 if !searchText.isEmpty {
                     Button {
-                        searchText = ""
+                        withAnimation(DesignSystem.Animations.quickSpring) {
+                            searchText = ""
+                        }
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.secondary)
                     }
                 }
             }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.white.opacity(0.1))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                    )
-            )
-            .padding(.top, 8)
+            .padding(DesignSystem.Spacing.md)
+            .glassStyle(cornerRadius: DesignSystem.CornerRadius.lg)
+            .padding(.top, DesignSystem.Spacing.xs)
         }
     }
     
     private var filterChipsView: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
+            HStack(spacing: DesignSystem.Spacing.sm) {
                 ForEach(ProjectStatus.allCases, id: \.self) { status in
                     ModernFilterChip(
                         title: status.rawValue,
@@ -198,7 +183,7 @@ struct ProjectsListView: View {
                         isSelected: selectedStatus == status,
                         color: statusColor(for: status)
                     ) {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        withAnimation(DesignSystem.Animations.smoothSpring) {
                             selectedStatus = selectedStatus == status ? nil : status
                         }
                     }
@@ -228,46 +213,17 @@ struct ProjectsListView: View {
     }
     
     private var emptyStateView: some View {
-        VStack(spacing: 24) {
-            Spacer()
-            
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.purple.opacity(0.3), Color.blue.opacity(0.3)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 120, height: 120)
-                    .blur(radius: 30)
-                
-                Image(systemName: "music.note.list")
-                    .font(.system(size: 60, weight: .light))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.purple, .blue],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            }
-            
-            VStack(spacing: 8) {
-                Text(allProjects.isEmpty ? "No ideas yet" : "No results")
-                    .font(.title2.bold())
-                    .foregroundStyle(.white)
-                
-                Text(allProjects.isEmpty ? "Tap the + button to capture your first idea" : "Try adjusting your filters")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            
-            Spacer()
+        // Usar el componente EmptyStateView del Design System
+        EmptyStateView(
+            icon: "music.note.list",
+            title: allProjects.isEmpty ? "No Ideas Yet" : "No Results",
+            message: allProjects.isEmpty ? 
+                "Tap the + button to capture your first idea" : 
+                "Try adjusting your filters",
+            actionTitle: allProjects.isEmpty ? "Create Project" : nil
+        ) {
+            showingCreateSheet = true
         }
-        .padding()
     }
     
     private func statusIcon(for status: ProjectStatus) -> String {
@@ -282,10 +238,10 @@ struct ProjectsListView: View {
     
     private func statusColor(for status: ProjectStatus) -> Color {
         switch status {
-        case .idea: return .yellow
+        case .idea: return DesignSystem.Colors.warning
         case .inProgress: return .orange
-        case .polished: return .purple
-        case .finished: return .green
+        case .polished: return DesignSystem.Colors.primary
+        case .finished: return DesignSystem.Colors.success
         case .archived: return .gray
         }
     }
