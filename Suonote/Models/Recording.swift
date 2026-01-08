@@ -67,7 +67,7 @@ final class Recording {
         self.duration = duration
         self.bpm = bpm
         self.timeTop = timeTop
-        self.timeBottom = timeTop
+        self.timeBottom = timeBottom
         self.countIn = countIn
         self.createdAt = Date()
         self.isFavorite = false

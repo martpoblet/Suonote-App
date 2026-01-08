@@ -244,7 +244,8 @@ class MIDIExporter {
         data.append(titleBytes)
         
         // Tempo (microseconds per quarter note)
-        let microsecondsPerQuarter = UInt32(60_000_000 / project.bpm)
+        let quarterBpm = project.quarterNoteBpm()
+        let microsecondsPerQuarter = UInt32(60_000_000.0 / max(1.0, quarterBpm))
         data.append(contentsOf: [0x00, 0xFF, 0x51, 0x03])
         data.append(contentsOf: [
             UInt8((microsecondsPerQuarter >> 16) & 0xFF),
@@ -272,30 +273,31 @@ class MIDIExporter {
         data.append(contentsOf: [0x00, 0xFF, 0x03, 0x06])
         data.append(contentsOf: "Chords".data(using: .utf8)!)
         
-        var currentTick: UInt32 = 0
-        let ticksPerBeat = UInt32(480)
+        var currentTick: Double = 0
+        let ticksPerQuarter: Double = 480
+        let ticksPerGridBeat = ticksPerQuarter * (4.0 / Double(project.timeBottom))
         
         // Process arrangement
         for item in project.arrangementItems.sorted(by: { $0.orderIndex < $1.orderIndex }) {
             guard let section = item.sectionTemplate else { continue }
             
             for chord in section.chordEvents.sorted(by: { ($0.barIndex, $0.beatOffset) < ($1.barIndex, $1.beatOffset) }) {
-                let chordTick = currentTick + UInt32(Double(chord.barIndex * project.timeTop) + chord.beatOffset) * ticksPerBeat
-                let deltaTime = chordTick - currentTick
+                let chordStart = currentTick + (Double(chord.barIndex * project.timeTop) + chord.beatOffset) * ticksPerGridBeat
+                let deltaTime = UInt32(max(0, chordStart - currentTick).rounded())
                 
                 // Note on
                 data.append(contentsOf: encodeVariableLength(deltaTime))
                 data.append(contentsOf: [0x90, getMIDINote(chord), 0x64]) // Note on, velocity 100
                 
                 // Note off (after duration)
-                let durationTicks = UInt32(chord.duration) * ticksPerBeat
+                let durationTicks = UInt32((Double(chord.duration) * ticksPerGridBeat).rounded())
                 data.append(contentsOf: encodeVariableLength(durationTicks))
                 data.append(contentsOf: [0x80, getMIDINote(chord), 0x00]) // Note off
                 
-                currentTick = chordTick + durationTicks
+                currentTick = chordStart + Double(durationTicks)
             }
             
-            currentTick += UInt32(section.bars * project.timeTop) * ticksPerBeat
+            currentTick += Double(section.bars * project.timeTop) * ticksPerGridBeat
         }
         
         // End of track

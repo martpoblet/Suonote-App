@@ -145,7 +145,7 @@ struct ActiveRecordingView: View {
                     .font(.title3)
                     .foregroundStyle(.secondary)
                 
-                Text("\(4 - countInBeats)")
+                Text("\(max(0, tempoBeatsPerBar - countInBeats))")
                     .font(.system(size: 120, weight: .bold))
                     .foregroundStyle(.white)
                     .monospacedDigit()
@@ -153,11 +153,11 @@ struct ActiveRecordingView: View {
             }
             
             HStack(spacing: 20) {
-                ForEach(0..<project.timeTop, id: \.self) { beat in
+                ForEach(0..<tempoBeatsPerBar, id: \.self) { beat in
                     Circle()
-                        .fill(beat < countInBeats % project.timeTop ? Color.orange : Color.white.opacity(0.2))
+                        .fill(beat < countInBeats % tempoBeatsPerBar ? Color.orange : Color.white.opacity(0.2))
                         .frame(width: 16, height: 16)
-                        .shadow(color: beat < countInBeats % project.timeTop ? Color.orange.opacity(0.6) : .clear, radius: 8)
+                        .shadow(color: beat < countInBeats % tempoBeatsPerBar ? Color.orange.opacity(0.6) : .clear, radius: 8)
                 }
             }
         }
@@ -318,7 +318,7 @@ struct ActiveRecordingView: View {
                             .foregroundStyle(.secondary)
                         
                         HStack(spacing: 10) {
-                            ForEach(0..<project.timeTop, id: \.self) { beat in
+                            ForEach(0..<tempoBeatsPerBar, id: \.self) { beat in
                                 Circle()
                                     .fill(beat == currentBeat ? Color.red : Color.white.opacity(0.3))
                                     .frame(width: beat == currentBeat ? 18 : 14, height: beat == currentBeat ? 18 : 14)
@@ -398,8 +398,8 @@ struct ActiveRecordingView: View {
     }
     
     private func startCountIn() {
-        let interval = 60.0 / Double(project.bpm)
-        let totalCountInBeats = project.timeTop * 1 // 1 bar count-in
+        let interval = project.tempoBeatInterval()
+        let totalCountInBeats = tempoBeatsPerBar * 1 // 1 bar count-in
         
         // Visual pulse for count-in
         countInBeats = 0
@@ -429,10 +429,10 @@ struct ActiveRecordingView: View {
     
     private func startTimers() {
         // Beat timer
-        let beatInterval = 60.0 / Double(project.bpm)
+        let beatInterval = project.tempoBeatInterval()
         beatTimer = Timer.scheduledTimer(withTimeInterval: beatInterval, repeats: true) { _ in
             withAnimation(.spring(response: 0.2)) {
-                self.currentBeat = (self.currentBeat + 1) % self.project.timeTop
+                self.currentBeat = (self.currentBeat + 1) % self.tempoBeatsPerBar
                 if self.currentBeat == 0 {
                     self.currentBar += 1
                 }
@@ -472,6 +472,10 @@ struct ActiveRecordingView: View {
         let seconds = Int(time) % 60
         let centiseconds = Int((time.truncatingRemainder(dividingBy: 1)) * 100)
         return String(format: "%02d:%02d.%02d", minutes, seconds, centiseconds)
+    }
+
+    private var tempoBeatsPerBar: Int {
+        project.tempoBeatsPerBar
     }
 }
 

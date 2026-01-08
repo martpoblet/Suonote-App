@@ -58,9 +58,10 @@ class AudioRecordingManager: NSObject, ObservableObject {
                 startMetronome(bpm: project.bpm, countInBars: countIn)
             }
             
-            let beatsPerBar = project.timeTop
-            let beatsPerSecond = Double(project.bpm) / 60.0
-            let countInDuration = Double(countInBars * beatsPerBar) / beatsPerSecond
+            let beatsPerBar = project.tempoBeatsPerBar
+            let interval = project.tempoBeatInterval()
+            let beatsPerSecond = interval > 0 ? (1.0 / interval) : 0
+            let countInDuration = Double(countInBars * beatsPerBar) / max(0.0001, beatsPerSecond)
             
             DispatchQueue.main.asyncAfter(deadline: .now() + countInDuration) {
                 self.audioRecorder?.record()
@@ -119,11 +120,11 @@ class AudioRecordingManager: NSObject, ObservableObject {
     private func startMetronome(bpm: Int, countInBars: Int) {
         guard clickEnabled else { return }
         
-        let beatsPerSecond = Double(bpm) / 60.0
-        let interval = 1.0 / beatsPerSecond
+        let interval = project?.tempoBeatInterval() ?? (60.0 / Double(max(1, bpm)))
         
         var beatCount = 0
-        let totalCountInBeats = countInBars * (project?.timeTop ?? 4)
+        let beatsPerBar = project?.tempoBeatsPerBar ?? (project?.timeTop ?? 4)
+        let totalCountInBeats = countInBars * beatsPerBar
         
         metronomeTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] timer in
             guard let self = self else { 
@@ -132,7 +133,6 @@ class AudioRecordingManager: NSObject, ObservableObject {
             }
             
             // Play click sound for both count-in and recording
-            let beatsPerBar = self.project?.timeTop ?? 4
             let isAccent = beatCount % beatsPerBar == 0
             self.playClickSound(isAccent: isAccent)
             
@@ -155,7 +155,7 @@ class AudioRecordingManager: NSObject, ObservableObject {
     }
     
     private func playClickSound(isAccent: Bool) {
-        AudioServicesPlaySystemSound(isAccent ? 1054 : 1053)
+        MetronomeClickPlayer.shared.play(accent: isAccent)
     }
     
     private func getDocumentsDirectory() -> URL {

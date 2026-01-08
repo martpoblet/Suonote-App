@@ -315,6 +315,7 @@ struct ProjectsListView: View {
                 timeTop: project.timeTop,
                 timeBottom: project.timeBottom
             )
+            clonedProject.studioStyleRaw = project.studioStyleRaw
             
             // Clone arrangement items and sections
             for item in project.arrangementItems {
@@ -341,6 +342,30 @@ struct ProjectsListView: View {
                     clonedArrangementItem.sectionTemplate = clonedSection
                     clonedProject.arrangementItems.append(clonedArrangementItem)
                 }
+            }
+
+            for track in project.studioTracks {
+                let clonedTrack = StudioTrack(
+                    name: track.name,
+                    instrument: track.instrument,
+                    orderIndex: track.orderIndex,
+                    isMuted: track.isMuted,
+                    isSolo: track.isSolo,
+                    audioRecordingId: track.audioRecordingId,
+                    audioStartBeat: track.audioStartBeat
+                )
+
+                for note in track.notes {
+                    let clonedNote = StudioNote(
+                        startBeat: note.startBeat,
+                        duration: note.duration,
+                        pitch: note.pitch,
+                        velocity: note.velocity
+                    )
+                    clonedTrack.notes.append(clonedNote)
+                }
+
+                clonedProject.studioTracks.append(clonedTrack)
             }
             
             self.modelContext.insert(clonedProject)

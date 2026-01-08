@@ -11,6 +11,7 @@ struct CreateProjectView: View {
     @State private var tagInput = ""
     @State private var bpm = 120
     @State private var showingBPMPicker = false
+    @StateObject private var tempoPreviewer = TempoPreviewer()
     @FocusState private var isTitleFocused: Bool
     
     var body: some View {
@@ -173,6 +174,14 @@ struct CreateProjectView: View {
                                         }
                                     }
                                 }
+
+                                TempoPreviewButton(
+                                    previewer: tempoPreviewer,
+                                    bpm: bpm,
+                                    timeTop: 4,
+                                    timeBottom: 4,
+                                    tint: .cyan
+                                )
                             }
                             .padding(24)
                             .background(

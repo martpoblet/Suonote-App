@@ -15,12 +15,14 @@ struct ProjectDetailView: View {
     
     private enum ProjectTab: Int, CaseIterable {
         case compose
+        case studio
         case lyrics
         case record
         
         var title: String {
             switch self {
             case .compose: return "Compose"
+            case .studio: return "Studio"
             case .lyrics: return "Lyrics"
             case .record: return "Record"
             }
@@ -29,6 +31,7 @@ struct ProjectDetailView: View {
         var icon: String {
             switch self {
             case .compose: return "music.note.list"
+            case .studio: return "square.grid.2x2"
             case .lyrics: return "text.quote"
             case .record: return "waveform.circle.fill"
             }
@@ -37,6 +40,7 @@ struct ProjectDetailView: View {
         var tintColor: Color {
             switch self {
             case .compose: return SectionColor.purple.color
+            case .studio: return SectionColor.cyan.color
             case .lyrics: return SectionColor.pink.color
             case .record: return SectionColor.red.color
             }
@@ -57,6 +61,14 @@ struct ProjectDetailView: View {
                     .tag(ProjectTab.compose)
                     .tabItem {
                         Label(ProjectTab.compose.title, systemImage: ProjectTab.compose.icon)
+                    }
+                
+                ProjectTabContainer {
+                    StudioTabView(project: project)
+                }
+                    .tag(ProjectTab.studio)
+                    .tabItem {
+                        Label(ProjectTab.studio.title, systemImage: ProjectTab.studio.icon)
                     }
                 
                 ProjectTabContainer {
@@ -207,7 +219,7 @@ struct EditProjectSheet: View {
     @State private var showingTimeSignatureWarning = false
     
     private let roots = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-    private let timeBottoms = [2, 4, 8, 16]
+    private let timeSignatures = TimeSignaturePreset.allCases
     
     private var timeSignatureChanged: Bool {
         tempTimeTop != project.timeTop || tempTimeBottom != project.timeBottom
@@ -272,7 +284,7 @@ struct EditProjectSheet: View {
                     }
                     
                     // BPM
-                    BPMSelector(bpm: $tempBPM)
+                    BPMSelector(bpm: $tempBPM, timeTop: tempTimeTop, timeBottom: tempTimeBottom)
                     
                     // Time Signature
                     VStack(alignment: .leading, spacing: 8) {
@@ -280,52 +292,29 @@ struct EditProjectSheet: View {
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.white)
                         
-                        HStack(spacing: 16) {
-                            // Top number
-                            VStack(spacing: 8) {
-                                Text("Beats per bar")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                
-                                Picker("", selection: $tempTimeTop) {
-                                    ForEach(1...12, id: \.self) { num in
-                                        Text("\(num)").tag(num)
-                                    }
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 12) {
+                            ForEach(timeSignatures) { signature in
+                                Button {
+                                    tempTimeTop = signature.top
+                                    tempTimeBottom = signature.bottom
+                                } label: {
+                                    Text(signature.rawValue)
+                                        .font(.headline.weight(.semibold))
+                                        .foregroundStyle(isSelected(signature) ? .white : .secondary)
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 44)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .fill(isSelected(signature) ? Color.orange.opacity(0.3) : Color.white.opacity(0.05))
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 12)
+                                                        .stroke(isSelected(signature) ? Color.orange : Color.white.opacity(0.1), lineWidth: isSelected(signature) ? 2 : 1)
+                                                )
+                                        )
                                 }
-                                .pickerStyle(.wheel)
-                                .frame(width: 100, height: 100)
-                                .clipped()
-                            }
-                            
-                            Text("/")
-                                .font(.largeTitle)
-                                .foregroundStyle(.secondary)
-                            
-                            // Bottom number
-                            VStack(spacing: 8) {
-                                Text("Note value")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                
-                                Picker("", selection: $tempTimeBottom) {
-                                    ForEach(timeBottoms, id: \.self) { num in
-                                        Text("\(num)").tag(num)
-                                    }
-                                }
-                                .pickerStyle(.wheel)
-                                .frame(width: 100, height: 100)
-                                .clipped()
+                                .buttonStyle(.plain)
                             }
                         }
-                        .padding(16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.white.opacity(0.05))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.orange.opacity(0.3), lineWidth: 1)
-                                )
-                        )
                     }
                     
                     // Key
@@ -493,8 +482,9 @@ struct EditProjectSheet: View {
     private func loadCurrentValues() {
         tempTitle = project.title
         tempBPM = project.bpm
-        tempTimeTop = project.timeTop
-        tempTimeBottom = project.timeBottom
+        let signature = TimeSignaturePreset.from(top: project.timeTop, bottom: project.timeBottom)
+        tempTimeTop = signature.top
+        tempTimeBottom = signature.bottom
         tempKeyRoot = project.keyRoot
         tempKeyMode = project.keyMode
         tempTags = project.tags
@@ -508,8 +498,16 @@ struct EditProjectSheet: View {
             newTag = ""
         }
     }
+
+    private func isSelected(_ signature: TimeSignaturePreset) -> Bool {
+        tempTimeTop == signature.top && tempTimeBottom == signature.bottom
+    }
     
     private func saveChanges() {
+        let oldTimeTop = project.timeTop
+        let oldTimeBottom = project.timeBottom
+        let shouldReflow = tempTimeTop != oldTimeTop || tempTimeBottom != oldTimeBottom
+
         project.title = tempTitle
         project.bpm = tempBPM
         project.timeTop = tempTimeTop
@@ -518,6 +516,14 @@ struct EditProjectSheet: View {
         project.keyMode = tempKeyMode
         project.tags = tempTags
         project.status = tempStatus
+        if shouldReflow {
+            project.applyTimeSignatureChange(
+                oldTimeTop: oldTimeTop,
+                oldTimeBottom: oldTimeBottom,
+                newTimeTop: tempTimeTop,
+                newTimeBottom: tempTimeBottom
+            )
+        }
         project.updatedAt = Date()
         
         try? modelContext.save()
@@ -729,6 +735,9 @@ struct FlowLayout: Layout {
 // MARK: - BPM Selector Component
 struct BPMSelector: View {
     @Binding var bpm: Int
+    let timeTop: Int
+    let timeBottom: Int
+    @StateObject private var tempoPreviewer = TempoPreviewer()
     
     private let gradientColors: [Color] = [.white, .white.opacity(0.7)]
     private let sliderGradient: [Color] = [.purple, .blue, .cyan]
@@ -743,6 +752,13 @@ struct BPMSelector: View {
             VStack(spacing: 16) {
                 bpmDisplay
                 bpmSlider
+                TempoPreviewButton(
+                    previewer: tempoPreviewer,
+                    bpm: bpm,
+                    timeTop: timeTop,
+                    timeBottom: timeBottom,
+                    tint: .cyan
+                )
                 bpmPresets
             }
             .padding(20)
