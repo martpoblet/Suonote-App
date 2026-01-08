@@ -131,164 +131,121 @@ struct ComposeTabView: View {
     }
     
     private var topControlsBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: DesignSystem.Spacing.sm) {
+            // Key button
             Button {
                 showingKeyPicker = true
             } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "music.note")
+                HStack(spacing: DesignSystem.Spacing.xs) {
+                    Image(systemName: DesignSystem.Icons.key)
                         .font(.caption)
                     Text("\(project.keyRoot)\(project.keyMode == .minor ? "m" : "")")
-                        .font(.subheadline.weight(.semibold))
+                        .font(DesignSystem.Typography.callout.weight(.semibold))
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, DesignSystem.Spacing.sm)
+                .padding(.vertical, DesignSystem.Spacing.xs)
                 .background(
                     Capsule()
-                        .fill(Color.purple.opacity(0.15))
-                        .overlay(Capsule().stroke(Color.purple, lineWidth: 1))
+                        .fill(DesignSystem.Colors.primary.opacity(0.15))
+                        .overlay(Capsule().stroke(DesignSystem.Colors.primary, lineWidth: 1))
                 )
-                .foregroundStyle(.purple)
+                .foregroundStyle(DesignSystem.Colors.primary)
             }
+            .animatedPress()
             
+            // Time signature button
             Button {
-                // Open edit project sheet focused on time signature
                 showingEditSheet = true
             } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "metronome")
+                HStack(spacing: DesignSystem.Spacing.xs) {
+                    Image(systemName: DesignSystem.Icons.tempo)
                         .font(.caption)
                     Text("\(project.timeTop)/\(project.timeBottom)")
-                        .font(.subheadline.weight(.semibold))
+                        .font(DesignSystem.Typography.callout.weight(.semibold))
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, DesignSystem.Spacing.sm)
+                .padding(.vertical, DesignSystem.Spacing.xs)
                 .background(
                     Capsule()
-                        .fill(Color.orange.opacity(0.15))
-                        .overlay(Capsule().stroke(Color.orange, lineWidth: 1))
+                        .fill(DesignSystem.Colors.warning.opacity(0.15))
+                        .overlay(Capsule().stroke(DesignSystem.Colors.warning, lineWidth: 1))
                 )
-                .foregroundStyle(.orange)
+                .foregroundStyle(DesignSystem.Colors.warning)
             }
+            .animatedPress()
             
+            // BPM button with tempo description
             Button {
-                // Open edit project sheet focused on BPM
                 showingEditSheet = true
             } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "waveform")
+                HStack(spacing: DesignSystem.Spacing.xs) {
+                    Image(systemName: DesignSystem.Icons.waveform)
                         .font(.caption)
-                    Text("\(project.bpm)")
-                        .font(.subheadline.weight(.semibold))
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("\(project.bpm)")
+                            .font(DesignSystem.Typography.callout.weight(.semibold))
+                        Text(TempoUtils.tempoDescription(for: project.bpm).split(separator: " ").first.map(String.init) ?? "")
+                            .font(DesignSystem.Typography.caption2)
+                            .opacity(0.7)
+                    }
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, DesignSystem.Spacing.sm)
+                .padding(.vertical, DesignSystem.Spacing.xs)
                 .background(
                     Capsule()
-                        .fill(Color.cyan.opacity(0.15))
-                        .overlay(Capsule().stroke(Color.cyan, lineWidth: 1))
+                        .fill(DesignSystem.Colors.accent.opacity(0.15))
+                        .overlay(Capsule().stroke(DesignSystem.Colors.accent, lineWidth: 1))
                 )
-                .foregroundStyle(.cyan)
+                .foregroundStyle(DesignSystem.Colors.accent)
             }
+            .animatedPress()
             
             Spacer()
             
+            // Export button
             Button {
                 showingExport = true
             } label: {
-                Image(systemName: "square.and.arrow.up")
+                Image(systemName: DesignSystem.Icons.export)
                     .font(.title3)
                     .foregroundStyle(.white)
-                    .padding(8)
+                    .padding(DesignSystem.Spacing.xs)
                     .background(
                         Circle()
-                            .fill(Color.white.opacity(0.1))
+                            .fill(DesignSystem.Colors.surface)
                     )
             }
+            .animatedPress()
             
+            // Add section button
             Button {
-                showingSectionCreator = true
+                withAnimation(DesignSystem.Animations.smoothSpring) {
+                    showingSectionCreator = true
+                }
             } label: {
-                Image(systemName: "plus.circle.fill")
+                Image(systemName: DesignSystem.Icons.add)
                     .font(.title2)
-                    .padding(8)
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.purple, .blue],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .padding(DesignSystem.Spacing.xs)
+                    .foregroundStyle(DesignSystem.Colors.primaryGradient)
             }
+            .animatedPress()
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 12)
+        .padding(.horizontal, DesignSystem.Spacing.xl)
+        .padding(.vertical, DesignSystem.Spacing.sm)
     }
     
     private var emptyStateView: some View {
-        VStack(spacing: 24) {
-            Spacer()
-            
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.purple.opacity(0.2), Color.blue.opacity(0.2)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 120, height: 120)
-                
-                Image(systemName: "music.note.list")
-                    .font(.system(size: 50))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.purple, .blue],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            }
-            
-            VStack(spacing: 8) {
-                Text("Start Composing")
-                    .font(.title2.bold())
-                    .foregroundStyle(.white)
-                
-                Text("Add your first section to build your song")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            
-            Button {
+        EmptyStateView(
+            icon: "music.note.list",
+            title: "Start Composing",
+            message: "Add your first section to build your song",
+            actionTitle: "Add Section"
+        ) {
+            withAnimation(DesignSystem.Animations.smoothSpring) {
                 showingSectionCreator = true
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "plus.circle.fill")
-                    Text("Add Section")
-                        .font(.headline)
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 14)
-                .background(
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [.purple, .blue],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .shadow(color: Color.purple.opacity(0.4), radius: 10, x: 0, y: 5)
-                )
             }
-            
-            Spacer()
         }
-        .padding(.horizontal, 40)
+        .padding(.horizontal, DesignSystem.Spacing.xxxl)
     }
     
     private func arrangementTimeline(
@@ -598,16 +555,18 @@ struct SectionTimelineCard: View {
     
     var body: some View {
         Button(action: onSelect) {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                 HStack {
+                    // Section number badge
                     Text("\(index + 1)")
-                        .font(.caption.weight(.bold))
+                        .font(DesignSystem.Typography.caption.weight(.bold))
                         .foregroundStyle(.white)
                         .frame(width: 24, height: 24)
                         .background(Circle().fill(sectionColor))
                     
                     Spacer()
                     
+                    // Delete button
                     Button(action: { showingDeleteConfirmation = true }) {
                         Image(systemName: "xmark.circle.fill")
                             .font(.caption)
@@ -616,43 +575,40 @@ struct SectionTimelineCard: View {
                     .buttonStyle(.plain)
                 }
                 
+                // Section name
                 Text(section.name)
-                    .font(.subheadline.weight(.semibold))
+                    .font(DesignSystem.Typography.callout.weight(.semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                 
-                HStack(spacing: 4) {
-                    Text("\(section.bars) bars")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                // Metadata with badges
+                HStack(spacing: DesignSystem.Spacing.xxs) {
+                    Badge("\(section.bars) bars", color: sectionColor)
                     
                     if linkedRecordingsCount > 0 {
-                        Text("•")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        
-                        HStack(spacing: 2) {
-                            Image(systemName: "waveform")
-                                .font(.caption2)
-                            Text("\(linkedRecordingsCount)")
-                                .font(.caption2.weight(.medium))
-                        }
-                        .foregroundStyle(.purple)
+                        Badge("\(linkedRecordingsCount) 🎙", color: DesignSystem.Colors.accent)
+                    }
+                    
+                    if section.chordEvents.isEmpty {
+                        Badge("Empty", color: DesignSystem.Colors.warning.opacity(0.5))
                     }
                 }
             }
-            .padding(12)
+            .padding(DesignSystem.Spacing.sm)
             .frame(width: 120)
             .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(isSelected ? sectionColor.opacity(0.2) : Color.white.opacity(0.05))
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
+                    .fill(isSelected ? sectionColor.opacity(0.2) : DesignSystem.Colors.surface)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(isSelected ? sectionColor : Color.white.opacity(0.1), lineWidth: isSelected ? 2 : 1)
+                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
+                            .stroke(isSelected ? sectionColor : DesignSystem.Colors.border, 
+                                   lineWidth: isSelected ? 2 : 1)
                     )
             )
         }
         .buttonStyle(.plain)
+        .scaleEffect(isSelected ? 1.05 : 1.0)
+        .animation(DesignSystem.Animations.smoothSpring, value: isSelected)
         .alert("Delete Section?", isPresented: $showingDeleteConfirmation) {
             Button("Cancel", role: .cancel) {}
             Button("Delete", role: .destructive, action: onDelete)
