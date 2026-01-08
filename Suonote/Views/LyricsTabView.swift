@@ -22,7 +22,7 @@ struct LyricsTabView: View {
                 emptyStateView
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 16) {
+                    LazyVStack(spacing: DesignSystem.Spacing.md) {
                         ForEach(uniqueSections) { section in
                             LyricsSectionCard(
                                 section: section,
@@ -33,9 +33,9 @@ struct LyricsTabView: View {
                             }
                         }
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 20)  // Extra top padding to prevent overlap
-                    .padding(.bottom, 20)
+                    .padding(.horizontal, DesignSystem.Spacing.xl)
+                    .padding(.top, DesignSystem.Spacing.lg)
+                    .padding(.bottom, DesignSystem.Spacing.lg)
                 }
             }
         }
@@ -45,45 +45,11 @@ struct LyricsTabView: View {
     }
     
     private var emptyStateView: some View {
-        VStack(spacing: 24) {
-            Spacer()
-            
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.pink.opacity(0.3), Color.purple.opacity(0.3)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 120, height: 120)
-                    .blur(radius: 30)
-                
-                Image(systemName: "text.quote")
-                    .font(.system(size: 60, weight: .light))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.pink, .purple],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            }
-            
-            VStack(spacing: 8) {
-                Text("No sections yet")
-                    .font(.title2.bold())
-                    .foregroundStyle(.white)
-                
-                Text("Add sections in the Compose tab first")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
+        EmptyStateView(
+            icon: "text.quote",
+            title: "No sections yet",
+            message: "Add sections in the Compose tab first"
+        )
     }
     
     private func usageCount(for section: SectionTemplate) -> Int {
@@ -100,17 +66,17 @@ struct LyricsSectionCard: View {
     
     var body: some View {
         Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
                 // Header
                 HStack {
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxs) {
                         Text(section.name)
-                            .font(.title3.bold())
+                            .font(DesignSystem.Typography.title3)
                             .foregroundStyle(.white)
                         
                         if usageCount > 1 {
                             Text("Used \(usageCount) times")
-                                .font(.caption)
+                                .font(DesignSystem.Typography.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -118,21 +84,21 @@ struct LyricsSectionCard: View {
                     Spacer()
                     
                     Image(systemName: "chevron.right")
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                         .foregroundStyle(.secondary)
                 }
                 
                 // Lyrics preview
                 if !section.lyricsText.isEmpty {
                     Text(section.lyricsText)
-                        .font(.body)
+                        .font(DesignSystem.Typography.body)
                         .foregroundStyle(.white.opacity(0.8))
                         .lineLimit(3)
-                        .padding(16)
+                        .padding(DesignSystem.Spacing.md)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.white.opacity(0.03))
+                            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
+                                .fill(DesignSystem.Colors.surface.opacity(0.6))
                         )
                 } else {
                     HStack {
@@ -141,24 +107,25 @@ struct LyricsSectionCard: View {
                             .foregroundStyle(.secondary)
                         
                         Text("No lyrics yet")
-                            .font(.subheadline)
+                            .font(DesignSystem.Typography.callout)
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 24)
+                    .padding(.vertical, DesignSystem.Spacing.xl)
                 }
             }
-            .padding(20)
+            .padding(DesignSystem.Spacing.lg)
             .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(Color.white.opacity(0.05))
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
+                    .fill(DesignSystem.Colors.surface)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
+                            .stroke(DesignSystem.Colors.border, lineWidth: 1)
                     )
             )
         }
         .buttonStyle(.plain)
+        .animatedPress()
     }
 }
 
@@ -189,42 +156,43 @@ struct ImmersiveLyricsEditor: View {
                     Button {
                         dismiss()
                     } label: {
-                        HStack(spacing: 8) {
+                        HStack(spacing: DesignSystem.Spacing.xxs) {
                             Image(systemName: "chevron.left")
                             Text("Back")
                         }
-                        .font(.headline)
+                        .font(DesignSystem.Typography.body)
                         .foregroundStyle(.white)
                     }
+                    .animatedPress()
                     
                     Spacer()
                     
                     Text(section.name)
-                        .font(.headline)
+                        .font(DesignSystem.Typography.body)
                         .foregroundStyle(.white)
                     
                     Spacer()
                     
                     // Placeholder for symmetry
-                    HStack(spacing: 8) {
+                    HStack(spacing: DesignSystem.Spacing.xxs) {
                         Image(systemName: "chevron.left")
                         Text("Back")
                     }
                     .opacity(0)
                 }
-                .padding(.horizontal, 24)
-                .padding(.vertical, 16)
+                .padding(.horizontal, DesignSystem.Spacing.xl)
+                .padding(.vertical, DesignSystem.Spacing.md)
                 
                 // Text Editor
                 ZStack(alignment: .topLeading) {
                     if section.lyricsText.isEmpty {
-                        VStack(spacing: 16) {
+                        VStack(spacing: DesignSystem.Spacing.md) {
                             Image(systemName: "text.quote")
                                 .font(.system(size: 60))
                                 .foregroundStyle(.white.opacity(0.1))
                             
                             Text("Start writing your lyrics...")
-                                .font(.title3)
+                                .font(DesignSystem.Typography.title3)
                                 .foregroundStyle(.white.opacity(0.3))
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -235,15 +203,15 @@ struct ImmersiveLyricsEditor: View {
                         .foregroundStyle(.white)
                         .scrollContentBackground(.hidden)
                         .focused($isTextEditorFocused)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 20)
+                        .padding(.horizontal, DesignSystem.Spacing.xl)
+                        .padding(.vertical, DesignSystem.Spacing.lg)
                 }
                 .frame(maxHeight: .infinity)
                 
                 // Toolbar
-                HStack(spacing: 20) {
+                HStack(spacing: DesignSystem.Spacing.lg) {
                     Text("\(section.lyricsText.count) characters")
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                         .foregroundStyle(.secondary)
                     
                     Spacer()
@@ -252,18 +220,13 @@ struct ImmersiveLyricsEditor: View {
                         isTextEditorFocused = false
                     } label: {
                         Text("Done")
-                            .font(.headline)
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [.purple, .blue],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
+                            .font(DesignSystem.Typography.bodyBold)
+                            .foregroundStyle(DesignSystem.Colors.primaryGradient)
                     }
+                    .animatedPress()
                 }
-                .padding(.horizontal, 24)
-                .padding(.vertical, 16)
+                .padding(.horizontal, DesignSystem.Spacing.xl)
+                .padding(.vertical, DesignSystem.Spacing.md)
                 .background(
                     Rectangle()
                         .fill(Color.black.opacity(0.5))

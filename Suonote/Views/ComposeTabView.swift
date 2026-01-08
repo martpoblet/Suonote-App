@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
+import AudioToolbox
 
 // MARK: - Compose Tab View
 /// Tab principal de composición que permite:
@@ -26,6 +27,7 @@ struct ComposeTabView: View {
     @State private var showingEditSheet = false
     @State private var editingSection: SectionTemplate?
     @StateObject private var audioManager = AudioRecordingManager()
+    @StateObject private var chordPreview = ChordPreviewPlayer() // ← Preview player
     
     // View mode: true = all sections, false = single section
     @State private var showAllSections = true
@@ -112,7 +114,12 @@ struct ComposeTabView: View {
                 ChordPaletteSheet(
                     section: sectionForSlot,
                     slot: slot,
-                    project: project
+                    project: project,
+                    onChordSelected: { root, quality in
+                        // Play chord preview when selected
+                        haptic(.success)
+                        playChordPreview(root: root, quality: quality)
+                    }
                 )
             }
         }
@@ -414,27 +421,29 @@ struct ComposeTabView: View {
     private func sectionEditor(_ section: SectionTemplate, recordings: [Recording]) -> some View {
         let sectionColor = section.color
         
-        return VStack(alignment: .leading, spacing: 20) {
+        return VStack(alignment: .leading, spacing: DesignSystem.Spacing.lg) {
             HStack {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxs) {
                     Text(section.name)
-                        .font(.title2.bold())
+                        .font(DesignSystem.Typography.title2)
                         .foregroundStyle(.white)
                     
                     Text("\(section.bars) bars × \(project.timeTop)/\(project.timeBottom)")
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                         .foregroundStyle(.secondary)
                 }
                 
                 Spacer()
                 
                 Button {
+                    haptic(.light)
                     editingSection = section
                 } label: {
                     Image(systemName: "pencil.circle.fill")
                         .font(.title2)
                         .foregroundStyle(sectionColor)
                 }
+                .buttonStyle(.haptic(.light))
             }
             
             // Linked recordings section (collapsible)
@@ -449,12 +458,12 @@ struct ComposeTabView: View {
                 draggingChord: $draggingChord
             )
         }
-        .padding(20)
+        .padding(DesignSystem.Spacing.lg)
         .background(
-            RoundedRectangle(cornerRadius: 20)
+            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
                 .fill(sectionColor.opacity(0.2))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 20)
+                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
                         .stroke(sectionColor.opacity(0.3), lineWidth: 2)
                 )
         )
@@ -538,6 +547,13 @@ struct ComposeTabView: View {
                 try? modelContext.save()
             }
         }
+    }
+    
+    // MARK: - Chord Preview
+    
+    /// Reproduce un preview sonoro del acorde seleccionado
+    private func playChordPreview(root: String, quality: ChordQuality) {
+        chordPreview.playChord(root: root, quality: quality)
     }
 }
 
@@ -718,7 +734,7 @@ struct ChordGridView: View {
     
     private var beatsPerBar: Int { project.timeTop }
     private let barRowHeight: CGFloat = 104
-    private let barRowSpacing: CGFloat = 12
+    private var barRowSpacing: CGFloat { DesignSystem.Spacing.sm }
     
     private var barsListHeight: CGFloat {
         let count = CGFloat(section.bars)
@@ -727,7 +743,7 @@ struct ChordGridView: View {
     }
     
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: DesignSystem.Spacing.sm) {
             // Show only the bars defined in section.bars
             LazyVStack(spacing: barRowSpacing) {
                 ForEach(0..<section.bars, id: \.self) { barIndex in
@@ -746,27 +762,29 @@ struct ChordGridView: View {
             
             // Add Bar button
             Button {
+                haptic(.light)
                 section.bars += 1
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: DesignSystem.Spacing.xxs) {
                     Image(systemName: "plus.circle.fill")
                         .font(.title3)
                     Text("Add Bar")
-                        .font(.subheadline.weight(.semibold))
+                        .font(DesignSystem.Typography.callout)
                 }
                 .foregroundStyle(section.color)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+                .padding(.vertical, DesignSystem.Spacing.md)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
                         .fill(section.color.opacity(0.1))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 12)
+                            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
                                 .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
                                 .foregroundStyle(section.color.opacity(0.5))
                         )
                 )
             }
+            .buttonStyle(.haptic(.light))
         }
     }
 }
@@ -1877,6 +1895,7 @@ struct ChordPaletteSheet: View {
     let section: SectionTemplate
     let slot: ChordSlot
     @Bindable var project: Project
+    var onChordSelected: ((String, ChordQuality) -> Void)? = nil  // ← Callback opcional
     @Environment(\.dismiss) private var dismiss
     
     @State private var selectedRoot: String
@@ -1886,6 +1905,7 @@ struct ChordPaletteSheet: View {
     @State private var showingSuggestions = true
     @State private var showingDiagram = false
     @State private var selectedTab: SuggestionTab = .smart
+    @State private var showingSmartSuggestionsModal = false // ← NEW: Para modal completo
     
     // Cached values to avoid recalculation
     private let existingChord: ChordEvent?
@@ -1935,10 +1955,11 @@ struct ChordPaletteSheet: View {
     private var diatonicChords: [ChordSuggestion] { cachedDiatonicChords }
     private var popularProgressions: [(name: String, progression: [ChordSuggestion])] { cachedPopularProgressions }
     
-    init(section: SectionTemplate, slot: ChordSlot, project: Project) {
+    init(section: SectionTemplate, slot: ChordSlot, project: Project, onChordSelected: ((String, ChordQuality) -> Void)? = nil) {
         self.section = section
         self.slot = slot
         self.project = project
+        self.onChordSelected = onChordSelected
         
         let existingChord = section.chordEvents.first { chord in
             chord.barIndex == slot.barIndex && chord.beatOffset == slot.beatOffset
@@ -2016,6 +2037,32 @@ struct ChordPaletteSheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
+                
+                // NEW: Smart Suggestions button
+                ToolbarItem(placement: .principal) {
+                    Button {
+                        showingSmartSuggestionsModal = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "sparkles")
+                                .font(.caption)
+                            Text("Smart Suggestions")
+                                .font(.caption.weight(.medium))
+                        }
+                        .foregroundStyle(DesignSystem.Colors.accent)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(DesignSystem.Colors.accent.opacity(0.15))
+                                .overlay(
+                                    Capsule()
+                                        .stroke(DesignSystem.Colors.accent.opacity(0.3), lineWidth: 1)
+                                )
+                        )
+                    }
+                }
+                
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
                         addChord()
@@ -2031,6 +2078,19 @@ struct ChordPaletteSheet: View {
                             )
                     }
                 }
+            }
+            .sheet(isPresented: $showingSmartSuggestionsModal) {
+                SmartSuggestionsModal(
+                    project: project,
+                    section: section,
+                    lastChord: lastChord,
+                    onChordSelected: { root, quality in
+                        selectedRoot = root
+                        selectedQuality = quality
+                        onChordSelected?(root, quality)
+                        showingSmartSuggestionsModal = false
+                    }
+                )
             }
         }
     }
@@ -2459,6 +2519,9 @@ struct ChordPaletteSheet: View {
         selectedRoot = suggestion.root
         selectedQuality = suggestion.quality
         selectedExtensions = suggestion.extensions
+        
+        // Play preview when selecting from suggestions
+        onChordSelected?(suggestion.root, suggestion.quality)
     }
     
     private func addChord() {
@@ -2476,6 +2539,9 @@ struct ChordPaletteSheet: View {
         )
         
         section.chordEvents.append(chord)
+        
+        // Call preview callback
+        onChordSelected?(selectedRoot, selectedQuality)
         
         dismiss()
     }
@@ -2881,4 +2947,285 @@ struct ViewAllSectionsCard: View {
         }
         .buttonStyle(.plain)
     }
+}
+
+// MARK: - Smart Suggestions Modal
+
+struct SmartSuggestionsModal: View {
+    let project: Project
+    let section: SectionTemplate
+    let lastChord: ChordEvent?
+    let onChordSelected: (String, ChordQuality) -> Void
+    
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedTab: SuggestionTab = .smart
+    
+    enum SuggestionTab: String, CaseIterable {
+        case smart = "Smart"
+        case analysis = "Analysis"
+        case progressions = "Progressions"
+    }
+    
+    private var smartSuggestions: [ChordSuggestion] {
+        ChordSuggestionEngine.suggestNextChord(
+            after: lastChord,
+            inKey: project.keyRoot,
+            mode: project.keyMode
+        )
+    }
+    
+    private var progressionAnalysis: ProgressionAnalysis {
+        ChordSuggestionEngine.analyzeProgression(
+            section.chordEvents,
+            inKey: project.keyRoot,
+            mode: project.keyMode
+        )
+    }
+    
+    private var popularProgressions: [(name: String, progression: [ChordSuggestion])] {
+        ChordSuggestionEngine.popularProgressions(
+            forKey: project.keyRoot,
+            mode: project.keyMode
+        )
+    }
+    
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVStack(spacing: DesignSystem.Spacing.lg) {
+                    // Tab picker
+                    Picker("Tab", selection: $selectedTab) {
+                        ForEach(SuggestionTab.allCases, id: \.self) { tab in
+                            Text(tab.rawValue).tag(tab)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal, DesignSystem.Spacing.xl)
+                    
+                    // Content
+                    switch selectedTab {
+                    case .smart:
+                        smartSuggestionsView
+                    case .analysis:
+                        analysisView
+                    case .progressions:
+                        progressionsView
+                    }
+                }
+                .padding(.vertical, DesignSystem.Spacing.lg)
+            }
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.05, green: 0.05, blue: 0.15),
+                        Color(red: 0.1, green: 0.05, blue: 0.2),
+                        Color.black
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .navigationTitle("Smart Suggestions")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+        .presentationDetents([.large])
+    }
+    
+    private var smartSuggestionsView: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+            Text("Next Chord Suggestions")
+                .font(DesignSystem.Typography.title3)
+                .foregroundStyle(.white)
+                .padding(.horizontal, DesignSystem.Spacing.xl)
+            
+            ForEach(smartSuggestions) { suggestion in
+                Button {
+                    onChordSelected(suggestion.root, suggestion.quality)
+                } label: {
+                    HStack(spacing: DesignSystem.Spacing.md) {
+                        // Chord display
+                        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxs) {
+                            Text("\(suggestion.root)\(suggestion.quality.symbol)")
+                                .font(.system(size: 32, weight: .bold))
+                                .foregroundStyle(DesignSystem.Colors.accent)
+                            
+                            Text(suggestion.quality.displayName)
+                                .font(DesignSystem.Typography.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        
+                        Spacer()
+                        
+                        // Info
+                        VStack(alignment: .trailing, spacing: DesignSystem.Spacing.xxs) {
+                            if let romanNumeral = suggestion.romanNumeral {
+                                Text(romanNumeral)
+                                    .font(DesignSystem.Typography.callout.weight(.semibold))
+                                    .foregroundStyle(DesignSystem.Colors.primary)
+                            }
+                            
+                            Text(suggestion.reason)
+                                .font(DesignSystem.Typography.caption)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.trailing)
+                            
+                            confidenceBadge(suggestion.confidence)
+                        }
+                        
+                        Image(systemName: "chevron.right")
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(DesignSystem.Spacing.md)
+                    .background(
+                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                            .fill(DesignSystem.Colors.surface)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                                    .stroke(DesignSystem.Colors.border, lineWidth: 1)
+                            )
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, DesignSystem.Spacing.xl)
+        }
+    }
+    
+    private var analysisView: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.lg) {
+            Text("Progression Analysis")
+                .font(DesignSystem.Typography.title3)
+                .foregroundStyle(.white)
+                .padding(.horizontal, DesignSystem.Spacing.xl)
+            
+            VStack(spacing: DesignSystem.Spacing.md) {
+                // Diatonic percentage
+                HStack {
+                    Text("Diatonic Chords")
+                        .font(DesignSystem.Typography.body)
+                    Spacer()
+                    Text("\(progressionAnalysis.diatonicChords)/\(progressionAnalysis.totalChords)")
+                        .font(DesignSystem.Typography.bodyBold)
+                    Text("(\(Int(progressionAnalysis.diatonicPercentage))%)")
+                        .foregroundStyle(progressionAnalysis.diatonicPercentage > 80 ? DesignSystem.Colors.success : DesignSystem.Colors.warning)
+                }
+                
+                // Roman numerals
+                if !progressionAnalysis.romanNumerals.isEmpty {
+                    Divider()
+                    
+                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                        Text("Roman Numeral Analysis")
+                            .font(DesignSystem.Typography.callout.weight(.semibold))
+                        
+                        Text(progressionAnalysis.romanNumerals.joined(separator: " - "))
+                            .font(DesignSystem.Typography.body.monospaced())
+                            .foregroundStyle(DesignSystem.Colors.accent)
+                    }
+                }
+            }
+            .foregroundStyle(.white)
+            .padding(DesignSystem.Spacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                    .fill(DesignSystem.Colors.surface)
+            )
+            .padding(.horizontal, DesignSystem.Spacing.xl)
+        }
+    }
+    
+    private var progressionsView: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+            Text("Popular Progressions")
+                .font(DesignSystem.Typography.title3)
+                .foregroundStyle(.white)
+                .padding(.horizontal, DesignSystem.Spacing.xl)
+            
+            ForEach(popularProgressions.indices, id: \.self) { index in
+                let progression = popularProgressions[index]
+                
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+                    Text(progression.name)
+                        .font(DesignSystem.Typography.callout.weight(.semibold))
+                        .foregroundStyle(.white)
+                    
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: DesignSystem.Spacing.xs) {
+                            ForEach(progression.progression) { suggestion in
+                                Button {
+                                    onChordSelected(suggestion.root, suggestion.quality)
+                                } label: {
+                                    VStack(spacing: DesignSystem.Spacing.xxs) {
+                                        Text("\(suggestion.root)\(suggestion.quality.symbol)")
+                                            .font(DesignSystem.Typography.body.weight(.bold))
+                                        
+                                        if let roman = suggestion.romanNumeral {
+                                            Text(roman)
+                                                .font(DesignSystem.Typography.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                    .foregroundStyle(DesignSystem.Colors.accent)
+                                    .padding(.horizontal, DesignSystem.Spacing.sm)
+                                    .padding(.vertical, DesignSystem.Spacing.xs)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.xs)
+                                            .fill(DesignSystem.Colors.surface)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.xs)
+                                                    .stroke(DesignSystem.Colors.border, lineWidth: 1)
+                                            )
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+                .padding(DesignSystem.Spacing.md)
+                .background(
+                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                        .fill(DesignSystem.Colors.surface.opacity(0.5))
+                )
+            }
+            .padding(.horizontal, DesignSystem.Spacing.xl)
+        }
+    }
+    
+    private func confidenceBadge(_ confidence: Double) -> some View {
+        let color: Color
+        let text: String
+        
+        if confidence >= 0.8 {
+            color = DesignSystem.Colors.success
+            text = "High"
+        } else if confidence >= 0.5 {
+            color = DesignSystem.Colors.warning
+            text = "Medium"
+        } else {
+            color = DesignSystem.Colors.error.opacity(0.7)
+            text = "Low"
+        }
+        
+        return Text(text)
+            .font(DesignSystem.Typography.caption.weight(.medium))
+            .foregroundStyle(color)
+            .padding(.horizontal, DesignSystem.Spacing.xs)
+            .padding(.vertical, DesignSystem.Spacing.xxxs)
+            .background(
+                Capsule()
+                    .fill(color.opacity(0.15))
+                    .overlay(
+                        Capsule()
+                            .stroke(color.opacity(0.3), lineWidth: 1)
+                    )
+            )
+    }
+
 }
