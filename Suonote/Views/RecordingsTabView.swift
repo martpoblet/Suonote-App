@@ -405,10 +405,6 @@ struct RecordingsTabView: View {
         }
     }
     
-    private func getDocumentsDirectory() -> URL {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-    }
-    
     private func togglePlayback(for recording: Recording) {
         if playingRecordingId == recording.id {
             stopPlayback()
@@ -425,6 +421,14 @@ struct RecordingsTabView: View {
     
     private func playRecordingWithEffects(_ recording: Recording) {
         stopPlayback()
+        
+        let url = FileManagerUtils.recordingURL(for: recording.fileName)
+        
+        // Verify file exists
+        guard FileManagerUtils.fileExists(at: url) else {
+            print("Recording file not found at: \(url.path)")
+            return
+        }
         
         // Check if recording has individual effects
         let hasEffects = recording.reverbEnabled || recording.delayEnabled || 
@@ -452,9 +456,13 @@ struct RecordingsTabView: View {
             
             effectsProcessor.applyEffects()
             
-            let url = getDocumentsDirectory().appendingPathComponent(recording.fileName)
             playingRecordingId = recording.id
-            try? effectsProcessor.playAudio(url: url) {
+            do {
+                try effectsProcessor.playAudio(url: url) {
+                    playingRecordingId = nil
+                }
+            } catch {
+                print("Failed to play recording with effects: \(error)")
                 playingRecordingId = nil
             }
         } else {

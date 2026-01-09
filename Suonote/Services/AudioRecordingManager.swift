@@ -41,7 +41,7 @@ class AudioRecordingManager: NSObject, ObservableObject {
         self.currentRecordingType = recordingType
         
         let fileName = "\(UUID().uuidString).m4a"
-        let url = getDocumentsDirectory().appendingPathComponent(fileName)
+        let url = FileManagerUtils.recordingURL(for: fileName)
         
         let settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
@@ -100,7 +100,12 @@ class AudioRecordingManager: NSObject, ObservableObject {
     }
     
     func playRecording(_ recording: Recording) {
-        let url = getDocumentsDirectory().appendingPathComponent(recording.fileName)
+        let url = FileManagerUtils.recordingURL(for: recording.fileName)
+        
+        guard FileManagerUtils.fileExists(at: url) else {
+            print("Recording file not found at: \(url.path)")
+            return
+        }
         
         do {
             audioPlayer = try AVAudioPlayer(contentsOf: url)
@@ -156,10 +161,6 @@ class AudioRecordingManager: NSObject, ObservableObject {
     
     private func playClickSound(isAccent: Bool) {
         MetronomeClickPlayer.shared.play(accent: isAccent)
-    }
-    
-    private func getDocumentsDirectory() -> URL {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
 }
 

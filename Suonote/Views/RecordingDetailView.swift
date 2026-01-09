@@ -431,16 +431,23 @@ struct RecordingDetailView: View {
             isPlaying = false
         } else {
             loadEffectsFromRecording()
-            let url = getDocumentsDirectory().appendingPathComponent(recording.fileName)
-            try? effectsProcessor.playAudio(url: url) {
+            let url = FileManagerUtils.recordingURL(for: recording.fileName)
+            
+            guard FileManagerUtils.fileExists(at: url) else {
+                print("Recording file not found at: \(url.path)")
+                return
+            }
+            
+            do {
+                try effectsProcessor.playAudio(url: url) {
+                    isPlaying = false
+                }
+                isPlaying = true
+            } catch {
+                print("Failed to play recording with effects: \(error)")
                 isPlaying = false
             }
-            isPlaying = true
         }
-    }
-    
-    private func getDocumentsDirectory() -> URL {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
     
     private func formatDuration(_ duration: TimeInterval) -> String {
