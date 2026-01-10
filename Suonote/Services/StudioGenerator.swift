@@ -358,6 +358,20 @@ struct StudioGenerator {
                 let strideBeat = timeBottom == 8 ? midBeat : 1.0
                 let offsets = stride(from: 0.0, to: baseDuration, by: strideBeat).map { $0 }
                 hits = offsets.map { ($0, rootPitch) }
+            case .jazz:
+                if baseDuration >= 1.0 {
+                    hits.append((0.75, rootPitch)) // Walking bass feel
+                }
+            case .hiphop:
+                hits = [(0, rootPitch)]
+                if baseDuration >= 2.0 {
+                    hits.append((1.5, rootPitch))
+                }
+            case .funk:
+                let offsets = stride(from: 0.0, to: baseDuration, by: 0.5).map { $0 }
+                hits = offsets.map { ($0, rootPitch) }
+            case .ambient:
+                hits = [(0, rootPitch)]
             }
 
             let durationHint = bassHitDuration(style: style)
@@ -551,6 +565,14 @@ struct StudioGenerator {
             return instrument == .guitar ? -12 : 0
         case .edm:
             return instrument == .synth ? 12 : 0
+        case .jazz:
+            return instrument == .piano ? 12 : 0
+        case .hiphop:
+            return instrument == .bass ? -12 : 0
+        case .funk:
+            return instrument == .bass ? -12 : 0
+        case .ambient:
+            return instrument == .synth ? 12 : (instrument == .piano ? 12 : 0)
         }
     }
 
@@ -660,6 +682,14 @@ struct StudioGenerator {
             styleBoost = -12
         case .edm:
             styleBoost = 4
+        case .jazz:
+            styleBoost = -8
+        case .hiphop:
+            styleBoost = 6
+        case .funk:
+            styleBoost = 5
+        case .ambient:
+            styleBoost = -15
         }
 
         return min(127, max(40, base + styleBoost))
@@ -705,6 +735,21 @@ struct StudioGenerator {
             } else {
                 offsets = [0]
             }
+        case .jazz:
+            offsets = [0]
+            if chordDuration >= 1.5 {
+                offsets.append(0.75) // Swing feel
+            }
+        case .hiphop:
+            offsets = [0]
+        case .funk:
+            if instrument == .guitar {
+                offsets = stride(from: 0, to: chordDuration, by: 0.5).map { $0 }
+            } else {
+                offsets = [0]
+            }
+        case .ambient:
+            offsets = [0]
         }
 
         let clamped = offsets
@@ -741,6 +786,17 @@ struct StudioGenerator {
                 return min(remaining, shortHit)
             }
             return min(remaining, 1.0)
+        case .jazz:
+            return min(remaining, 0.75)
+        case .hiphop:
+            return remaining
+        case .funk:
+            if instrument == .guitar {
+                return min(remaining, 0.5)
+            }
+            return min(remaining, 1.0)
+        case .ambient:
+            return remaining
         }
     }
 
@@ -754,19 +810,35 @@ struct StudioGenerator {
             return 1.0
         case .edm:
             return 0.5
+        case .jazz:
+            return 0.75
+        case .hiphop:
+            return 1.5
+        case .funk:
+            return 0.5
+        case .ambient:
+            return 4.0
         }
     }
 
     private static func bassVelocity(for style: StudioStyle) -> Int {
         switch style {
-        case .pop:
-            return 86
-        case .rock:
-            return 96
         case .lofi:
-            return 72
+            return 65
+        case .pop:
+            return 80
+        case .rock:
+            return 95
         case .edm:
+            return 100
+        case .jazz:
+            return 70
+        case .hiphop:
+            return 105
+        case .funk:
             return 90
+        case .ambient:
+            return 60
         }
     }
 

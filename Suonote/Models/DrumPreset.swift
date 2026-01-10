@@ -37,6 +37,14 @@ enum DrumPreset: String, Codable, CaseIterable, Identifiable {
             return [.sparse, .basic, .offbeat]
         case .edm:
             return canFourOnFloor ? [.fourOnFloor, .offbeat, .drive] : [.offbeat, .drive, .basic]
+        case .jazz:
+            return [.sparse, .offbeat, .basic]
+        case .hiphop:
+            return [.drive, .halfTime, .basic]
+        case .funk:
+            return [.offbeat, .drive, .basic]
+        case .ambient:
+            return [.sparse, .basic, .halfTime]
         }
     }
 

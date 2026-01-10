@@ -82,8 +82,8 @@ struct StudioTabView: View {
     var body: some View {
         VStack(spacing: 0) {
             studioHeader
-                .padding(.horizontal, DesignSystem.Spacing.lg)
-                .padding(.top, DesignSystem.Spacing.sm)
+                .padding(.horizontal, DesignSystem.Spacing.xl)
+                .padding(.vertical, DesignSystem.Spacing.sm)
 
             Divider().overlay(DesignSystem.Colors.border)
 
@@ -305,30 +305,7 @@ struct StudioTabView: View {
                 )
             }
             .animatedPress()
-
-            // Regenerate Button (conditional)
-            if hasGeneratedTracks {
-                Button {
-                    showingRegenerateDialog = true
-                } label: {
-                    HStack(spacing: DesignSystem.Spacing.xxs) {
-                        Image(systemName: "sparkles")
-                        Text("Regenerate")
-                    }
-                    .font(DesignSystem.Typography.callout)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, DesignSystem.Spacing.sm)
-                    .padding(.vertical, DesignSystem.Spacing.xxs)
-                    .background(
-                        Capsule()
-                            .fill(DesignSystem.Colors.surface)
-                    )
-                }
-                .animatedPress()
-                .disabled(project.studioStyle == nil)
-            }
         }
-        .padding(.horizontal, DesignSystem.Spacing.xl)
     }
 
     private func regenerateNotes() {
@@ -770,9 +747,37 @@ struct StudioTrackRow: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
 
-                    Text(track.instrument.title)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    // Variant selector inline
+                    if !track.instrument.variants.isEmpty {
+                        Menu {
+                            ForEach(track.instrument.variants, id: \.self) { variant in
+                                Button {
+                                    track.variant = variant
+                                    onTrackChange()
+                                } label: {
+                                    HStack {
+                                        Text(variant.rawValue)
+                                        if track.variant == variant {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(track.variant?.rawValue ?? track.instrument.variants.first?.rawValue ?? track.instrument.title)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Image(systemName: "chevron.up.chevron.down")
+                                    .font(.system(size: 8))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    } else {
+                        Text(track.instrument.title)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Spacer()
@@ -823,53 +828,6 @@ struct StudioTrackRow: View {
             
             if showingControls {
                 VStack(spacing: 12) {
-                    // Variant Selector (if instrument has variants)
-                    if !track.instrument.variants.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Image(systemName: "slider.horizontal.3")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Text("Sound")
-                                    .font(.caption.weight(.medium))
-                                    .foregroundStyle(.secondary)
-                                Spacer()
-                            }
-                            
-                            Menu {
-                                ForEach(track.instrument.variants, id: \.self) { variant in
-                                    Button {
-                                        track.variant = variant
-                                        onTrackChange()
-                                    } label: {
-                                        HStack {
-                                            Text(variant.rawValue)
-                                            if track.variant == variant {
-                                                Image(systemName: "checkmark")
-                                            }
-                                        }
-                                    }
-                                }
-                            } label: {
-                                HStack {
-                                    Text(track.variant?.rawValue ?? track.instrument.variants.first?.rawValue ?? "Default")
-                                        .font(.caption)
-                                        .foregroundStyle(.white)
-                                    Spacer()
-                                    Image(systemName: "chevron.up.chevron.down")
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .fill(Color.white.opacity(0.1))
-                                )
-                            }
-                        }
-                    }
-                    
                     // Volume Control
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
@@ -914,6 +872,34 @@ struct StudioTrackRow: View {
                                 playback.updateTrackMix(trackId: track.id, volume: track.volume, pan: newValue)
                                 onTrackChange()
                             }
+                    }
+                    
+                    // Regenerate button (only for generated tracks)
+                    if !track.instrument.isAudio && !track.notes.isEmpty {
+                        Button {
+                            // TODO: Implement individual track regeneration with options
+                            onTrackChange()
+                        } label: {
+                            HStack {
+                                Image(systemName: "sparkles")
+                                    .font(.caption)
+                                Text("Regenerate Notes")
+                                    .font(.caption.weight(.semibold))
+                                Spacer()
+                            }
+                            .foregroundStyle(track.instrument.color)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(track.instrument.color.opacity(0.15))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(track.instrument.color.opacity(0.4), lineWidth: 1)
+                                    )
+                            )
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
                 .padding(.horizontal, 12)

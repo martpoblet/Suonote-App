@@ -7,6 +7,10 @@ enum StudioStyle: String, Codable, CaseIterable, Identifiable {
     case rock
     case lofi
     case edm
+    case jazz
+    case hiphop
+    case funk
+    case ambient
 
     var id: String { rawValue }
 
@@ -16,6 +20,10 @@ enum StudioStyle: String, Codable, CaseIterable, Identifiable {
         case .rock: return "Rock"
         case .lofi: return "Lo-Fi"
         case .edm: return "EDM"
+        case .jazz: return "Jazz"
+        case .hiphop: return "Hip-Hop"
+        case .funk: return "Funk"
+        case .ambient: return "Ambient"
         }
     }
 
@@ -25,6 +33,10 @@ enum StudioStyle: String, Codable, CaseIterable, Identifiable {
         case .rock: return "Punchy drums with driving guitars."
         case .lofi: return "Soft drums, warm keys, mellow bass."
         case .edm: return "Four‑on‑the‑floor with big synths."
+        case .jazz: return "Swung rhythms with complex harmonies."
+        case .hiphop: return "Hard-hitting drums with deep bass."
+        case .funk: return "Groovy bass with syncopated rhythms."
+        case .ambient: return "Atmospheric pads with sparse drums."
         }
     }
 
@@ -34,6 +46,10 @@ enum StudioStyle: String, Codable, CaseIterable, Identifiable {
         case .rock: return "guitars"
         case .lofi: return "leaf.fill"
         case .edm: return "bolt.fill"
+        case .jazz: return "music.quarternote.3"
+        case .hiphop: return "waveform"
+        case .funk: return "figure.dance"
+        case .ambient: return "cloud.fill"
         }
     }
 
@@ -43,6 +59,10 @@ enum StudioStyle: String, Codable, CaseIterable, Identifiable {
         case .rock: return SectionColor.orange.color
         case .lofi: return SectionColor.green.color
         case .edm: return SectionColor.cyan.color
+        case .jazz: return SectionColor.blue.color
+        case .hiphop: return SectionColor.red.color
+        case .funk: return SectionColor.yellow.color
+        case .ambient: return SectionColor.pink.color
         }
     }
 }
