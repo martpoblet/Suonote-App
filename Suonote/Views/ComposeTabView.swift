@@ -60,14 +60,17 @@ struct ComposeTabView: View {
             // MARK: Top Controls
             /// Barra superior con controles de exportar, tonalidad, BPM, etc.
             topControlsBar
-                .padding(.top, 8)  // Extra padding to prevent overlap with navigation bar
             
             Divider().overlay(Color.white.opacity(0.1))
             
             // MARK: Content Area
             if project.arrangementItems.isEmpty {
                 // Estado vacío: sin secciones creadas
-                emptyStateView
+                VStack(spacing: 0) {
+                    Spacer()
+                    emptyStateView
+                    Spacer()
+                }
             } else {
                 // Lista de secciones con lazy loading para mejor performance
                 ScrollView {
@@ -420,6 +423,7 @@ struct ComposeTabView: View {
     
     private func sectionEditor(_ section: SectionTemplate, recordings: [Recording]) -> some View {
         let sectionColor = section.color
+        let completionPercentage = calculateCompletionPercentage(for: section)
         
         return VStack(alignment: .leading, spacing: DesignSystem.Spacing.lg) {
             HStack {
@@ -428,9 +432,19 @@ struct ComposeTabView: View {
                         .font(DesignSystem.Typography.title2)
                         .foregroundStyle(.white)
                     
-                    Text("\(section.bars) bars × \(project.timeTop)/\(project.timeBottom)")
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: DesignSystem.Spacing.sm) {
+                        Text("\(section.bars) bars × \(project.timeTop)/\(project.timeBottom)")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundStyle(.secondary)
+                        
+                        Text("•")
+                            .foregroundStyle(.secondary)
+                        
+                        Text("\(completionPercentage)% filled")
+                            .font(DesignSystem.Typography.caption.weight(.medium))
+                            .foregroundStyle(completionPercentage > 80 ? DesignSystem.Colors.success : 
+                                           completionPercentage > 50 ? DesignSystem.Colors.warning : .secondary)
+                    }
                 }
                 
                 Spacer()
@@ -467,6 +481,22 @@ struct ComposeTabView: View {
                         .stroke(sectionColor.opacity(0.3), lineWidth: 2)
                 )
         )
+    }
+    
+    private func calculateCompletionPercentage(for section: SectionTemplate) -> Int {
+        let totalBeats = Double(section.bars * project.timeTop)
+        guard totalBeats > 0 else { return 0 }
+        
+        var usedBeats = 0.0
+        for barIndex in 0..<section.bars {
+            let chordsInBar = section.chordEvents.filter { $0.barIndex == barIndex }
+            for chord in chordsInBar {
+                usedBeats += chord.duration
+            }
+        }
+        
+        let percentage = Int((usedBeats / totalBeats) * 100)
+        return min(100, percentage)
     }
     
     private func linkedRecordingsSection(recordings: [Recording], section: SectionTemplate) -> some View {
@@ -622,13 +652,12 @@ struct SectionTimelineCard: View {
                             Badge("Empty", color: DesignSystem.Colors.warning.opacity(0.5))
                         } else {
                             ChordCountBadge(count: section.chordEvents.count, color: sectionColor)
-                            ProgressionAnalysisBadge(section: section, project: project)
                         }
                     }
                 }
             }
             .padding(DesignSystem.Spacing.sm)
-            .frame(width: 120)
+            .frame(width: 145)
             .background(
                 RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
                     .fill(isSelected ? sectionColor.opacity(0.2) : DesignSystem.Colors.surface)
@@ -983,6 +1012,13 @@ struct BarRow: View {
     
     private var swipeActions: [SwipeActionItem] {
         var items: [SwipeActionItem] = []
+        
+        items.append(
+            SwipeActionItem(systemImage: "speaker.slash.fill", tint: .purple, role: nil) {
+                makeBarSilent()
+            }
+        )
+        
         items.append(
             SwipeActionItem(systemImage: "doc.on.doc.fill", tint: .blue, role: nil) {
                 cloneBar()
@@ -998,6 +1034,11 @@ struct BarRow: View {
         }
         
         return items
+    }
+    
+    private func makeBarSilent() {
+        // Remove all chords in this bar
+        section.chordEvents.removeAll { $0.barIndex == barIndex }
     }
     
     private func cloneBar() {

@@ -14,6 +14,7 @@ final class StudioPlaybackEngine: ObservableObject {
     private var sequencer: AVAudioSequencer?
     private var samplerNodes: [UUID: AVAudioUnitSampler] = [:]
     private var audioNodes: [UUID: AVAudioPlayerNode] = [:]
+    private var mixerNodes: [UUID: AVAudioMixerNode] = [:]
     private var audioTrackInfo: [UUID: (fileName: String, startBeat: Double)] = [:]
     private var bpm: Double = 120
     private var beatScale: Double = 1.0
@@ -124,6 +125,12 @@ final class StudioPlaybackEngine: ObservableObject {
             play()
         }
     }
+    
+    func updateTrackMix(trackId: UUID, volume: Float, pan: Float) {
+        guard let mixer = mixerNodes[trackId] else { return }
+        mixer.outputVolume = volume
+        mixer.pan = pan
+    }
 
     private func resolvedTracks(from project: Project) -> [StudioTrack] {
         let solos = project.studioTracks.filter { $0.isSolo }
@@ -146,8 +153,10 @@ final class StudioPlaybackEngine: ObservableObject {
         engine.reset()
         samplerNodes.values.forEach { engine.detach($0) }
         audioNodes.values.forEach { engine.detach($0) }
+        mixerNodes.values.forEach { engine.detach($0) }
         samplerNodes.removeAll()
         audioNodes.removeAll()
+        mixerNodes.removeAll()
         audioTrackInfo.removeAll()
         stopPlayheadTimer()
     }
@@ -161,19 +170,43 @@ final class StudioPlaybackEngine: ObservableObject {
     private func attachSamplers(for tracks: [StudioTrack]) {
         for track in tracks where !track.instrument.isAudio {
             let sampler = AVAudioUnitSampler()
+            let mixer = AVAudioMixerNode()
+            
             engine.attach(sampler)
-            engine.connect(sampler, to: engine.mainMixerNode, format: nil)
+            engine.attach(mixer)
+            
+            // Connect: sampler -> mixer -> main
+            engine.connect(sampler, to: mixer, format: nil)
+            engine.connect(mixer, to: engine.mainMixerNode, format: nil)
+            
+            // Apply volume and pan
+            mixer.outputVolume = track.volume
+            mixer.pan = track.pan
+            
             samplerNodes[track.id] = sampler
-            loadInstrument(for: track.instrument, sampler: sampler)
+            mixerNodes[track.id] = mixer
+            loadInstrument(for: track, sampler: sampler)
         }
     }
 
     private func attachAudioNodes(for tracks: [StudioTrack], project: Project) {
         for track in tracks where track.instrument.isAudio {
             let node = AVAudioPlayerNode()
+            let mixer = AVAudioMixerNode()
+            
             engine.attach(node)
-            engine.connect(node, to: engine.mainMixerNode, format: nil)
+            engine.attach(mixer)
+            
+            // Connect: player -> mixer -> main
+            engine.connect(node, to: mixer, format: nil)
+            engine.connect(mixer, to: engine.mainMixerNode, format: nil)
+            
+            // Apply volume and pan
+            mixer.outputVolume = track.volume
+            mixer.pan = track.pan
+            
             audioNodes[track.id] = node
+            mixerNodes[track.id] = mixer
 
             if let recordingId = track.audioRecordingId,
                let recording = project.recordings.first(where: { $0.id == recordingId }) {
@@ -280,8 +313,9 @@ final class StudioPlaybackEngine: ObservableObject {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
 
-    private func loadInstrument(for instrument: StudioInstrument, sampler: AVAudioUnitSampler) {
-        let program = programNumber(for: instrument)
+    private func loadInstrument(for track: StudioTrack, sampler: AVAudioUnitSampler) {
+        // Use variant's MIDI program if available, otherwise default
+        let program = track.variant?.midiProgram ?? programNumber(for: track.instrument)
 
         if let url = resolvedCustomBankURL() {
             let logFailure: Bool
@@ -294,7 +328,7 @@ final class StudioPlaybackEngine: ObservableObject {
                 sampler,
                 url: url,
                 program: program,
-                bankMSB: appleBankMSB(for: instrument),
+                bankMSB: appleBankMSB(for: track.instrument),
                 bankLSB: UInt8(kAUSampler_DefaultBankLSB),
                 logFailure: logFailure
             ) {
@@ -309,7 +343,7 @@ final class StudioPlaybackEngine: ObservableObject {
                 sampler,
                 url: systemURL,
                 program: program,
-                bankMSB: appleBankMSB(for: instrument),
+                bankMSB: appleBankMSB(for: track.instrument),
                 bankLSB: UInt8(kAUSampler_DefaultBankLSB),
                 logFailure: false
             )

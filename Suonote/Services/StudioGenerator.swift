@@ -522,13 +522,13 @@ struct StudioGenerator {
     private static func baseInstrumentRange(for instrument: StudioInstrument) -> ClosedRange<Int> {
         switch instrument {
         case .piano:
-            return 36...72
+            return 48...84  // C3 to C6 (was 36...72)
         case .synth:
-            return 40...76
+            return 52...88  // E3 to E6 (was 40...76)
         case .guitar:
-            return 40...70
+            return 48...76  // C3 to E5 (was 40...70)
         case .bass:
-            return 28...52
+            return 28...52  // E1 to E3 (unchanged)
         case .drums, .audio:
             return 36...72
         }

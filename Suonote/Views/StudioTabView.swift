@@ -10,6 +10,7 @@ struct StudioTabView: View {
     @State private var showingRecordingPicker = false
     @State private var showingRegenerateDialog = false
     @State private var showingInstrumentPicker = false
+    @State private var showingAddTrackMenu = false
     @State private var pendingAddTrackAfterStyle = false
     @State private var selectedTrackId: UUID?
     @State private var needsRebuild = true
@@ -86,45 +87,34 @@ struct StudioTabView: View {
 
             Divider().overlay(DesignSystem.Colors.border)
 
-            ScrollView {
-                LazyVStack(spacing: DesignSystem.Spacing.lg) {
-                    if sortedTracks.isEmpty {
-                        StudioEmptyState(
-                            accentColor: project.studioStyle?.accentColor ?? SectionColor.purple.color,
-                            onPickStyle: { showingStylePicker = true },
-                            onAddTrack: promptAddTrack
-                        )
-                    } else {
-                        StudioTimelineView(
-                            segments: timelineSegments,
-                            beatsPerBar: project.timeTop,
-                            totalBars: totalBars,
-                            currentBeat: playback.currentBeat,
-                            isPlaying: playback.isPlaying,
-                            accentColor: project.studioStyle?.accentColor ?? SectionColor.purple.color,
-                            onPlay: handlePlay,
-                            onPause: playback.pause,
-                            onStop: handleStop,
-                            onSeek: { beat in
-                                playback.seek(to: beat)
-                            }
-                        )
-
+            if sortedTracks.isEmpty {
+                VStack(spacing: 0) {
+                    Spacer()
+                    
+                    StudioEmptyState(
+                        accentColor: project.studioStyle?.accentColor ?? SectionColor.purple.color,
+                        onPickStyle: { showingStylePicker = true },
+                        onAddTrack: promptAddTrack
+                    )
+                    .padding(.horizontal, DesignSystem.Spacing.xxl)
+                    
+                    Spacer()
+                }
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: DesignSystem.Spacing.lg) {
                         StudioTrackList(
                             tracks: sortedTracks,
                             selectedTrackId: $selectedTrackId,
                             onTrackChange: { needsRebuild = true },
-                            onDelete: { track in
-                                deleteTrack(track)
-                            }
+                            onDelete: deleteTrack,
+                            playback: playback
                         )
 
-                        if let track = selectedTrack {
-                            if track.instrument.isAudio {
-                                StudioAudioTrackView(track: track, project: project)
-                            } else if track.instrument == .drums {
+                        if let selectedTrack {
+                            if selectedTrack.instrument == .drums {
                                 StudioDrumEditor(
-                                    track: track,
+                                    track: selectedTrack,
                                     beatsPerBar: project.timeTop,
                                     timeBottom: project.timeBottom,
                                     totalBars: totalBars,
@@ -133,7 +123,7 @@ struct StudioTabView: View {
                                 )
                             } else {
                                 StudioNoteEditor(
-                                    track: track,
+                                    track: selectedTrack,
                                     beatsPerBar: project.timeTop,
                                     totalBars: totalBars,
                                     style: project.studioStyle,
@@ -142,9 +132,40 @@ struct StudioTabView: View {
                             }
                         }
                     }
+                    .padding(DesignSystem.Spacing.lg)
+                    .padding(.bottom, 120)
                 }
-                .padding(DesignSystem.Spacing.lg)
-                .padding(.bottom, DesignSystem.Spacing.xxl)
+                
+                // Fixed timeline at bottom
+                VStack(spacing: 0) {
+                    Divider().overlay(DesignSystem.Colors.border)
+                    
+                    StudioTimelineView(
+                        segments: timelineSegments,
+                        beatsPerBar: project.timeTop,
+                        totalBars: totalBars,
+                        currentBeat: playback.currentBeat,
+                        isPlaying: playback.isPlaying,
+                        accentColor: project.studioStyle?.accentColor ?? SectionColor.purple.color,
+                        onPlay: handlePlay,
+                        onPause: playback.pause,
+                        onStop: handleStop,
+                        onSeek: { beat in
+                            playback.seek(to: beat)
+                        }
+                    )
+                    .padding(DesignSystem.Spacing.md)
+                }
+                .background(
+                    LinearGradient(
+                        colors: [
+                            Color.black.opacity(0.95),
+                            Color.black
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
             }
         }
         .onAppear {
@@ -157,7 +178,7 @@ struct StudioTabView: View {
             playback.prepare(project: project)
             lastProjectSignature = projectStudioSignature
         }
-        .onChange(of: projectStudioSignature) { newSignature in
+        .onChange(of: projectStudioSignature) { _, newSignature in
             handleProjectChange(newSignature: newSignature)
         }
         .onChange(of: showingStylePicker) { _, isShowing in
@@ -205,6 +226,23 @@ struct StudioTabView: View {
                 existingInstruments: existingInstrumentSet,
                 onPick: { instrument in
                     addInstrumentTrack(instrument)
+                }
+            )
+        }
+        .sheet(isPresented: $showingAddTrackMenu) {
+            AddTrackMenuView(
+                hasRecordings: !project.recordings.isEmpty,
+                onAddInstrument: {
+                    showingAddTrackMenu = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        showingInstrumentPicker = true
+                    }
+                },
+                onAddRecording: {
+                    showingAddTrackMenu = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        showingRecordingPicker = true
+                    }
                 }
             )
         }
@@ -289,23 +327,8 @@ struct StudioTabView: View {
                 .animatedPress()
                 .disabled(project.studioStyle == nil)
             }
-
-            // Add Recording Button
-            Button {
-                showingRecordingPicker = true
-            } label: {
-                Image(systemName: DesignSystem.Icons.waveform)
-                    .font(.title3)
-                    .foregroundStyle(.white)
-                    .padding(DesignSystem.Spacing.xxs)
-                    .background(
-                        Circle().fill(DesignSystem.Colors.surface)
-                    )
-            }
-            .animatedPress()
-            .disabled(project.recordings.isEmpty)
-            .opacity(project.recordings.isEmpty ? 0.5 : 1.0)
         }
+        .padding(.horizontal, DesignSystem.Spacing.xl)
     }
 
     private func regenerateNotes() {
@@ -323,7 +346,7 @@ struct StudioTabView: View {
             showingStylePicker = true
             return
         }
-        showingInstrumentPicker = true
+        showingAddTrackMenu = true
     }
 
     private func addInstrumentTrack(_ instrument: StudioInstrument) {
@@ -526,7 +549,6 @@ struct StudioEmptyState: View {
             }
         }
         .padding(24)
-        .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 20)
                 .fill(Color.white.opacity(0.05))
@@ -638,7 +660,7 @@ struct StudioTimelineView: View {
                         let x = CGFloat(segment.startBar) * barWidth
                         RoundedRectangle(cornerRadius: 6)
                             .fill(segment.color.opacity(0.5))
-                            .frame(width: width, height: 26)
+                            .frame(width: width, height: 40)
                             .overlay(
                                 Text(segment.label)
                                     .font(.caption2.weight(.semibold))
@@ -652,35 +674,28 @@ struct StudioTimelineView: View {
 
                     Rectangle()
                         .fill(accentColor)
-                        .frame(width: 2, height: 30)
+                        .frame(width: 2, height: 44)
                         .offset(x: max(0, min(playheadX, geo.size.width - 2)))
 
                     Circle()
                         .fill(accentColor)
-                        .frame(width: 8, height: 8)
+                        .frame(width: 10, height: 10)
                         .offset(
-                            x: max(0, min(playheadX - 3, geo.size.width - 8)),
-                            y: -4
+                            x: max(0, min(playheadX - 4, geo.size.width - 10)),
+                            y: -5
                         )
                 }
                 .contentShape(Rectangle())
-                .onTapGesture(count: 1, coordinateSpace: .local) { location in
-                    let clampedX = max(0, min(location.x, geo.size.width))
-                    let beat = Double(clampedX / barWidth) * Double(beatsPerBar)
-                    onSeek(min(beat, maxBeats))
-                }
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            let clampedX = max(0, min(value.location.x, geo.size.width))
+                            let beat = Double(clampedX / barWidth) * Double(beatsPerBar)
+                            onSeek(min(beat, maxBeats))
+                        }
+                )
             }
-            .frame(height: 32)
-
-            Slider(
-                value: Binding(
-                    get: { currentBeat },
-                    set: { onSeek(min($0, maxBeats)) }
-                ),
-                in: 0...maxBeats,
-                step: 0.25
-            )
-            .tint(accentColor)
+            .frame(height: 44)
         }
         .padding(14)
         .background(
@@ -699,6 +714,7 @@ struct StudioTrackList: View {
     @Binding var selectedTrackId: UUID?
     let onTrackChange: () -> Void
     let onDelete: (StudioTrack) -> Void
+    let playback: StudioPlaybackEngine
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -722,7 +738,8 @@ struct StudioTrackList: View {
                             onTrackChange: onTrackChange,
                             onDelete: {
                                 onDelete(track)
-                            }
+                            },
+                            playback: playback
                         )
                     }
                 }
@@ -737,57 +754,172 @@ struct StudioTrackRow: View {
     let onSelect: () -> Void
     let onTrackChange: () -> Void
     let onDelete: () -> Void
+    let playback: StudioPlaybackEngine
+    @State private var showingControls = false
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: track.instrument.icon)
-                .font(.title3)
-                .foregroundStyle(track.instrument.color)
-                .frame(width: 28)
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Image(systemName: track.instrument.icon)
+                    .font(.title3)
+                    .foregroundStyle(track.instrument.color)
+                    .frame(width: 28)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(track.name)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(track.name)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
 
-                Text(track.instrument.title)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    Text(track.instrument.title)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+                
+                Button {
+                    withAnimation(.spring(response: 0.3)) {
+                        showingControls.toggle()
+                    }
+                } label: {
+                    Image(systemName: showingControls ? "chevron.up" : "chevron.down")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 26, height: 26)
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    track.isMuted.toggle()
+                    onTrackChange()
+                } label: {
+                    Text("M")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(track.isMuted ? .black : .white)
+                        .frame(width: 26, height: 26)
+                        .background(
+                            Circle()
+                                .fill(track.isMuted ? track.instrument.color : Color.white.opacity(0.12))
+                        )
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    track.isSolo.toggle()
+                    onTrackChange()
+                } label: {
+                    Text("S")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(track.isSolo ? .black : .white)
+                        .frame(width: 26, height: 26)
+                        .background(
+                            Circle()
+                                .fill(track.isSolo ? track.instrument.color : Color.white.opacity(0.12))
+                        )
+                }
+                .buttonStyle(.plain)
             }
-
-            Spacer()
-
-            Button {
-                track.isMuted.toggle()
-                onTrackChange()
-            } label: {
-                Text("M")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(track.isMuted ? .black : .white)
-                    .frame(width: 26, height: 26)
-                    .background(
-                        Circle()
-                            .fill(track.isMuted ? track.instrument.color : Color.white.opacity(0.12))
-                    )
+            .padding(12)
+            
+            if showingControls {
+                VStack(spacing: 12) {
+                    // Variant Selector (if instrument has variants)
+                    if !track.instrument.variants.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Image(systemName: "slider.horizontal.3")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text("Sound")
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                            }
+                            
+                            Menu {
+                                ForEach(track.instrument.variants, id: \.self) { variant in
+                                    Button {
+                                        track.variant = variant
+                                        onTrackChange()
+                                    } label: {
+                                        HStack {
+                                            Text(variant.rawValue)
+                                            if track.variant == variant {
+                                                Image(systemName: "checkmark")
+                                            }
+                                        }
+                                    }
+                                }
+                            } label: {
+                                HStack {
+                                    Text(track.variant?.rawValue ?? track.instrument.variants.first?.rawValue ?? "Default")
+                                        .font(.caption)
+                                        .foregroundStyle(.white)
+                                    Spacer()
+                                    Image(systemName: "chevron.up.chevron.down")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(Color.white.opacity(0.1))
+                                )
+                            }
+                        }
+                    }
+                    
+                    // Volume Control
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Image(systemName: "speaker.wave.2.fill")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("Volume")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text("\(Int(track.volume * 100))%")
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.white)
+                        }
+                        
+                        Slider(value: $track.volume, in: 0...1)
+                            .tint(track.instrument.color)
+                            .onChange(of: track.volume) { _, newValue in
+                                playback.updateTrackMix(trackId: track.id, volume: newValue, pan: track.pan)
+                                onTrackChange()
+                            }
+                    }
+                    
+                    // Pan Control
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Image(systemName: "l.joystick.fill")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("Pan")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text(panLabel)
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.white)
+                        }
+                        
+                        Slider(value: $track.pan, in: -1...1)
+                            .tint(track.instrument.color)
+                            .onChange(of: track.pan) { _, newValue in
+                                playback.updateTrackMix(trackId: track.id, volume: track.volume, pan: newValue)
+                                onTrackChange()
+                            }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 12)
             }
-            .buttonStyle(.plain)
-
-            Button {
-                track.isSolo.toggle()
-                onTrackChange()
-            } label: {
-                Text("S")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(track.isSolo ? .black : .white)
-                    .frame(width: 26, height: 26)
-                    .background(
-                        Circle()
-                            .fill(track.isSolo ? track.instrument.color : Color.white.opacity(0.12))
-                    )
-            }
-            .buttonStyle(.plain)
         }
-        .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 14)
                 .fill(Color.white.opacity(0.05))
@@ -804,6 +936,16 @@ struct StudioTrackRow: View {
             } label: {
                 Label("Delete Track", systemImage: "trash.fill")
             }
+        }
+    }
+    
+    private var panLabel: String {
+        if track.pan < -0.05 {
+            return "L\(Int(abs(track.pan) * 100))"
+        } else if track.pan > 0.05 {
+            return "R\(Int(track.pan * 100))"
+        } else {
+            return "C"
         }
     }
 }
@@ -1620,5 +1762,131 @@ struct StudioRecordingPicker: View {
             }
         }
         .preferredColorScheme(.dark)
+    }
+}
+
+struct AddTrackMenuView: View {
+    let hasRecordings: Bool
+    let onAddInstrument: () -> Void
+    let onAddRecording: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                Text("Choose Track Type")
+                    .font(.title2.bold())
+                    .foregroundStyle(.white)
+                    .padding(.top, 24)
+                
+                VStack(spacing: 16) {
+                    Button {
+                        onAddInstrument()
+                    } label: {
+                        HStack(spacing: 16) {
+                            Image(systemName: "music.note")
+                                .font(.title2)
+                                .foregroundStyle(.white)
+                                .frame(width: 50, height: 50)
+                                .background(
+                                    Circle()
+                                        .fill(SectionColor.purple.color.opacity(0.3))
+                                )
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Add Instrument")
+                                    .font(.headline)
+                                    .foregroundStyle(.white)
+                                
+                                Text("Piano, Guitar, Drums, Bass, Synth")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.right")
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(20)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color.white.opacity(0.05))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(SectionColor.purple.color.opacity(0.4), lineWidth: 1.5)
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Button {
+                        onAddRecording()
+                    } label: {
+                        HStack(spacing: 16) {
+                            Image(systemName: "waveform")
+                                .font(.title2)
+                                .foregroundStyle(.white)
+                                .frame(width: 50, height: 50)
+                                .background(
+                                    Circle()
+                                        .fill(SectionColor.cyan.color.opacity(0.3))
+                                )
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Add Recording")
+                                    .font(.headline)
+                                    .foregroundStyle(.white)
+                                
+                                Text(hasRecordings ? "Import audio from your recordings" : "No recordings available")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.right")
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(20)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color.white.opacity(0.05))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(SectionColor.cyan.color.opacity(hasRecordings ? 0.4 : 0.2), lineWidth: 1.5)
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!hasRecordings)
+                    .opacity(hasRecordings ? 1.0 : 0.5)
+                }
+                .padding(.horizontal, 24)
+                
+                Spacer()
+            }
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.05, green: 0.05, blue: 0.15),
+                        Color(red: 0.1, green: 0.05, blue: 0.2),
+                        Color.black
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+        .presentationDetents([.height(350)])
     }
 }

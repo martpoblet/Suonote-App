@@ -49,7 +49,7 @@ struct ProjectsListView: View {
             ProjectBackgroundView()
             
             VStack(spacing: 0) {
-                // Custom header
+                // Custom header - always at top
                 customHeader
                     .padding(.horizontal, DesignSystem.Spacing.xl)
                     .padding(.top, DesignSystem.Spacing.xs)
@@ -62,8 +62,12 @@ struct ProjectsListView: View {
                 
                 // Projects grid
                 if filteredProjects.isEmpty {
-                    emptyStateView
-                        .padding(.top, DesignSystem.Spacing.md)
+                    VStack(spacing: 0) {
+                        Spacer()
+                        emptyStateView
+                            .padding(.horizontal, DesignSystem.Spacing.xxl)
+                        Spacer()
+                    }
                 } else {
                     List {
                         ForEach(filteredProjects) { project in
@@ -105,7 +109,7 @@ struct ProjectsListView: View {
                     }
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
-                    .contentMargins(.top, 16, for: .scrollContent)  // Add top padding
+                    .contentMargins(.top, 16, for: .scrollContent)
                 }
             }
             

@@ -63,9 +63,9 @@ struct DesignSystem {
         static let title3 = Font.system(size: 20, weight: .semibold)
         
         // Body
-        static let body = Font.system(size: 17, weight: .regular)
-        static let bodyBold = Font.system(size: 17, weight: .semibold)
-        static let callout = Font.system(size: 16, weight: .regular)
+        static let body = Font.system(size: 15, weight: .regular)
+        static let bodyBold = Font.system(size: 15, weight: .semibold)
+        static let callout = Font.system(size: 13, weight: .regular)
         
         // Captions
         static let caption = Font.system(size: 12, weight: .regular)

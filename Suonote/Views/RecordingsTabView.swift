@@ -319,21 +319,24 @@ struct RecordingsTabView: View {
             }
             
             if recordings.isEmpty {
-                Spacer()
-                
-                EmptyStateView(
-                    icon: "waveform.circle",
-                    title: project.recordings.isEmpty ? "No recordings yet" : "No recordings match filters",
-                    message: project.recordings.isEmpty ? "Tap 'Start Recording' to begin" : "Try adjusting your filters",
-                    actionTitle: project.recordings.isEmpty ? nil : "Clear Filters"
-                ) {
-                    if !project.recordings.isEmpty {
-                        filterType = nil
-                        showLinkedOnly = false
+                VStack(spacing: 0) {
+                    Spacer()
+                    
+                    EmptyStateView(
+                        icon: "waveform.circle",
+                        title: project.recordings.isEmpty ? "No recordings yet" : "No recordings match filters",
+                        message: project.recordings.isEmpty ? "Tap 'Start Recording' to begin" : "Try adjusting your filters",
+                        actionTitle: project.recordings.isEmpty ? nil : "Clear Filters"
+                    ) {
+                        if !project.recordings.isEmpty {
+                            filterType = nil
+                            showLinkedOnly = false
+                        }
                     }
+                    .padding(.horizontal, DesignSystem.Spacing.xxl)
+                    
+                    Spacer()
                 }
-                
-                Spacer()
             } else {
                 List {
                     ForEach(recordings) { recording in

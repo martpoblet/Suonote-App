@@ -93,6 +93,67 @@ enum StudioInstrument: String, Codable, CaseIterable, Identifiable {
     var isAudio: Bool {
         self == .audio
     }
+    
+    var variants: [InstrumentVariant] {
+        switch self {
+        case .piano:
+            return [.acousticPiano, .electricPiano, .brightPiano]
+        case .synth:
+            return [.padSynth, .leadSynth, .brassSynth]
+        case .guitar:
+            return [.acousticGuitar, .electricGuitar, .cleanGuitar]
+        case .bass:
+            return [.acousticBass, .electricBass, .synthBass]
+        case .drums, .audio:
+            return []
+        }
+    }
+}
+
+enum InstrumentVariant: String, Codable, CaseIterable {
+    // Piano variants
+    case acousticPiano = "Acoustic Piano"
+    case electricPiano = "Electric Piano"
+    case brightPiano = "Bright Piano"
+    
+    // Synth variants
+    case padSynth = "Pad Synth"
+    case leadSynth = "Lead Synth"
+    case brassSynth = "Brass Synth"
+    
+    // Guitar variants
+    case acousticGuitar = "Acoustic Guitar"
+    case electricGuitar = "Electric Guitar"
+    case cleanGuitar = "Clean Guitar"
+    
+    // Bass variants
+    case acousticBass = "Acoustic Bass"
+    case electricBass = "Electric Bass"
+    case synthBass = "Synth Bass"
+    
+    var midiProgram: UInt8 {
+        switch self {
+        // Piano
+        case .acousticPiano: return 0
+        case .electricPiano: return 4
+        case .brightPiano: return 1
+        
+        // Synth
+        case .padSynth: return 88
+        case .leadSynth: return 80
+        case .brassSynth: return 61
+        
+        // Guitar
+        case .acousticGuitar: return 24
+        case .electricGuitar: return 27
+        case .cleanGuitar: return 26
+        
+        // Bass
+        case .acousticBass: return 32
+        case .electricBass: return 33
+        case .synthBass: return 38
+        }
+    }
 }
 
 @Model
@@ -102,9 +163,12 @@ final class StudioTrack {
     var orderIndex: Int
     private var _instrument: String
     private var _drumPreset: String
+    private var _variant: String?
     var octaveShift: Int
     var isMuted: Bool
     var isSolo: Bool
+    var volume: Float
+    var pan: Float
     var createdAt: Date
     var audioRecordingId: UUID?
     var audioStartBeat: Double
@@ -116,6 +180,16 @@ final class StudioTrack {
     var instrument: StudioInstrument {
         get { StudioInstrument(rawValue: _instrument) ?? .piano }
         set { _instrument = newValue.rawValue }
+    }
+    
+    var variant: InstrumentVariant? {
+        get {
+            guard let variantString = _variant else { return nil }
+            return InstrumentVariant(rawValue: variantString)
+        }
+        set {
+            _variant = newValue?.rawValue
+        }
     }
 
     var drumPreset: DrumPreset? {
@@ -143,9 +217,12 @@ final class StudioTrack {
         self.orderIndex = orderIndex
         self._instrument = instrument.rawValue
         self._drumPreset = ""
+        self._variant = instrument.variants.first?.rawValue
         self.octaveShift = 0
         self.isMuted = isMuted
         self.isSolo = isSolo
+        self.volume = 0.75
+        self.pan = 0.0
         self.createdAt = Date()
         self.audioRecordingId = audioRecordingId
         self.audioStartBeat = audioStartBeat
