@@ -334,7 +334,7 @@ struct RecordingsTabView: View {
                         }
                     }
                     .padding(.horizontal, DesignSystem.Spacing.xxl)
-                    
+                    .frame(maxWidth: .infinity)
                     Spacer()
                 }
             } else {

@@ -372,6 +372,7 @@ struct EmptyStateView: View {
             }
         }
         .padding(DesignSystem.Spacing.xxl)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

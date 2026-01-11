@@ -9,6 +9,10 @@ struct StudioTabView: View {
     @State private var showingStylePicker = false
     @State private var showingRecordingPicker = false
     @State private var showingRegenerateDialog = false
+    @State private var showingRegenerateOptions = false
+    @State private var trackToRegenerate: StudioTrack?
+    @State private var regenerateIntensity: Double = 0.5
+    @State private var regenerateComplexity: Double = 0.5
     @State private var showingInstrumentPicker = false
     @State private var showingAddTrackMenu = false
     @State private var pendingAddTrackAfterStyle = false
@@ -108,6 +112,7 @@ struct StudioTabView: View {
                             selectedTrackId: $selectedTrackId,
                             onTrackChange: { needsRebuild = true },
                             onDelete: deleteTrack,
+                            onRegenerateTrack: regenerateTrackNotes,
                             playback: playback
                         )
 
@@ -246,6 +251,18 @@ struct StudioTabView: View {
                 }
             )
         }
+        .sheet(isPresented: $showingRegenerateOptions) {
+            RegenerateOptionsView(
+                trackName: trackToRegenerate?.name ?? "Track",
+                intensity: $regenerateIntensity,
+                complexity: $regenerateComplexity,
+                onRegenerate: executeRegenerate,
+                onCancel: {
+                    showingRegenerateOptions = false
+                    trackToRegenerate = nil
+                }
+            )
+        }
         .confirmationDialog(
             "Regenerate tracks?",
             isPresented: $showingRegenerateDialog,
@@ -315,6 +332,57 @@ struct StudioTabView: View {
         try? modelContext.save()
         needsRebuild = true
         playback.stop(resetPosition: true)
+    }
+    
+    private func regenerateTrackNotes(_ track: StudioTrack) {
+        trackToRegenerate = track
+        regenerateIntensity = 0.5
+        regenerateComplexity = 0.5
+        showingRegenerateOptions = true
+    }
+    
+    private func executeRegenerate() {
+        guard let track = trackToRegenerate,
+              let style = project.studioStyle else { 
+            print("❌ No style or track set")
+            return 
+        }
+        
+        print("🔄 Regenerating notes for \(track.instrument.title) in \(style.title) style")
+        print("   Intensity: \(Int(regenerateIntensity * 100))%, Complexity: \(Int(regenerateComplexity * 100))%")
+        
+        // Delete existing notes
+        for note in track.notes {
+            modelContext.delete(note)
+        }
+        track.notes.removeAll()
+        
+        // Generate new notes with intensity and complexity
+        let newNotes = StudioGenerator.generateNotes(
+            for: track.instrument,
+            project: project,
+            style: style,
+            drumPreset: track.drumPreset,
+            octaveShift: track.octaveShift,
+            intensity: regenerateIntensity,
+            complexity: regenerateComplexity
+        )
+        
+        print("✅ Generated \(newNotes.count) new notes")
+        
+        // Add new notes to track
+        for note in newNotes {
+            note.track = track
+            track.notes.append(note)
+            modelContext.insert(note)
+        }
+        
+        project.updatedAt = Date()
+        try? modelContext.save()
+        needsRebuild = true
+        playback.stop(resetPosition: true)
+        showingRegenerateOptions = false
+        trackToRegenerate = nil
     }
 
     private func promptAddTrack() {
@@ -691,6 +759,7 @@ struct StudioTrackList: View {
     @Binding var selectedTrackId: UUID?
     let onTrackChange: () -> Void
     let onDelete: (StudioTrack) -> Void
+    let onRegenerateTrack: (StudioTrack) -> Void
     let playback: StudioPlaybackEngine
 
     var body: some View {
@@ -716,6 +785,7 @@ struct StudioTrackList: View {
                             onDelete: {
                                 onDelete(track)
                             },
+                            onRegenerateTrack: { onRegenerateTrack(track) },
                             playback: playback
                         )
                     }
@@ -731,6 +801,7 @@ struct StudioTrackRow: View {
     let onSelect: () -> Void
     let onTrackChange: () -> Void
     let onDelete: () -> Void
+    let onRegenerateTrack: () -> Void
     let playback: StudioPlaybackEngine
     @State private var showingControls = false
 
@@ -877,8 +948,7 @@ struct StudioTrackRow: View {
                     // Regenerate button (only for generated tracks)
                     if !track.instrument.isAudio && !track.notes.isEmpty {
                         Button {
-                            // TODO: Implement individual track regeneration with options
-                            onTrackChange()
+                            onRegenerateTrack()
                         } label: {
                             HStack {
                                 Image(systemName: "sparkles")
@@ -1874,5 +1944,152 @@ struct AddTrackMenuView: View {
         }
         .preferredColorScheme(.dark)
         .presentationDetents([.height(350)])
+    }
+}
+
+struct RegenerateOptionsView: View {
+    let trackName: String
+    @Binding var intensity: Double
+    @Binding var complexity: Double
+    let onRegenerate: () -> Void
+    let onCancel: () -> Void
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 24) {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Regenerating: \(trackName)")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    
+                    // Intensity Slider
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Image(systemName: "waveform")
+                                .foregroundStyle(.purple)
+                            Text("Intensity")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.white)
+                            Spacer()
+                            Text("\(Int(intensity * 100))%")
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                        
+                        Slider(value: $intensity, in: 0...1)
+                            .tint(.purple)
+                        
+                        HStack {
+                            Text("Minimal")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text("Maximum")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        
+                        Text("Controls hit frequency and velocity")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary.opacity(0.7))
+                    }
+                    
+                    // Complexity Slider
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Image(systemName: "music.note.list")
+                                .foregroundStyle(.cyan)
+                            Text("Complexity")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.white)
+                            Spacer()
+                            Text("\(Int(complexity * 100))%")
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                        
+                        Slider(value: $complexity, in: 0...1)
+                            .tint(.cyan)
+                        
+                        HStack {
+                            Text("Simple")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text("Complex")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        
+                        Text("Controls note variations and rhythmic patterns")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary.opacity(0.7))
+                    }
+                }
+                .padding(20)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color.white.opacity(0.05))
+                )
+                
+                Spacer()
+                
+                // Buttons
+                HStack(spacing: 12) {
+                    Button {
+                        onCancel()
+                    } label: {
+                        Text("Cancel")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.white.opacity(0.1))
+                            )
+                    }
+                    
+                    Button {
+                        onRegenerate()
+                    } label: {
+                        HStack {
+                            Image(systemName: "sparkles")
+                            Text("Regenerate")
+                        }
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [.purple, .cyan],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                        )
+                    }
+                }
+            }
+            .padding(24)
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.05, green: 0.05, blue: 0.15),
+                        Color(red: 0.1, green: 0.05, blue: 0.2),
+                        Color.black
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .navigationTitle("Regenerate Options")
+            .navigationBarTitleDisplayMode(.inline)
+            .preferredColorScheme(.dark)
+        }
+        .presentationDetents([.height(480)])
     }
 }

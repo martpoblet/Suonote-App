@@ -113,7 +113,9 @@ struct StudioGenerator {
         project: Project,
         style: StudioStyle,
         drumPreset: DrumPreset? = nil,
-        octaveShift: Int = 0
+        octaveShift: Int = 0,
+        intensity: Double = 0.5,
+        complexity: Double = 0.5
     ) -> [StudioNote] {
         let timeline = buildTimeline(for: project)
         let diatonicMap = diatonicQualityMap(forKey: project.keyRoot, mode: project.keyMode)
@@ -137,7 +139,9 @@ struct StudioGenerator {
             drumPreset: resolvedPreset,
             octaveShift: octaveShift,
             keyRoot: project.keyRoot,
-            diatonicMap: diatonicMap
+            diatonicMap: diatonicMap,
+            intensity: intensity,
+            complexity: complexity
         )
     }
 
@@ -211,7 +215,9 @@ struct StudioGenerator {
         drumPreset: DrumPreset?,
         octaveShift: Int,
         keyRoot: String,
-        diatonicMap: [String: ChordQuality]
+        diatonicMap: [String: ChordQuality],
+        intensity: Double = 0.5,
+        complexity: Double = 0.5
     ) -> [StudioNote] {
         switch instrument {
         case .drums:
@@ -235,7 +241,9 @@ struct StudioGenerator {
                 timeBottom: timeBottom,
                 style: style,
                 octaveShift: octaveShift,
-                keyRoot: keyRoot
+                keyRoot: keyRoot,
+                intensity: intensity,
+                complexity: complexity
             )
         case .guitar, .synth, .piano:
             return chordPadNotes(
@@ -247,7 +255,9 @@ struct StudioGenerator {
                 style: style,
                 octaveShift: octaveShift,
                 keyRoot: keyRoot,
-                diatonicMap: diatonicMap
+                diatonicMap: diatonicMap,
+                intensity: intensity,
+                complexity: complexity
             )
         case .audio:
             return []
@@ -263,7 +273,9 @@ struct StudioGenerator {
         style: StudioStyle,
         octaveShift: Int,
         keyRoot: String,
-        diatonicMap: [String: ChordQuality]
+        diatonicMap: [String: ChordQuality],
+        intensity: Double = 0.5,
+        complexity: Double = 0.5
     ) -> [StudioNote] {
         let range = chordRange(for: instrument, style: style, octaveShift: octaveShift)
         let tonicTarget = anchorPitch(for: keyRoot, in: range)
@@ -280,15 +292,33 @@ struct StudioGenerator {
             )
             var pitches = chordPitches(rootPitch: rootPitch, quality: resolvedQuality)
             pitches = fitPitches(pitches, in: range)
+            
+            // Simplify guitar voicings - use fewer notes for clearer sound
+            if instrument == .guitar {
+                // Complexity affects how many notes we use
+                let maxNotes = complexity > 0.7 ? 3 : (complexity > 0.3 ? 2 : 1)
+                if pitches.count > maxNotes {
+                    pitches = Array(pitches.prefix(maxNotes))
+                }
+            }
+            
             let center = pitches.reduce(0, +) / max(1, pitches.count)
             lastCenter = center
-            let velocity = chordVelocity(for: instrument, style: style)
+            
+            // Apply intensity to velocity
+            let baseVelocity = chordVelocity(for: instrument, style: style)
+            let velocityRange = 40
+            let minVelocity = max(30, baseVelocity - velocityRange / 2)
+            let maxVelocity = min(127, baseVelocity + velocityRange / 2)
+            let velocity = Int(Double(minVelocity) + intensity * Double(maxVelocity - minVelocity))
+            
             let hitOffsets = chordHitOffsets(
                 instrument: instrument,
                 style: style,
                 beatsPerBar: beatsPerBar,
                 timeBottom: timeBottom,
-                chordDuration: baseDuration
+                chordDuration: baseDuration,
+                complexity: complexity
             )
 
             for offset in hitOffsets {
@@ -326,7 +356,9 @@ struct StudioGenerator {
         timeBottom: Int,
         style: StudioStyle,
         octaveShift: Int,
-        keyRoot: String
+        keyRoot: String,
+        intensity: Double = 0.5,
+        complexity: Double = 0.5
     ) -> [StudioNote] {
         let range = bassRange(style: style, octaveShift: octaveShift)
         var lastPitch = anchorPitch(for: keyRoot, in: range)
@@ -536,13 +568,13 @@ struct StudioGenerator {
     private static func baseInstrumentRange(for instrument: StudioInstrument) -> ClosedRange<Int> {
         switch instrument {
         case .piano:
-            return 48...84  // C3 to C6 (was 36...72)
+            return 48...84  // C3 to C6
         case .synth:
-            return 52...88  // E3 to E6 (was 40...76)
+            return 52...88  // E3 to E6
         case .guitar:
-            return 48...76  // C3 to E5 (was 40...70)
+            return 52...76  // E3 to E5 (standard guitar tuning range, avoiding very low notes)
         case .bass:
-            return 28...52  // E1 to E3 (unchanged)
+            return 28...52  // E1 to E3
         case .drums, .audio:
             return 36...72
         }
@@ -660,39 +692,50 @@ struct StudioGenerator {
     }
 
     private static func chordVelocity(for instrument: StudioInstrument, style: StudioStyle) -> Int {
-        let base: Int
-        switch instrument {
-        case .synth:
-            base = 70
-        case .guitar:
-            base = 78
-        case .piano:
-            base = 88
-        default:
-            base = 86
+        // More nuanced velocities based on instrument AND style
+        switch (style, instrument) {
+        // Pop - balanced, clean
+        case (.pop, .piano): return 90
+        case (.pop, .guitar): return 82
+        case (.pop, .synth): return 75
+            
+        // Rock - aggressive, loud
+        case (.rock, .guitar): return 95
+        case (.rock, .piano): return 92
+        case (.rock, .synth): return 85
+            
+        // Lo-Fi - soft, mellow
+        case (.lofi, .piano): return 70
+        case (.lofi, .guitar): return 65
+        case (.lofi, .synth): return 60
+            
+        // EDM - punchy, energetic
+        case (.edm, .synth): return 100
+        case (.edm, .piano): return 90
+        case (.edm, .guitar): return 85
+            
+        // Jazz - subtle, dynamic
+        case (.jazz, .piano): return 75
+        case (.jazz, .guitar): return 70
+        case (.jazz, .synth): return 65
+            
+        // Hip-Hop - moderate, groovy
+        case (.hiphop, .piano): return 85
+        case (.hiphop, .synth): return 80
+        case (.hiphop, .guitar): return 75
+            
+        // Funk - percussive, rhythmic
+        case (.funk, .guitar): return 95
+        case (.funk, .piano): return 92
+        case (.funk, .synth): return 85
+            
+        // Ambient - very soft, atmospheric
+        case (.ambient, .synth): return 55
+        case (.ambient, .piano): return 60
+        case (.ambient, .guitar): return 58
+            
+        default: return 80
         }
-
-        let styleBoost: Int
-        switch style {
-        case .pop:
-            styleBoost = 0
-        case .rock:
-            styleBoost = 8
-        case .lofi:
-            styleBoost = -12
-        case .edm:
-            styleBoost = 4
-        case .jazz:
-            styleBoost = -8
-        case .hiphop:
-            styleBoost = 6
-        case .funk:
-            styleBoost = 5
-        case .ambient:
-            styleBoost = -15
-        }
-
-        return min(127, max(40, base + styleBoost))
     }
 
     private static func chordHitOffsets(
@@ -700,7 +743,8 @@ struct StudioGenerator {
         style: StudioStyle,
         beatsPerBar: Int,
         timeBottom: Int,
-        chordDuration: Double
+        chordDuration: Double,
+        complexity: Double = 0.5
     ) -> [Double] {
         let midBeat = Double(max(1, beatsPerBar / 2))
         let beatStride = timeBottom == 8 ? midBeat : 1.0
@@ -710,8 +754,12 @@ struct StudioGenerator {
         var offsets: [Double] = []
         switch style {
         case .lofi:
+            // All instruments: sustained, minimal hits
             offsets = [0]
+            
         case .pop:
+            // Piano/Guitar: on-beat with half-beat accents
+            // Synth: sustained pads
             if instrument == .synth {
                 offsets = [0]
             } else {
@@ -720,42 +768,105 @@ struct StudioGenerator {
                     offsets.append(midBeat)
                 }
             }
+            
         case .rock:
+            // Guitar: driving rhythm, frequent hits
+            // Piano: solid quarter notes
+            // Synth: sustained
             if instrument == .guitar {
                 offsets = stride(from: 0, to: chordDuration, by: beatStride).map { $0 }
+            } else if instrument == .piano {
+                offsets = [0]
+                if chordDuration >= 1.0 {
+                    offsets.append(1.0)
+                }
             } else {
                 offsets = [0]
             }
+            
         case .edm:
+            // Synth: offbeat stabs
+            // Piano: quarter notes
+            // Guitar: sustained
             if instrument == .synth {
                 offsets = stride(from: offbeat, to: chordDuration, by: beatStride).map { $0 }
                 if offsets.isEmpty {
                     offsets = [0]
                 }
+            } else if instrument == .piano {
+                offsets = stride(from: 0, to: chordDuration, by: 1.0).map { $0 }
             } else {
                 offsets = [0]
             }
+            
         case .jazz:
-            offsets = [0]
-            if chordDuration >= 1.5 {
-                offsets.append(0.75) // Swing feel
+            // All instruments: swing feel
+            // Piano: walking comp pattern
+            // Guitar: light swing
+            if instrument == .piano {
+                offsets = [0]
+                if chordDuration >= 2.0 {
+                    offsets.append(0.75)
+                    offsets.append(2.0)
+                } else if chordDuration >= 1.0 {
+                    offsets.append(0.75)
+                }
+            } else if instrument == .guitar {
+                offsets = [0]
+                if chordDuration >= 1.5 {
+                    offsets.append(0.75)
+                }
+            } else {
+                offsets = [0]
             }
+            
         case .hiphop:
-            offsets = [0]
+            // Piano/Synth: sparse, on downbeats
+            // Guitar: minimal
+            if instrument == .piano || instrument == .synth {
+                offsets = [0]
+                if chordDuration >= 2.0 {
+                    offsets.append(2.0)
+                }
+            } else {
+                offsets = [0]
+            }
+            
         case .funk:
+            // Guitar: syncopated 16th note rhythms
+            // Piano: percussive stabs
+            // Synth: sustained
             if instrument == .guitar {
                 offsets = stride(from: 0, to: chordDuration, by: 0.5).map { $0 }
+            } else if instrument == .piano {
+                offsets = [0]
+                if chordDuration >= 1.0 {
+                    offsets.append(0.5)
+                    if chordDuration >= 2.0 {
+                        offsets.append(1.5)
+                    }
+                }
             } else {
                 offsets = [0]
             }
+            
         case .ambient:
+            // All instruments: sustained, minimal movement
             offsets = [0]
         }
 
         let clamped = offsets
             .filter { $0 >= 0 && $0 < chordDuration }
             .map { quantize($0, step: quantStep) }
-        return Array(Set(clamped)).sorted()
+        
+        let sorted = Array(Set(clamped)).sorted()
+        
+        // Apply complexity: lower complexity = fewer hits
+        // Complexity 0.0 = only first hit
+        // Complexity 0.5 = half the hits
+        // Complexity 1.0 = all hits
+        let numHitsToKeep = max(1, Int(Double(sorted.count) * complexity))
+        return Array(sorted.prefix(numHitsToKeep))
     }
 
     private static func chordHitDuration(
@@ -770,32 +881,61 @@ struct StudioGenerator {
 
         switch style {
         case .lofi:
+            // All sustained
             return remaining
+            
         case .pop:
             if instrument == .synth {
                 return remaining
+            } else if instrument == .piano {
+                return min(remaining, 1.5)
+            } else if instrument == .guitar {
+                return min(remaining, 1.0)
             }
             return min(remaining, 1.5)
+            
         case .rock:
             if instrument == .guitar {
-                return min(remaining, 0.75)
+                return min(remaining, 0.75) // Short, punchy
+            } else if instrument == .piano {
+                return min(remaining, 1.0)
             }
             return min(remaining, 1.25)
+            
         case .edm:
             if instrument == .synth {
-                return min(remaining, shortHit)
+                return min(remaining, shortHit) // Stabs
+            } else if instrument == .piano {
+                return min(remaining, 0.75)
             }
             return min(remaining, 1.0)
+            
         case .jazz:
+            // Medium-short for comp feel
+            if instrument == .piano {
+                return min(remaining, 0.5)
+            } else if instrument == .guitar {
+                return min(remaining, 0.75)
+            }
             return min(remaining, 0.75)
+            
         case .hiphop:
+            // Long, sustained
+            if instrument == .piano || instrument == .synth {
+                return remaining
+            }
             return remaining
+            
         case .funk:
             if instrument == .guitar {
-                return min(remaining, 0.5)
+                return min(remaining, 0.5) // Short, percussive
+            } else if instrument == .piano {
+                return min(remaining, 0.25) // Very short stabs
             }
             return min(remaining, 1.0)
+            
         case .ambient:
+            // Everything sustained
             return remaining
         }
     }
