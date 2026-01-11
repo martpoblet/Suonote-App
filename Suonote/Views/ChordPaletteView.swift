@@ -99,7 +99,14 @@ struct ChordPaletteView: View {
             section.chordEvents.removeAll { $0.id == existing.id }
         }
         
-        let chord = ChordEvent(barIndex: barIndex, beatOffset: Double(beatOffset), duration: 1.0, root: root, quality: quality)
+        let chord = ChordEvent(
+            barIndex: barIndex,
+            beatOffset: Double(beatOffset),
+            duration: 1.0,
+            isRest: false,
+            root: root,
+            quality: quality
+        )
         section.chordEvents.append(chord)
     }
     

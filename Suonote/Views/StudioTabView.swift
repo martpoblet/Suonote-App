@@ -530,7 +530,8 @@ struct StudioTabView: View {
                         let ext = chord.extensions.joined(separator: ",")
                         let beat = String(format: "%.3f", chord.beatOffset)
                         let duration = String(format: "%.3f", chord.duration)
-                        return "\(chord.barIndex):\(beat):\(duration):\(chord.root):\(chord.quality.rawValue):\(ext):\(chord.slashRoot ?? "")"
+                        let restFlag = chord.isRest ? "rest" : "chord"
+                        return "\(chord.barIndex):\(beat):\(duration):\(restFlag):\(chord.root):\(chord.quality.rawValue):\(ext):\(chord.slashRoot ?? "")"
                     }
                     .joined(separator: ";")
                 return "\(section.id.uuidString):\(section.bars):\(chords)"

@@ -150,7 +150,9 @@ struct StudioGenerator {
         beatsPerBar: Int,
         timeBottom: Int,
         style: StudioStyle,
-        preset: DrumPreset?
+        preset: DrumPreset?,
+        intensity: Double = 0.5,
+        complexity: Double = 0.5
     ) -> [StudioNote] {
         let resolvedPreset = preset ?? DrumPreset.defaultPreset(
             for: style,
@@ -162,7 +164,9 @@ struct StudioGenerator {
             beatsPerBar: beatsPerBar,
             timeBottom: timeBottom,
             style,
-            preset: resolvedPreset
+            preset: resolvedPreset,
+            intensity: intensity,
+            complexity: complexity
         )
     }
 
@@ -175,6 +179,7 @@ struct StudioGenerator {
             guard let section = item.sectionTemplate else { continue }
             let sectionBars = max(1, section.bars)
             for chord in section.chordEvents {
+                guard !chord.isRest else { continue }
                 let globalBar = sectionStartBar + chord.barIndex
                 let startBeat = Double(globalBar * project.timeTop) + chord.beatOffset
                 chordSpans.append(
@@ -230,7 +235,9 @@ struct StudioGenerator {
                     for: style,
                     beatsPerBar: beatsPerBar,
                     timeBottom: timeBottom
-                )
+                ),
+                intensity: intensity,
+                complexity: complexity
             )
         case .bass:
             return bassNotes(
@@ -291,6 +298,19 @@ struct StudioGenerator {
                 diatonicMap: diatonicMap
             )
             var pitches = chordPitches(rootPitch: rootPitch, quality: resolvedQuality)
+            let extensions = chordExtensionIntervals(
+                for: resolvedQuality,
+                style: style,
+                instrument: instrument,
+                complexity: complexity
+            )
+            for interval in extensions {
+                pitches.append(rootPitch + interval)
+            }
+            if intensity > 0.7, instrument != .guitar {
+                pitches.append(rootPitch + 12)
+            }
+            pitches = Array(Set(pitches)).sorted()
             pitches = fitPitches(pitches, in: range)
             
             // Simplify guitar voicings - use fewer notes for clearer sound
@@ -307,10 +327,7 @@ struct StudioGenerator {
             
             // Apply intensity to velocity
             let baseVelocity = chordVelocity(for: instrument, style: style)
-            let velocityRange = 40
-            let minVelocity = max(30, baseVelocity - velocityRange / 2)
-            let maxVelocity = min(127, baseVelocity + velocityRange / 2)
-            let velocity = Int(Double(minVelocity) + intensity * Double(maxVelocity - minVelocity))
+            let velocity = scaledVelocity(base: baseVelocity, intensity: intensity, range: 40)
             
             let hitOffsets = chordHitOffsets(
                 instrument: instrument,
@@ -318,6 +335,7 @@ struct StudioGenerator {
                 beatsPerBar: beatsPerBar,
                 timeBottom: timeBottom,
                 chordDuration: baseDuration,
+                intensity: intensity,
                 complexity: complexity
             )
 
@@ -406,8 +424,39 @@ struct StudioGenerator {
                 hits = [(0, rootPitch)]
             }
 
+            let density = max(0.0, min(1.0, complexity))
+            if density < 0.35 {
+                hits = hits.first.map { [$0] } ?? []
+            } else {
+                if style == .jazz, density > 0.6 {
+                    hits = stride(from: 0.0, to: baseDuration, by: 1.0).map { ($0, rootPitch) }
+                }
+                if density > 0.6 {
+                    let extraOffset = min(midBeat, baseDuration - 0.25)
+                    if extraOffset > 0 {
+                        let extraPitch: Int
+                        switch style {
+                        case .edm:
+                            extraPitch = octave
+                        case .hiphop:
+                            extraPitch = rootPitch
+                        default:
+                            extraPitch = fifth
+                        }
+                        hits.append((extraOffset, extraPitch))
+                    }
+                }
+                if density > 0.85, baseDuration >= 1.5 {
+                    let approachOffset = max(0.5, baseDuration - 0.5)
+                    if approachOffset < baseDuration {
+                        hits.append((approachOffset, fitPitch(rootPitch + 2, in: range)))
+                    }
+                }
+            }
+
             let durationHint = bassHitDuration(style: style)
-            let velocity = bassVelocity(for: style)
+            let adjustedDuration = max(0.25, durationHint * (1.1 - 0.4 * intensity))
+            let velocity = scaledVelocity(base: bassVelocity(for: style), intensity: intensity, range: 36)
             var seenOffsets = Set<Double>()
             let orderedHits = hits
                 .filter { seenOffsets.insert($0.offset).inserted }
@@ -415,7 +464,7 @@ struct StudioGenerator {
 
             for hit in orderedHits {
                 guard hit.offset < baseDuration else { continue }
-                let duration = min(durationHint, max(0.25, baseDuration - hit.offset))
+                let duration = min(adjustedDuration, max(0.25, baseDuration - hit.offset))
                 notes.append(
                     StudioNote(
                         startBeat: span.startBeat + hit.offset,
@@ -434,24 +483,55 @@ struct StudioGenerator {
         totalBars: Int,
         beatsPerBar: Int,
         timeBottom: Int,
-        _: StudioStyle,
-        preset: DrumPreset
+        style: StudioStyle,
+        preset: DrumPreset,
+        intensity: Double = 0.5,
+        complexity: Double = 0.5
     ) -> [StudioNote] {
         let stepsPerBeat = timeBottom == 8 ? 2 : 4
         let stepLength = 1.0 / Double(stepsPerBeat)
         let stepsPerBar = beatsPerBar * stepsPerBeat
         let meter = meterPattern(beatsPerBar: beatsPerBar, timeBottom: timeBottom)
-        let pattern = drumPattern(
+        var pattern = drumPattern(
             for: preset,
             meter: meter,
             stepsPerBeat: stepsPerBeat,
             stepsPerBar: stepsPerBar
         )
+
+        let density = max(0.0, min(1.0, complexity))
+        if density < 0.35 {
+            pattern = DrumPattern(
+                kick: pattern.kick.filter { $0 % stepsPerBeat == 0 },
+                snare: Array(pattern.snare.prefix(1)),
+                hat: pattern.hat.filter { $0 % stepsPerBeat == 0 },
+                clap: []
+            )
+        } else if density > 0.75 {
+            let offbeatSteps = stepsFromOffsets(
+                meter.offbeatOffsets,
+                stepsPerBeat: stepsPerBeat,
+                stepsPerBar: stepsPerBar
+            )
+            let extraHat = pattern.hat + offbeatSteps
+            let extraSnare = density > 0.9 ? (pattern.snare + offbeatSteps) : pattern.snare
+            pattern = DrumPattern(
+                kick: pattern.kick,
+                snare: Array(Set(extraSnare)).sorted(),
+                hat: Array(Set(extraHat)).sorted(),
+                clap: pattern.clap
+            )
+        }
+
         let accentSteps = hatAccentSteps(
             pulseOffsets: meter.pulseOffsets,
             stepsPerBeat: stepsPerBeat
         )
         var notes: [StudioNote] = []
+        let kickVelocityBase = style == .rock ? 118 : 112
+        let snareVelocityBase = style == .rock ? 108 : 102
+        let hatVelocityBase = style == .ambient ? 62 : 72
+        let clapVelocityBase = style == .edm ? 98 : 90
 
         for bar in 0..<totalBars {
             let barStart = Double(bar * beatsPerBar)
@@ -461,7 +541,11 @@ struct StudioGenerator {
                         startBeat: barStart + Double(step) * stepLength,
                         duration: stepLength,
                         pitch: 36,
-                        velocity: step == 0 ? 118 : 110
+                        velocity: scaledVelocity(
+                            base: step == 0 ? kickVelocityBase : kickVelocityBase - 8,
+                            intensity: intensity,
+                            range: 24
+                        )
                     )
                 )
             }
@@ -471,12 +555,18 @@ struct StudioGenerator {
                         startBeat: barStart + Double(step) * stepLength,
                         duration: stepLength,
                         pitch: 38,
-                        velocity: 102
+                        velocity: scaledVelocity(
+                            base: snareVelocityBase,
+                            intensity: intensity,
+                            range: 22
+                        )
                     )
                 )
             }
             for step in pattern.hat {
-                let velocity = accentSteps.contains(step) ? 82 : 68
+                let velocity = accentSteps.contains(step)
+                    ? scaledVelocity(base: hatVelocityBase + 8, intensity: intensity, range: 18)
+                    : scaledVelocity(base: hatVelocityBase, intensity: intensity, range: 16)
                 notes.append(
                     StudioNote(
                         startBeat: barStart + Double(step) * stepLength,
@@ -492,7 +582,11 @@ struct StudioGenerator {
                         startBeat: barStart + Double(step) * stepLength,
                         duration: stepLength,
                         pitch: 39,
-                        velocity: 90
+                        velocity: scaledVelocity(
+                            base: clapVelocityBase,
+                            intensity: intensity,
+                            range: 18
+                        )
                     )
                 )
             }
@@ -504,6 +598,66 @@ struct StudioGenerator {
     private static func chordPitches(rootPitch: Int, quality: ChordQuality) -> [Int] {
         let intervals = simpleIntervals(for: quality)
         return intervals.map { rootPitch + $0 }
+    }
+
+    private static func chordExtensionIntervals(
+        for quality: ChordQuality,
+        style: StudioStyle,
+        instrument: StudioInstrument,
+        complexity: Double
+    ) -> [Int] {
+        guard complexity > 0.45 else { return [] }
+
+        let seventhInterval: Int = {
+            switch quality {
+            case .major, .major7, .minorMajor7:
+                return 11
+            case .diminished7:
+                return 9
+            default:
+                return 10
+            }
+        }()
+
+        var intervals: [Int] = []
+
+        switch style {
+        case .jazz:
+            intervals.append(seventhInterval)
+            if complexity > 0.7 {
+                intervals.append(14)
+            }
+        case .lofi:
+            if complexity > 0.6 {
+                intervals.append(seventhInterval)
+            }
+        case .ambient:
+            if instrument != .guitar {
+                intervals.append(14)
+            }
+        case .pop:
+            if complexity > 0.7 {
+                intervals.append(14)
+            }
+        case .funk:
+            if instrument == .guitar || instrument == .piano {
+                intervals.append(10)
+            }
+        case .edm:
+            if instrument == .synth, complexity > 0.6 {
+                intervals.append(14)
+            }
+        case .rock:
+            if instrument == .piano, complexity > 0.6 {
+                intervals.append(seventhInterval)
+            }
+        case .hiphop:
+            if instrument == .piano || instrument == .synth {
+                intervals.append(seventhInterval)
+            }
+        }
+
+        return intervals
     }
 
     private static func diatonicQualityMap(forKey root: String, mode: KeyMode) -> [String: ChordQuality] {
@@ -738,12 +892,20 @@ struct StudioGenerator {
         }
     }
 
+    private static func scaledVelocity(base: Int, intensity: Double, range: Int) -> Int {
+        let clamped = max(0.0, min(1.0, intensity))
+        let offset = (clamped - 0.5) * Double(range)
+        let adjusted = Double(base) + offset
+        return Int(max(30, min(127, adjusted)))
+    }
+
     private static func chordHitOffsets(
         instrument: StudioInstrument,
         style: StudioStyle,
         beatsPerBar: Int,
         timeBottom: Int,
         chordDuration: Double,
+        intensity: Double = 0.5,
         complexity: Double = 0.5
     ) -> [Double] {
         let midBeat = Double(max(1, beatsPerBar / 2))
@@ -853,6 +1015,36 @@ struct StudioGenerator {
         case .ambient:
             // All instruments: sustained, minimal movement
             offsets = [0]
+        }
+
+        let intensityClamped = max(0.0, min(1.0, intensity))
+        if intensityClamped < 0.3 {
+            offsets = [0]
+        } else if intensityClamped > 0.7 {
+            let microStep = timeBottom == 8 ? 0.5 : 0.25
+            let syncopated = timeBottom == 8 ? 1.0 : 0.5
+            switch style {
+            case .funk:
+                if instrument == .guitar {
+                    offsets.append(contentsOf: stride(from: microStep, to: chordDuration, by: 0.5))
+                }
+            case .rock:
+                if instrument == .guitar {
+                    offsets.append(contentsOf: stride(from: 0, to: chordDuration, by: beatStride))
+                }
+            case .pop:
+                if instrument == .piano || instrument == .guitar {
+                    offsets.append(syncopated)
+                }
+            case .edm:
+                if instrument == .synth {
+                    offsets.append(syncopated)
+                }
+            default:
+                if instrument == .piano {
+                    offsets.append(syncopated)
+                }
+            }
         }
 
         let clamped = offsets

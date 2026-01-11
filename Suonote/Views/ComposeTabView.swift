@@ -1060,6 +1060,7 @@ struct BarRow: View {
                 barIndex: newBarIndex,
                 beatOffset: chord.beatOffset,
                 duration: chord.duration,
+                isRest: chord.isRest,
                 root: chord.root,
                 quality: chord.quality,
                 extensions: chord.extensions,
@@ -1271,6 +1272,7 @@ struct BarRow: View {
             barIndex: barIndex,
             beatOffset: targetBeat,
             duration: chord.duration,
+            isRest: chord.isRest,
             root: chord.root,
             quality: chord.quality,
             extensions: chord.extensions,
@@ -1644,7 +1646,7 @@ struct ChordSlotButton: View {
     var body: some View {
         Group {
             if let chord = chord {
-                chordPill(text: chord.display)
+                chordPill(for: chord)
                     .contentShape(Rectangle())
                     .onTapGesture {
                         selectedSlot = ChordSlot(
@@ -1662,7 +1664,7 @@ struct ChordSlotButton: View {
                         )
                         return NSItemProvider(object: dragPayload(for: chord) as NSString)
                     } preview: {
-                        chordPillPreview(text: chord.display)
+                        chordPillPreview(for: chord)
                             .padding(4)
                     }
             }
@@ -1673,33 +1675,37 @@ struct ChordSlotButton: View {
         "\(section.id.uuidString)|\(chord.id.uuidString)"
     }
     
-    private func chordPill(text: String) -> some View {
-        chordPillBase(text: text)
+    private func chordPill(for chord: ChordEvent) -> some View {
+        chordPillBase(text: chord.display, isRest: chord.isRest)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
-    private func chordPillPreview(text: String) -> some View {
-        chordPillBase(text: text)
+    private func chordPillPreview(for chord: ChordEvent) -> some View {
+        chordPillBase(text: chord.display, isRest: chord.isRest)
             .fixedSize()
     }
     
-    private func chordPillBase(text: String) -> some View {
+    private func chordPillBase(text: String, isRest: Bool) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: 8)
                 .fill(
                     LinearGradient(
                         colors: [
-                            section.color.opacity(0.7),
-                            section.color.opacity(0.5)
+                            section.color.opacity(isRest ? 0.25 : 0.7),
+                            section.color.opacity(isRest ? 0.15 : 0.5)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.white.opacity(isRest ? 0.25 : 0.1), style: StrokeStyle(lineWidth: 1, dash: isRest ? [6, 4] : []))
+                )
             
             Text(text)
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(isRest ? Color.white.opacity(0.8) : .white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .padding(.horizontal, 8)
@@ -1943,6 +1949,7 @@ struct ChordPaletteSheet: View {
     @State private var selectedQuality: ChordQuality
     @State private var selectedExtensions: [String]
     @State private var duration: Double  // Changed to Double for half-beats
+    @State private var isRest: Bool
     @State private var showingSuggestions = true
     @State private var showingDiagram = false
     @State private var selectedTab: SuggestionTab = .smart
@@ -2010,11 +2017,13 @@ struct ChordPaletteSheet: View {
         _selectedRoot = State(initialValue: existingChord?.root ?? project.keyRoot)
         _selectedQuality = State(initialValue: existingChord?.quality ?? .major)
         _selectedExtensions = State(initialValue: existingChord?.extensions ?? [])
+        _isRest = State(initialValue: existingChord?.isRest ?? false)
         
         // Calculate and cache expensive values once during initialization
-        self.cachedLastChord = section.chordEvents.filter { 
-            $0.barIndex < slot.barIndex || 
-            ($0.barIndex == slot.barIndex && $0.beatOffset < slot.beatOffset)
+        self.cachedLastChord = section.chordEvents.filter {
+            !$0.isRest &&
+            ($0.barIndex < slot.barIndex ||
+                ($0.barIndex == slot.barIndex && $0.beatOffset < slot.beatOffset))
         }.max(by: { a, b in
             if a.barIndex != b.barIndex {
                 return a.barIndex < b.barIndex
@@ -2060,10 +2069,13 @@ struct ChordPaletteSheet: View {
             ScrollView {
                 LazyVStack(spacing: 28) {
                     chordPreviewSection
-                    suggestionsSection
-                    rootNoteSection
-                    qualitySection
-                    extensionsSection
+                    noteTypeSection
+                    if !isRest {
+                        suggestionsSection
+                        rootNoteSection
+                        qualitySection
+                        extensionsSection
+                    }
                     durationSection
                     addChordButton
                     if existingChord != nil {
@@ -2102,6 +2114,7 @@ struct ChordPaletteSheet: View {
                                 )
                         )
                     }
+                    .disabled(isRest)
                 }
                 
                 ToolbarItem(placement: .confirmationAction) {
@@ -2126,6 +2139,7 @@ struct ChordPaletteSheet: View {
                     section: section,
                     lastChord: lastChord,
                     onChordSelected: { root, quality in
+                        isRest = false
                         selectedRoot = root
                         selectedQuality = quality
                         onChordSelected?(root, quality)
@@ -2176,17 +2190,18 @@ struct ChordPaletteSheet: View {
                                 .font(.subheadline.weight(.semibold))
                         }
                     }
-                    .foregroundStyle(.white)
+                    .foregroundStyle(isRest ? .secondary : .white)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(
                         Capsule()
-                            .fill(showingDiagram ? accentColor.opacity(0.3) : accentColor)
+                            .fill(isRest ? Color.white.opacity(0.1) : (showingDiagram ? accentColor.opacity(0.3) : accentColor))
                     )
                 }
+                .disabled(isRest)
             }
             
-            if showingDiagram {
+            if showingDiagram && !isRest {
                 ChordDiagramView(
                     root: selectedRoot,
                     quality: selectedQuality,
@@ -2196,6 +2211,53 @@ struct ChordPaletteSheet: View {
             }
         }
         .padding(.vertical, 12)
+    }
+
+    private var noteTypeSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Note Type")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+
+            Picker("Note Type", selection: $isRest) {
+                Text("Chord").tag(false)
+                Text("Rest").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .tint(accentColor)
+
+            if isRest {
+                HStack(spacing: 12) {
+                    Image(systemName: "pause.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(accentColor)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Silence")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                        Text("No harmony will be generated during this beat range.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.white.opacity(0.05))
+                )
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white.opacity(0.03))
+        )
+        .onChange(of: isRest) { _, newValue in
+            if newValue {
+                showingDiagram = false
+            }
+        }
     }
     
     private var suggestionsSection: some View {
@@ -2439,7 +2501,7 @@ struct ChordPaletteSheet: View {
         Button {
             addChord()
         } label: {
-            Text(existingChord == nil ? "Add Chord" : "Save Chord")
+            Text(isRest ? (existingChord == nil ? "Add Rest" : "Save Rest") : (existingChord == nil ? "Add Chord" : "Save Chord"))
                 .font(.headline)
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
@@ -2468,6 +2530,7 @@ struct ChordPaletteSheet: View {
     }
     
     private var chordDisplay: String {
+        guard !isRest else { return "Rest" }
         var display = selectedRoot + selectedQuality.symbol
         if !selectedExtensions.isEmpty {
             display += selectedExtensions.joined()
@@ -2557,6 +2620,7 @@ struct ChordPaletteSheet: View {
     }
     
     private func applySuggestion(_ suggestion: ChordSuggestion) {
+        isRest = false
         selectedRoot = suggestion.root
         selectedQuality = suggestion.quality
         selectedExtensions = suggestion.extensions
@@ -2574,15 +2638,18 @@ struct ChordPaletteSheet: View {
             barIndex: slot.barIndex,
             beatOffset: slot.beatOffset,
             duration: duration,
+            isRest: isRest,
             root: selectedRoot,
             quality: selectedQuality,
-            extensions: selectedExtensions
+            extensions: isRest ? [] : selectedExtensions
         )
         
         section.chordEvents.append(chord)
         
         // Call preview callback
-        onChordSelected?(selectedRoot, selectedQuality)
+        if !isRest {
+            onChordSelected?(selectedRoot, selectedQuality)
+        }
         
         dismiss()
     }

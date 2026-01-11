@@ -7,6 +7,7 @@ final class ChordEvent {
     var barIndex: Int
     var beatOffset: Double  // Changed to Double to support fractional beats
     var duration: Double    // Duration in beats (0.5 = half beat, 1 = full beat, 2 = two beats)
+    var isRest: Bool
     var root: String
     var quality: ChordQuality
     var extensions: [String]
@@ -19,6 +20,7 @@ final class ChordEvent {
         barIndex: Int,
         beatOffset: Double,
         duration: Double = 1.0,
+        isRest: Bool = false,
         root: String,
         quality: ChordQuality = .major,
         extensions: [String] = [],
@@ -28,19 +30,24 @@ final class ChordEvent {
         self.barIndex = barIndex
         self.beatOffset = beatOffset
         self.duration = duration
+        self.isRest = isRest
         self.root = root
         self.quality = quality
         self.extensions = extensions
         self.slashRoot = slashRoot
         
-        var displayStr = root + quality.symbol
-        if !extensions.isEmpty {
-            displayStr += extensions.joined()
+        if isRest {
+            self.display = "Rest"
+        } else {
+            var displayStr = root + quality.symbol
+            if !extensions.isEmpty {
+                displayStr += extensions.joined()
+            }
+            if let slash = slashRoot {
+                displayStr += "/" + slash
+            }
+            self.display = displayStr
         }
-        if let slash = slashRoot {
-            displayStr += "/" + slash
-        }
-        self.display = displayStr
     }
 }
 

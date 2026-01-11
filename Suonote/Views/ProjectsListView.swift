@@ -291,9 +291,11 @@ struct ProjectsListView: View {
                             barIndex: chordEvent.barIndex,
                             beatOffset: chordEvent.beatOffset,
                             duration: chordEvent.duration,
+                            isRest: chordEvent.isRest,
                             root: chordEvent.root,
                             quality: chordEvent.quality,
-                            extensions: chordEvent.extensions
+                            extensions: chordEvent.extensions,
+                            slashRoot: chordEvent.slashRoot
                         )
                         clonedSection.chordEvents.append(clonedChord)
                     }
