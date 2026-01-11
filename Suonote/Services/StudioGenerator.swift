@@ -163,7 +163,7 @@ struct StudioGenerator {
             totalBars: totalBars,
             beatsPerBar: beatsPerBar,
             timeBottom: timeBottom,
-            style,
+            style: style,
             preset: resolvedPreset,
             intensity: intensity,
             complexity: complexity
@@ -230,7 +230,7 @@ struct StudioGenerator {
                 totalBars: totalBars,
                 beatsPerBar: beatsPerBar,
                 timeBottom: timeBottom,
-                style,
+                style: style,
                 preset: drumPreset ?? DrumPreset.defaultPreset(
                     for: style,
                     beatsPerBar: beatsPerBar,

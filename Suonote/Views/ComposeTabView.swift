@@ -2190,7 +2190,7 @@ struct ChordPaletteSheet: View {
                                 .font(.subheadline.weight(.semibold))
                         }
                     }
-                    .foregroundStyle(isRest ? .secondary : .white)
+                    .foregroundStyle(isRest ? .secondary : Color.white)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(
