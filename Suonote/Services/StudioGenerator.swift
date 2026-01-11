@@ -743,12 +743,12 @@ struct StudioGenerator {
         case .pop:
             return 0
         case .rock:
-            return instrument == .guitar ? -12 : 0
+            return 0
         case .lofi:
             if instrument == .piano || instrument == .synth {
                 return -12
             }
-            return instrument == .guitar ? -12 : 0
+            return 0
         case .edm:
             return instrument == .synth ? 12 : 0
         case .jazz:

@@ -3,6 +3,8 @@ import SwiftData
 import UniformTypeIdentifiers
 import AudioToolbox
 
+private let barRowDragUTType = UTType(exportedAs: "com.suonote.barrow")
+
 // MARK: - Compose Tab View
 /// Tab principal de composición que permite:
 /// - Crear y organizar secciones musicales (Verse, Chorus, Bridge, etc.)
@@ -995,6 +997,7 @@ struct BarRow: View {
     @Binding var selectedChordSlot: ChordSlot?
     @Binding var draggingChord: ChordDragInfo?
     @State private var isBarDropTargeted = false
+    @State private var isBarRowDropTargeted = false
     @State private var lastChordReorderTargetId: UUID?
     
     private let slotSpacing: CGFloat = 6
@@ -1006,6 +1009,15 @@ struct BarRow: View {
             SwipeActionRow(actions: swipeActions) {
                 barContent(slots: slots)
                     .id("bar-\(barIndex)")
+            }
+            .onDrag {
+                NSItemProvider(
+                    item: barRowPayload() as NSString,
+                    typeIdentifier: barRowDragUTType.identifier
+                )
+            }
+            .onDrop(of: [barRowDragUTType], isTargeted: $isBarRowDropTargeted) { providers in
+                handleBarRowDrop(providers)
             }
         }
     }
@@ -1101,6 +1113,10 @@ struct BarRow: View {
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(section.color.opacity(0.2), lineWidth: 1)
                 )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(section.color.opacity(isBarRowDropTargeted ? 0.6 : 0), lineWidth: 2)
         )
     }
 
@@ -1338,6 +1354,83 @@ struct BarRow: View {
                 targetBeatOffset: targetBeatOffset
             )
             draggingChord = nil
+        }
+    }
+
+    private func barRowPayload() -> String {
+        "\(section.id.uuidString)|\(barIndex)"
+    }
+
+    private func handleBarRowDrop(_ providers: [NSItemProvider]) -> Bool {
+        return loadBarPayload(from: providers) { payload in
+            guard payload.sectionId == section.id else { return }
+            guard payload.barIndex != barIndex else { return }
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+                moveBar(from: payload.barIndex, to: barIndex)
+            }
+        }
+    }
+
+    private func loadBarPayload(
+        from providers: [NSItemProvider],
+        perform: @escaping ((sectionId: UUID, barIndex: Int)) -> Void
+    ) -> Bool {
+        guard let provider = providers.first(where: { $0.canLoadObject(ofClass: NSString.self) }) else {
+            return false
+        }
+
+        provider.loadObject(ofClass: NSString.self) { object, _ in
+            let stringValue: String?
+            if let value = object as? String {
+                stringValue = value
+            } else if let value = object as? NSString {
+                stringValue = value as String
+            } else {
+                stringValue = nil
+            }
+
+            guard let stringValue,
+                  let payload = parseBarPayload(stringValue) else {
+                return
+            }
+
+            DispatchQueue.main.async {
+                perform(payload)
+            }
+        }
+
+        return true
+    }
+
+    private func parseBarPayload(_ value: String) -> (sectionId: UUID, barIndex: Int)? {
+        let parts = value.split(separator: "|")
+        guard parts.count == 2,
+              let sectionId = UUID(uuidString: String(parts[0])),
+              let barIndex = Int(parts[1]) else {
+            return nil
+        }
+        return (sectionId, barIndex)
+    }
+
+    private func moveBar(from sourceIndex: Int, to targetIndex: Int) {
+        guard sourceIndex != targetIndex else { return }
+
+        if sourceIndex < targetIndex {
+            for chord in section.chordEvents {
+                if chord.barIndex == sourceIndex {
+                    chord.barIndex = targetIndex
+                } else if chord.barIndex > sourceIndex && chord.barIndex <= targetIndex {
+                    chord.barIndex -= 1
+                }
+            }
+        } else {
+            for chord in section.chordEvents {
+                if chord.barIndex == sourceIndex {
+                    chord.barIndex = targetIndex
+                } else if chord.barIndex >= targetIndex && chord.barIndex < sourceIndex {
+                    chord.barIndex += 1
+                }
+            }
         }
     }
 
