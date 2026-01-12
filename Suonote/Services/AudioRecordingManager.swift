@@ -14,7 +14,6 @@ class AudioRecordingManager: NSObject, ObservableObject {
     private var metronomeTimer: Timer?
     
     private var project: Project?
-    private static var isAudioSessionConfigured = false
     private var recordingStartTime: Date?
     private var countInBars = 1
     private var clickEnabled = true
@@ -22,19 +21,12 @@ class AudioRecordingManager: NSObject, ObservableObject {
     
     func setup(project: Project) {
         self.project = project
-        guard !Self.isAudioSessionConfigured else { return }
-        
-        do {
-            try AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
-            try AVAudioSession.sharedInstance().setActive(true)
-            Self.isAudioSessionConfigured = true
-        } catch {
-            print("Failed to setup audio session: \(error)")
-        }
     }
     
     func startRecording(countIn: Int, clickEnabled: Bool, recordingType: RecordingType = .voice) {
         guard let project = project else { return }
+
+        configureAudioSession(category: .playAndRecord, options: [.defaultToSpeaker])
         
         self.countInBars = countIn
         self.clickEnabled = clickEnabled
@@ -53,6 +45,7 @@ class AudioRecordingManager: NSObject, ObservableObject {
         do {
             audioRecorder = try AVAudioRecorder(url: url, settings: settings)
             audioRecorder?.delegate = self
+            audioRecorder?.prepareToRecord()
             
             if clickEnabled {
                 startMetronome(bpm: project.bpm, countInBars: countIn)
@@ -100,18 +93,22 @@ class AudioRecordingManager: NSObject, ObservableObject {
     }
     
     func playRecording(_ recording: Recording) {
-        let url = FileManagerUtils.recordingURL(for: recording.fileName)
-        
-        guard FileManagerUtils.fileExists(at: url) else {
-            print("Recording file not found at: \(url.path)")
+        configureAudioSession(category: .playback, options: [.mixWithOthers])
+
+        guard let url = FileManagerUtils.existingRecordingURL(for: recording.fileName) else {
+            print("Recording file not found for: \(recording.fileName)")
             return
         }
         
         do {
             audioPlayer = try AVAudioPlayer(contentsOf: url)
             audioPlayer?.delegate = self
-            audioPlayer?.play()
-            currentlyPlayingRecording = recording
+            audioPlayer?.prepareToPlay()
+            if audioPlayer?.play() == true {
+                currentlyPlayingRecording = recording
+            } else {
+                currentlyPlayingRecording = nil
+            }
         } catch {
             print("Failed to play recording: \(error)")
         }
@@ -161,6 +158,19 @@ class AudioRecordingManager: NSObject, ObservableObject {
     
     private func playClickSound(isAccent: Bool) {
         MetronomeClickPlayer.shared.play(accent: isAccent)
+    }
+
+    private func configureAudioSession(
+        category: AVAudioSession.Category,
+        options: AVAudioSession.CategoryOptions
+    ) {
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(category, mode: .default, options: options)
+            try session.setActive(true)
+        } catch {
+            print("Failed to configure audio session: \(error)")
+        }
     }
 }
 

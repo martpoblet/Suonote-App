@@ -951,6 +951,7 @@ struct SwipeActionRow<Content: View>: View {
         }
         .padding(.trailing, 12)
         .frame(width: actionsWidth, alignment: .trailing)
+        .frame(maxWidth: .infinity, alignment: .trailing)
         .opacity(revealProgress == 0 ? 0 : 1)
         .animation(.easeOut(duration: 0.18), value: revealProgress)
     }
@@ -1064,6 +1065,7 @@ struct BarRow: View {
     @State private var isBarDropTargeted = false
     @State private var isBarRowDropTargeted = false
     @State private var lastChordReorderTargetId: UUID?
+    @State private var reorderNudge: CGFloat = 0
     
     private let slotSpacing: CGFloat = 6
     
@@ -1074,6 +1076,7 @@ struct BarRow: View {
             SwipeActionRow(actions: swipeActions, leadingActions: leadingSwipeActions) {
                 barContent(slots: slots)
                     .id("bar-\(barIndex)")
+                    .offset(y: reorderNudge)
             }
             .onDrag {
                 NSItemProvider(
@@ -1131,6 +1134,7 @@ struct BarRow: View {
 
     private func moveBarUp() {
         guard barIndex > 0 else { return }
+        triggerReorderNudge(-8)
         withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
             moveBar(from: barIndex, to: barIndex - 1)
         }
@@ -1138,8 +1142,20 @@ struct BarRow: View {
 
     private func moveBarDown() {
         guard barIndex < section.bars - 1 else { return }
+        triggerReorderNudge(8)
         withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
             moveBar(from: barIndex, to: barIndex + 1)
+        }
+    }
+
+    private func triggerReorderNudge(_ offset: CGFloat) {
+        withAnimation(.easeOut(duration: 0.12)) {
+            reorderNudge = offset
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                reorderNudge = 0
+            }
         }
     }
     

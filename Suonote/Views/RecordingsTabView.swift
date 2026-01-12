@@ -424,12 +424,8 @@ struct RecordingsTabView: View {
     
     private func playRecordingWithEffects(_ recording: Recording) {
         stopPlayback()
-        
-        let url = FileManagerUtils.recordingURL(for: recording.fileName)
-        
-        // Verify file exists
-        guard FileManagerUtils.fileExists(at: url) else {
-            print("Recording file not found at: \(url.path)")
+        guard let url = FileManagerUtils.existingRecordingURL(for: recording.fileName) else {
+            print("Recording file not found for: \(recording.fileName)")
             return
         }
         

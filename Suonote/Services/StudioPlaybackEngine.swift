@@ -15,7 +15,7 @@ final class StudioPlaybackEngine: ObservableObject {
     private var samplerNodes: [UUID: AVAudioUnitSampler] = [:]
     private var audioNodes: [UUID: AVAudioPlayerNode] = [:]
     private var mixerNodes: [UUID: AVAudioMixerNode] = [:]
-    private var audioTrackInfo: [UUID: (fileName: String, startBeat: Double)] = [:]
+    private var audioTrackInfo: [UUID: (url: URL, startBeat: Double)] = [:]
     private var bpm: Double = 120
     private var beatScale: Double = 1.0
     private var gridBeatInterval: Double = 0.5
@@ -198,8 +198,7 @@ final class StudioPlaybackEngine: ObservableObject {
             engine.attach(mixer)
             
             // Connect: player -> mixer -> main
-            engine.connect(node, to: mixer, format: nil)
-            engine.connect(mixer, to: engine.mainMixerNode, format: nil)
+            var inputFormat: AVAudioFormat?
             
             // Apply volume and pan
             mixer.outputVolume = track.volume
@@ -210,8 +209,18 @@ final class StudioPlaybackEngine: ObservableObject {
 
             if let recordingId = track.audioRecordingId,
                let recording = project.recordings.first(where: { $0.id == recordingId }) {
-                audioTrackInfo[track.id] = (recording.fileName, track.audioStartBeat)
+                if let url = FileManagerUtils.existingRecordingURL(for: recording.fileName) {
+                    audioTrackInfo[track.id] = (url, track.audioStartBeat)
+                    if let file = try? AVAudioFile(forReading: url) {
+                        inputFormat = file.processingFormat
+                    }
+                } else {
+                    print("Recording file not found for: \(recording.fileName)")
+                }
             }
+
+            engine.connect(node, to: mixer, format: inputFormat)
+            engine.connect(mixer, to: engine.mainMixerNode, format: nil)
         }
     }
 
@@ -252,7 +261,7 @@ final class StudioPlaybackEngine: ObservableObject {
 
         for (trackId, node) in audioNodes {
             guard let info = audioTrackInfo[trackId] else { continue }
-            let url = documentsURL().appendingPathComponent(info.fileName)
+            let url = info.url
 
             do {
                 let file = try AVAudioFile(forReading: url)
@@ -309,13 +318,25 @@ final class StudioPlaybackEngine: ObservableObject {
         }
     }
 
-    private func documentsURL() -> URL {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-    }
-
     private func loadInstrument(for track: StudioTrack, sampler: AVAudioUnitSampler) {
         // Use variant's MIDI program if available, otherwise default
         let program = track.variant?.midiProgram ?? programNumber(for: track.instrument)
+        let preferSystemBank = track.instrument == .guitar
+        var didLoad = false
+
+        if preferSystemBank, let systemURL = systemSoundBankURL() {
+            didLoad = attemptLoad(
+                sampler,
+                url: systemURL,
+                program: program,
+                bankMSB: appleBankMSB(for: track.instrument),
+                bankLSB: UInt8(kAUSampler_DefaultBankLSB),
+                logFailure: false
+            )
+            if didLoad {
+                return
+            }
+        }
 
         if let url = resolvedCustomBankURL() {
             let logFailure: Bool
@@ -338,7 +359,7 @@ final class StudioPlaybackEngine: ObservableObject {
             customBankStatus = .unavailable
         }
 
-        if let systemURL = systemSoundBankURL() {
+        if !didLoad, let systemURL = systemSoundBankURL() {
             _ = attemptLoad(
                 sampler,
                 url: systemURL,

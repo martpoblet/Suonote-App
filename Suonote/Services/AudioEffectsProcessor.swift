@@ -171,6 +171,7 @@ class AudioEffectsProcessor: ObservableObject {
     // MARK: - Playback
     
     func playAudio(url: URL, completion: @escaping () -> Void) throws {
+        configureAudioSessionForPlayback()
         let audioFile = try AVAudioFile(forReading: url)
         
         // Stop if already playing
@@ -203,5 +204,15 @@ class AudioEffectsProcessor: ObservableObject {
     
     var isPlaying: Bool {
         return audioEngine.isRunning && playerNode.isPlaying
+    }
+
+    private func configureAudioSessionForPlayback() {
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            try session.setActive(true)
+        } catch {
+            print("Failed to configure audio session: \(error)")
+        }
     }
 }
