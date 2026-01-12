@@ -9,14 +9,12 @@ struct StudioTabView: View {
     @State private var showingStylePicker = false
     @State private var showingRecordingPicker = false
     @State private var showingRegenerateDialog = false
-    @State private var showingRegenerateOptions = false
-    @State private var trackToRegenerate: StudioTrack?
-    @State private var regenerateIntensity: Double = 0.5
-    @State private var regenerateComplexity: Double = 0.5
     @State private var showingInstrumentPicker = false
     @State private var showingAddTrackMenu = false
     @State private var pendingAddTrackAfterStyle = false
     @State private var selectedTrackId: UUID?
+    @State private var editingTrackId: UUID?
+    @State private var showingTrackEditor = false
     @State private var needsRebuild = true
     @State private var lastProjectSignature = ""
     @StateObject private var playback = StudioPlaybackEngine()
@@ -28,6 +26,11 @@ struct StudioTabView: View {
     private var selectedTrack: StudioTrack? {
         guard let selectedTrackId else { return nil }
         return project.studioTracks.first { $0.id == selectedTrackId }
+    }
+
+    private var editingTrack: StudioTrack? {
+        guard let editingTrackId else { return nil }
+        return project.studioTracks.first { $0.id == editingTrackId }
     }
 
     private var hasGeneratedTracks: Bool {
@@ -112,30 +115,17 @@ struct StudioTabView: View {
                             selectedTrackId: $selectedTrackId,
                             onTrackChange: { needsRebuild = true },
                             onDelete: deleteTrack,
-                            onRegenerateTrack: regenerateTrackNotes,
-                            playback: playback
-                        )
-
-                        if let selectedTrack {
-                            if selectedTrack.instrument == .drums {
-                                StudioDrumEditor(
-                                    track: selectedTrack,
-                                    beatsPerBar: project.timeTop,
-                                    timeBottom: project.timeBottom,
-                                    totalBars: totalBars,
-                                    style: project.studioStyle,
-                                    onNotesChanged: { needsRebuild = true }
-                                )
-                            } else {
-                                StudioNoteEditor(
-                                    track: selectedTrack,
-                                    beatsPerBar: project.timeTop,
-                                    totalBars: totalBars,
-                                    style: project.studioStyle,
-                                    onNotesChanged: { needsRebuild = true }
-                                )
+                            onOpenEditor: { track in
+                                selectedTrackId = track.id
+                                editingTrackId = track.id
+                                showingTrackEditor = true
                             }
-                        }
+                        )
+                        StudioTrackEditorHint(
+                            accentColor: selectedTrack?.instrument.color
+                                ?? project.studioStyle?.accentColor
+                                ?? SectionColor.purple.color
+                        )
                     }
                     .padding(DesignSystem.Spacing.lg)
                     .padding(.bottom, 120)
@@ -251,18 +241,6 @@ struct StudioTabView: View {
                 }
             )
         }
-        .sheet(isPresented: $showingRegenerateOptions) {
-            RegenerateOptionsView(
-                trackName: trackToRegenerate?.name ?? "Track",
-                intensity: $regenerateIntensity,
-                complexity: $regenerateComplexity,
-                onRegenerate: executeRegenerate,
-                onCancel: {
-                    showingRegenerateOptions = false
-                    trackToRegenerate = nil
-                }
-            )
-        }
         .confirmationDialog(
             "Regenerate tracks?",
             isPresented: $showingRegenerateDialog,
@@ -274,6 +252,26 @@ struct StudioTabView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This will rebuild notes for the current generated tracks.")
+        }
+        .fullScreenCover(isPresented: $showingTrackEditor, onDismiss: {
+            editingTrackId = nil
+        }) {
+            if let editingTrack {
+                StudioTrackEditorView(
+                    project: project,
+                    track: editingTrack,
+                    totalBars: totalBars,
+                    beatsPerBar: project.timeTop,
+                    timeBottom: project.timeBottom,
+                    style: project.studioStyle,
+                    timelineSegments: timelineSegments,
+                    playback: playback,
+                    onNotesChanged: { needsRebuild = true },
+                    onPlay: handlePlay,
+                    onPause: playback.pause,
+                    onStop: handleStop
+                )
+            }
         }
     }
 
@@ -333,57 +331,6 @@ struct StudioTabView: View {
         needsRebuild = true
         playback.stop(resetPosition: true)
     }
-    
-    private func regenerateTrackNotes(_ track: StudioTrack) {
-        trackToRegenerate = track
-        regenerateIntensity = 0.5
-        regenerateComplexity = 0.5
-        showingRegenerateOptions = true
-    }
-    
-    private func executeRegenerate() {
-        guard let track = trackToRegenerate,
-              let style = project.studioStyle else { 
-            print("❌ No style or track set")
-            return 
-        }
-        
-        print("🔄 Regenerating notes for \(track.instrument.title) in \(style.title) style")
-        print("   Intensity: \(Int(regenerateIntensity * 100))%, Complexity: \(Int(regenerateComplexity * 100))%")
-        
-        // Delete existing notes
-        for note in track.notes {
-            modelContext.delete(note)
-        }
-        track.notes.removeAll()
-        
-        // Generate new notes with intensity and complexity
-        let newNotes = StudioGenerator.generateNotes(
-            for: track.instrument,
-            project: project,
-            style: style,
-            drumPreset: track.drumPreset,
-            octaveShift: track.octaveShift,
-            intensity: regenerateIntensity,
-            complexity: regenerateComplexity
-        )
-        
-        print("✅ Generated \(newNotes.count) new notes")
-        
-        // Add new notes to track
-        for note in newNotes {
-            note.track = track
-            track.notes.append(note)
-            modelContext.insert(note)
-        }
-        
-        project.updatedAt = Date()
-        try? modelContext.save()
-        needsRebuild = true
-        playback.stop(resetPosition: true)
-        showingRegenerateOptions = false
-        trackToRegenerate = nil
-    }
 
     private func promptAddTrack() {
         guard project.studioStyle != nil else {
@@ -439,6 +386,11 @@ struct StudioTabView: View {
             project.studioTracks.remove(at: index)
         }
         modelContext.delete(track)
+
+        if editingTrackId == track.id {
+            showingTrackEditor = false
+            editingTrackId = nil
+        }
 
         if selectedTrackId == track.id {
             selectedTrackId = project.studioTracks.sorted { $0.orderIndex < $1.orderIndex }.first?.id
@@ -755,13 +707,474 @@ struct StudioTimelineView: View {
     }
 }
 
+struct StudioTrackEditorView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Bindable var project: Project
+    @Bindable var track: StudioTrack
+    let totalBars: Int
+    let beatsPerBar: Int
+    let timeBottom: Int
+    let style: StudioStyle?
+    let timelineSegments: [StudioTimelineSegment]
+    @ObservedObject var playback: StudioPlaybackEngine
+    let onNotesChanged: () -> Void
+    let onPlay: () -> Void
+    let onPause: () -> Void
+    let onStop: () -> Void
+    @State private var showingRegenerateOptions = false
+    @State private var regenerateIntensity: Double = 0.5
+    @State private var regenerateComplexity: Double = 0.5
+
+    private var accentColor: Color {
+        track.instrument.color
+    }
+
+    private var trackSubtitle: String {
+        if let variant = track.variant?.rawValue, !variant.isEmpty {
+            return "\(track.instrument.title) - \(variant)"
+        }
+        return track.instrument.title
+    }
+
+    private var keyLabel: String {
+        let mode = project.keyMode == .minor ? "Minor" : "Major"
+        return "\(project.keyRoot) \(mode)"
+    }
+
+    private var infoItems: [StudioInfoChipData] {
+        let items: [StudioInfoChipData] = [
+            StudioInfoChipData(icon: "music.note.list", text: project.title),
+            StudioInfoChipData(icon: "key.fill", text: keyLabel),
+            StudioInfoChipData(icon: "metronome", text: "\(project.bpm) BPM"),
+            StudioInfoChipData(icon: "music.quarternote.3", text: "\(project.timeTop)/\(project.timeBottom)")
+        ]
+        return items
+    }
+
+    private var canRegenerate: Bool {
+        !track.instrument.isAudio && style != nil
+    }
+
+    private var panLabel: String {
+        if track.pan < -0.05 {
+            return "L\(Int(abs(track.pan) * 100))"
+        } else if track.pan > 0.05 {
+            return "R\(Int(track.pan * 100))"
+        } else {
+            return "C"
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+
+            Divider().overlay(DesignSystem.Colors.border)
+
+            ScrollView {
+                VStack(spacing: DesignSystem.Spacing.lg) {
+                    trackControls
+                    editorContent
+                }
+                .padding(DesignSystem.Spacing.lg)
+                .padding(.bottom, 140)
+            }
+
+            playbackHud
+        }
+        .background(DesignSystem.Colors.background.ignoresSafeArea())
+        .sheet(isPresented: $showingRegenerateOptions) {
+            RegenerateOptionsView(
+                trackName: track.name,
+                intensity: $regenerateIntensity,
+                complexity: $regenerateComplexity,
+                onRegenerate: executeRegenerate,
+                onCancel: {
+                    showingRegenerateOptions = false
+                }
+            )
+        }
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+            HStack(spacing: DesignSystem.Spacing.sm) {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(Color.white.opacity(0.12)))
+                }
+                .buttonStyle(.plain)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(track.name)
+                        .font(DesignSystem.Typography.title2)
+                        .foregroundStyle(.white)
+                    Text(trackSubtitle)
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                ZStack {
+                    Circle()
+                        .fill(accentColor.opacity(0.25))
+                        .frame(width: 44, height: 44)
+                        .overlay(
+                            Circle()
+                                .stroke(accentColor.opacity(0.6), lineWidth: 1)
+                        )
+                    Image(systemName: track.instrument.icon)
+                        .font(.title3)
+                        .foregroundStyle(accentColor)
+                }
+            }
+
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 120), spacing: 8, alignment: .leading)],
+                spacing: 8
+            ) {
+                ForEach(infoItems) { item in
+                    StudioInfoChip(
+                        icon: item.icon,
+                        text: item.text,
+                        color: accentColor
+                    )
+                }
+            }
+        }
+        .padding(DesignSystem.Spacing.lg)
+        .background(
+            LinearGradient(
+                colors: [
+                    accentColor.opacity(0.35),
+                    Color.black.opacity(0.2)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+    }
+
+    private var trackControls: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Track Controls")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+
+                Spacer()
+
+                if !track.instrument.isAudio {
+                    Button {
+                        openRegenerateOptions()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "sparkles")
+                                .font(.caption)
+                            Text("Regenerate")
+                                .font(.caption.weight(.semibold))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule()
+                                .fill(accentColor.opacity(canRegenerate ? 0.3 : 0.15))
+                                .overlay(
+                                    Capsule()
+                                        .stroke(accentColor.opacity(canRegenerate ? 0.7 : 0.3), lineWidth: 1)
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canRegenerate)
+                }
+            }
+
+            if !track.instrument.variants.isEmpty {
+                HStack {
+                    Text("Variant")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    Menu {
+                        ForEach(track.instrument.variants, id: \.self) { variant in
+                            Button {
+                                track.variant = variant
+                                onNotesChanged()
+                            } label: {
+                                HStack {
+                                    Text(variant.rawValue)
+                                    if track.variant == variant {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(track.variant?.rawValue ?? track.instrument.variants.first?.rawValue ?? track.instrument.title)
+                                .font(.caption.weight(.semibold))
+                            Image(systemName: "chevron.down")
+                                .font(.caption2)
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule()
+                                .fill(accentColor.opacity(0.2))
+                                .overlay(
+                                    Capsule()
+                                        .stroke(accentColor.opacity(0.5), lineWidth: 1)
+                                )
+                        )
+                    }
+                }
+            }
+
+            trackSlider(
+                icon: "speaker.wave.2.fill",
+                title: "Volume",
+                valueText: "\(Int(track.volume * 100))%",
+                value: $track.volume,
+                range: 0...1
+            )
+
+            trackSlider(
+                icon: "l.joystick.fill",
+                title: "Pan",
+                valueText: panLabel,
+                value: $track.pan,
+                range: -1...1
+            )
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 18)
+                .fill(Color.white.opacity(0.04))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18)
+                        .stroke(accentColor.opacity(0.4), lineWidth: 1)
+                )
+        )
+    }
+
+    @ViewBuilder
+    private var editorContent: some View {
+        if track.instrument == .drums {
+            StudioDrumEditor(
+                track: track,
+                beatsPerBar: beatsPerBar,
+                timeBottom: timeBottom,
+                totalBars: totalBars,
+                style: style,
+                onNotesChanged: onNotesChanged
+            )
+        } else if track.instrument == .audio {
+            StudioAudioTrackView(track: track, project: project)
+        } else {
+            StudioNoteEditor(
+                track: track,
+                beatsPerBar: beatsPerBar,
+                totalBars: totalBars,
+                style: style,
+                onNotesChanged: onNotesChanged
+            )
+        }
+    }
+
+    private func trackSlider(
+        icon: String,
+        title: String,
+        valueText: String,
+        value: Binding<Float>,
+        range: ClosedRange<Float>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Image(systemName: icon)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(title)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(valueText)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.white)
+            }
+
+            Slider(value: value, in: range)
+                .tint(accentColor)
+                .onChange(of: value.wrappedValue) { _, _ in
+                    updateTrackMix()
+                }
+        }
+    }
+
+    private func updateTrackMix() {
+        playback.updateTrackMix(trackId: track.id, volume: track.volume, pan: track.pan)
+    }
+
+    private func openRegenerateOptions() {
+        guard canRegenerate else { return }
+        regenerateIntensity = 0.5
+        regenerateComplexity = 0.5
+        showingRegenerateOptions = true
+    }
+
+    private func executeRegenerate() {
+        guard let style else { return }
+
+        for note in track.notes {
+            modelContext.delete(note)
+        }
+        track.notes.removeAll()
+
+        let newNotes = StudioGenerator.generateNotes(
+            for: track.instrument,
+            project: project,
+            style: style,
+            drumPreset: track.drumPreset,
+            octaveShift: track.octaveShift,
+            intensity: regenerateIntensity,
+            complexity: regenerateComplexity
+        )
+
+        for note in newNotes {
+            note.track = track
+            track.notes.append(note)
+            modelContext.insert(note)
+        }
+
+        project.updatedAt = Date()
+        try? modelContext.save()
+        onNotesChanged()
+        onStop()
+        showingRegenerateOptions = false
+    }
+
+    private var playbackHud: some View {
+        VStack(spacing: 0) {
+            Divider().overlay(DesignSystem.Colors.border)
+
+            StudioTimelineView(
+                segments: timelineSegments,
+                beatsPerBar: beatsPerBar,
+                totalBars: totalBars,
+                currentBeat: playback.currentBeat,
+                isPlaying: playback.isPlaying,
+                accentColor: accentColor,
+                onPlay: onPlay,
+                onPause: onPause,
+                onStop: onStop,
+                onSeek: { beat in
+                    playback.seek(to: beat)
+                }
+            )
+            .padding(DesignSystem.Spacing.md)
+        }
+        .background(
+            LinearGradient(
+                colors: [
+                    accentColor.opacity(0.2),
+                    Color.black
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+    }
+}
+
+struct StudioTrackEditorHint: View {
+    let accentColor: Color
+
+    var body: some View {
+        HStack(spacing: DesignSystem.Spacing.sm) {
+            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                .font(.title3)
+                .foregroundStyle(accentColor)
+                .frame(width: 36, height: 36)
+                .background(
+                    Circle()
+                        .fill(accentColor.opacity(0.2))
+                )
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Tap a track to edit")
+                    .font(DesignSystem.Typography.callout.weight(.semibold))
+                    .foregroundStyle(.white)
+                Text("Open the full-screen editor to write notes and grooves.")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+        }
+        .padding(DesignSystem.Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white.opacity(0.04))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(accentColor.opacity(0.4), lineWidth: 1)
+                )
+        )
+    }
+}
+
+private struct StudioInfoChipData: Identifiable {
+    let icon: String
+    let text: String
+    var id: String { "\(icon)-\(text)" }
+}
+
+private struct StudioInfoChip: View {
+    let icon: String
+    let text: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.caption2)
+            Text(text)
+                .font(DesignSystem.Typography.caption2.weight(.semibold))
+                .lineLimit(1)
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, DesignSystem.Spacing.sm)
+        .padding(.vertical, DesignSystem.Spacing.xxs)
+        .background(
+            Capsule()
+                .fill(color.opacity(0.25))
+                .overlay(
+                    Capsule()
+                        .stroke(color.opacity(0.6), lineWidth: 1)
+                )
+        )
+    }
+}
+
 struct StudioTrackList: View {
     let tracks: [StudioTrack]
     @Binding var selectedTrackId: UUID?
     let onTrackChange: () -> Void
     let onDelete: (StudioTrack) -> Void
-    let onRegenerateTrack: (StudioTrack) -> Void
-    let playback: StudioPlaybackEngine
+    let onOpenEditor: (StudioTrack) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -786,8 +1199,7 @@ struct StudioTrackList: View {
                             onDelete: {
                                 onDelete(track)
                             },
-                            onRegenerateTrack: { onRegenerateTrack(track) },
-                            playback: playback
+                            onOpenEditor: { onOpenEditor(track) }
                         )
                     }
                 }
@@ -802,9 +1214,7 @@ struct StudioTrackRow: View {
     let onSelect: () -> Void
     let onTrackChange: () -> Void
     let onDelete: () -> Void
-    let onRegenerateTrack: () -> Void
-    let playback: StudioPlaybackEngine
-    @State private var showingControls = false
+    let onOpenEditor: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -853,18 +1263,6 @@ struct StudioTrackRow: View {
                 }
 
                 Spacer()
-                
-                Button {
-                    withAnimation(.spring(response: 0.3)) {
-                        showingControls.toggle()
-                    }
-                } label: {
-                    Image(systemName: showingControls ? "chevron.up" : "chevron.down")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 26, height: 26)
-                }
-                .buttonStyle(.plain)
 
                 Button {
                     track.isMuted.toggle()
@@ -897,85 +1295,6 @@ struct StudioTrackRow: View {
                 .buttonStyle(.plain)
             }
             .padding(12)
-            
-            if showingControls {
-                VStack(spacing: 12) {
-                    // Volume Control
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Image(systemName: "speaker.wave.2.fill")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text("Volume")
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Text("\(Int(track.volume * 100))%")
-                                .font(.caption.monospacedDigit())
-                                .foregroundStyle(.white)
-                        }
-                        
-                        Slider(value: $track.volume, in: 0...1)
-                            .tint(track.instrument.color)
-                            .onChange(of: track.volume) { _, newValue in
-                                playback.updateTrackMix(trackId: track.id, volume: newValue, pan: track.pan)
-                                onTrackChange()
-                            }
-                    }
-                    
-                    // Pan Control
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Image(systemName: "l.joystick.fill")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text("Pan")
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Text(panLabel)
-                                .font(.caption.monospacedDigit())
-                                .foregroundStyle(.white)
-                        }
-                        
-                        Slider(value: $track.pan, in: -1...1)
-                            .tint(track.instrument.color)
-                            .onChange(of: track.pan) { _, newValue in
-                                playback.updateTrackMix(trackId: track.id, volume: track.volume, pan: newValue)
-                                onTrackChange()
-                            }
-                    }
-                    
-                    // Regenerate button (only for generated tracks)
-                    if !track.instrument.isAudio && !track.notes.isEmpty {
-                        Button {
-                            onRegenerateTrack()
-                        } label: {
-                            HStack {
-                                Image(systemName: "sparkles")
-                                    .font(.caption)
-                                Text("Regenerate Notes")
-                                    .font(.caption.weight(.semibold))
-                                Spacer()
-                            }
-                            .foregroundStyle(track.instrument.color)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 8)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(track.instrument.color.opacity(0.15))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .stroke(track.instrument.color.opacity(0.4), lineWidth: 1)
-                                    )
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 12)
-            }
         }
         .background(
             RoundedRectangle(cornerRadius: 14)
@@ -986,7 +1305,10 @@ struct StudioTrackRow: View {
                 )
         )
         .contentShape(Rectangle())
-        .onTapGesture(perform: onSelect)
+        .onTapGesture {
+            onSelect()
+            onOpenEditor()
+        }
         .contextMenu {
             Button(role: .destructive) {
                 onDelete()
@@ -996,15 +1318,6 @@ struct StudioTrackRow: View {
         }
     }
     
-    private var panLabel: String {
-        if track.pan < -0.05 {
-            return "L\(Int(abs(track.pan) * 100))"
-        } else if track.pan > 0.05 {
-            return "R\(Int(track.pan * 100))"
-        } else {
-            return "C"
-        }
-    }
 }
 
 struct StudioAudioTrackView: View {
