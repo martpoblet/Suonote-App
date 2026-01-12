@@ -830,6 +830,7 @@ struct SwipeActionItem: Identifiable {
 
 struct SwipeActionRow<Content: View>: View {
     let actions: [SwipeActionItem]
+    let leadingActions: [SwipeActionItem]
     let content: Content
     
     private let buttonSize: CGFloat = 40
@@ -838,8 +839,13 @@ struct SwipeActionRow<Content: View>: View {
     @State private var baseOffset: CGFloat = 0
     @State private var dragTranslation: CGFloat = 0
     
-    init(actions: [SwipeActionItem], @ViewBuilder content: () -> Content) {
+    init(
+        actions: [SwipeActionItem],
+        leadingActions: [SwipeActionItem] = [],
+        @ViewBuilder content: () -> Content
+    ) {
         self.actions = actions
+        self.leadingActions = leadingActions
         self.content = content()
     }
     
@@ -847,10 +853,20 @@ struct SwipeActionRow<Content: View>: View {
         guard !actions.isEmpty else { return 0 }
         return (CGFloat(actions.count) * buttonSize) + (CGFloat(max(actions.count - 1, 0)) * buttonSpacing)
     }
+
+    private var leadingActionsWidth: CGFloat {
+        guard !leadingActions.isEmpty else { return 0 }
+        return (CGFloat(leadingActions.count) * buttonSize) + (CGFloat(max(leadingActions.count - 1, 0)) * buttonSpacing)
+    }
     
     private var maxOffset: CGFloat {
         guard !actions.isEmpty else { return 0 }
         return actionsWidth + actionGap
+    }
+
+    private var maxLeadingOffset: CGFloat {
+        guard !leadingActions.isEmpty else { return 0 }
+        return leadingActionsWidth + actionGap
     }
     
     private var dragOffset: CGFloat {
@@ -860,19 +876,33 @@ struct SwipeActionRow<Content: View>: View {
     private var revealWidth: CGFloat {
         max(0, -dragOffset)
     }
+
+    private var leadingRevealWidth: CGFloat {
+        max(0, dragOffset)
+    }
     
     private var revealProgress: CGFloat {
         guard actionsWidth > 0 else { return 0 }
         return min(1, revealWidth / actionsWidth)
     }
+
+    private var leadingRevealProgress: CGFloat {
+        guard leadingActionsWidth > 0 else { return 0 }
+        return min(1, leadingRevealWidth / leadingActionsWidth)
+    }
     
     private var effectiveRevealWidth: CGFloat {
         min(revealWidth, actionsWidth)
     }
+
+    private var effectiveLeadingRevealWidth: CGFloat {
+        min(leadingRevealWidth, leadingActionsWidth)
+    }
     
     var body: some View {
-        ZStack(alignment: .trailing) {
+        ZStack {
             actionButtons
+            leadingActionButtons
             
             content
                 .offset(x: dragOffset)
@@ -884,7 +914,9 @@ struct SwipeActionRow<Content: View>: View {
                         },
                         onEnded: { translation in
                             let proposedOffset = clampOffset(baseOffset + translation)
-                            if proposedOffset <= -maxOffset * 0.5 {
+                            if proposedOffset >= maxLeadingOffset * 0.5 {
+                                baseOffset = maxLeadingOffset
+                            } else if proposedOffset <= -maxOffset * 0.5 {
                                 baseOffset = -maxOffset
                             } else {
                                 baseOffset = 0
@@ -921,15 +953,47 @@ struct SwipeActionRow<Content: View>: View {
         .opacity(revealProgress == 0 ? 0 : 1)
         .animation(.easeOut(duration: 0.18), value: revealProgress)
     }
+
+    private var leadingActionButtons: some View {
+        HStack(spacing: buttonSpacing) {
+            ForEach(Array(leadingActions.enumerated()), id: \.element.id) { index, item in
+                let progress = leadingButtonProgress(for: index)
+                Button(role: item.role) {
+                    item.action()
+                    baseOffset = 0
+                } label: {
+                    Image(systemName: item.systemImage)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: buttonSize, height: buttonSize)
+                        .background(Circle().fill(item.tint))
+                }
+                .scaleEffect(progress, anchor: .leading)
+                .opacity(progress)
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.leading, 12)
+        .frame(width: leadingActionsWidth, alignment: .leading)
+        .opacity(leadingRevealProgress == 0 ? 0 : 1)
+        .animation(.easeOut(duration: 0.18), value: leadingRevealProgress)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
     
     private func buttonProgress(for index: Int) -> CGFloat {
         let threshold = CGFloat(index) * (buttonSize + buttonSpacing)
         let raw = (effectiveRevealWidth - threshold) / buttonSize
         return max(0, min(1, raw))
     }
+
+    private func leadingButtonProgress(for index: Int) -> CGFloat {
+        let threshold = CGFloat(index) * (buttonSize + buttonSpacing)
+        let raw = (effectiveLeadingRevealWidth - threshold) / buttonSize
+        return max(0, min(1, raw))
+    }
     
     private func clampOffset(_ offset: CGFloat) -> CGFloat {
-        max(-maxOffset, min(0, offset))
+        max(-maxOffset, min(maxLeadingOffset, offset))
     }
 }
 
@@ -999,6 +1063,7 @@ struct BarRow: View {
     @State private var isBarDropTargeted = false
     @State private var isBarRowDropTargeted = false
     @State private var lastChordReorderTargetId: UUID?
+    @State private var showingBarReorderSheet = false
     
     private let slotSpacing: CGFloat = 6
     
@@ -1006,7 +1071,7 @@ struct BarRow: View {
         let slots = slotsForBar(barIndex)
         
         if !slots.isEmpty {
-            SwipeActionRow(actions: swipeActions) {
+            SwipeActionRow(actions: swipeActions, leadingActions: leadingSwipeActions) {
                 barContent(slots: slots)
                     .id("bar-\(barIndex)")
             }
@@ -1018,6 +1083,14 @@ struct BarRow: View {
             }
             .onDrop(of: [barRowDragUTType], isTargeted: $isBarRowDropTargeted) { providers in
                 handleBarRowDrop(providers)
+            }
+            .sheet(isPresented: $showingBarReorderSheet) {
+                BarReorderSheet(
+                    section: section,
+                    onReorder: { newOrder in
+                        applyBarOrder(newOrder)
+                    }
+                )
             }
         }
     }
@@ -1046,6 +1119,14 @@ struct BarRow: View {
         }
         
         return items
+    }
+
+    private var leadingSwipeActions: [SwipeActionItem] {
+        [
+            SwipeActionItem(systemImage: "arrow.up.arrow.down.circle.fill", tint: .teal, role: nil) {
+                showingBarReorderSheet = true
+            }
+        ]
     }
     
     private func makeBarSilent() {
@@ -1434,6 +1515,19 @@ struct BarRow: View {
         }
     }
 
+    private func applyBarOrder(_ order: [Int]) {
+        var mapping: [Int: Int] = [:]
+        for (newIndex, originalIndex) in order.enumerated() {
+            mapping[originalIndex] = newIndex
+        }
+
+        for chord in section.chordEvents {
+            if let newIndex = mapping[chord.barIndex] {
+                chord.barIndex = newIndex
+            }
+        }
+    }
+
     private func handleChordSlotHover(targetChord: ChordEvent) {
         guard let dragInfo = draggingChord,
               dragInfo.chordId != targetChord.id,
@@ -1720,6 +1814,49 @@ struct BarRow: View {
             .first { $0.id == id }
     }
 
+}
+
+struct BarReorderSheet: View {
+    let section: SectionTemplate
+    let onReorder: ([Int]) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var editMode: EditMode = .active
+    @State private var barOrder: [Int]
+
+    init(section: SectionTemplate, onReorder: @escaping ([Int]) -> Void) {
+        self.section = section
+        self.onReorder = onReorder
+        _barOrder = State(initialValue: Array(0..<section.bars))
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(barOrder, id: \.self) { index in
+                    HStack {
+                        Image(systemName: "line.3.horizontal")
+                            .foregroundStyle(.secondary)
+                        Text("Bar \(index + 1)")
+                            .font(.body.weight(.medium))
+                    }
+                }
+                .onMove { offsets, destination in
+                    barOrder.move(fromOffsets: offsets, toOffset: destination)
+                    onReorder(barOrder)
+                }
+            }
+            .navigationTitle("Reorder Bars")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .environment(\.editMode, $editMode)
+    }
 }
 
 struct ChordSlotButton: View {

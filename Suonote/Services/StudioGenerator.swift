@@ -1047,6 +1047,13 @@ struct StudioGenerator {
             }
         }
 
+        if instrument == .guitar {
+            offsets = offsets.filter { abs($0.rounded() - $0) < 0.001 }
+            if offsets.isEmpty {
+                offsets = [0]
+            }
+        }
+
         let clamped = offsets
             .filter { $0 >= 0 && $0 < chordDuration }
             .map { quantize($0, step: quantStep) }
