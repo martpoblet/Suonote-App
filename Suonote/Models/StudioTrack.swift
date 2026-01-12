@@ -121,7 +121,7 @@ enum StudioInstrument: String, Codable, CaseIterable, Identifiable {
         case .synth:
             return [.padSynth, .leadSynth, .brassSynth]
         case .guitar:
-            return [.acousticGuitar, .electricGuitar, .cleanGuitar]
+            return [.cleanGuitar, .electricGuitar, .acousticGuitar]
         case .bass:
             return [.acousticBass, .electricBass, .synthBass]
         case .drums, .audio:
@@ -237,7 +237,11 @@ final class StudioTrack {
         self.orderIndex = orderIndex
         self._instrument = instrument.rawValue
         self._drumPreset = ""
-        self._variant = instrument.variants.first?.rawValue
+        if instrument == .guitar {
+            self._variant = InstrumentVariant.cleanGuitar.rawValue
+        } else {
+            self._variant = instrument.variants.first?.rawValue
+        }
         self.octaveShift = 0
         self.isMuted = isMuted
         self.isSolo = isSolo

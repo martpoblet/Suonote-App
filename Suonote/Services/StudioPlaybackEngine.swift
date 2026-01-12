@@ -320,25 +320,15 @@ final class StudioPlaybackEngine: ObservableObject {
 
     private func loadInstrument(for track: StudioTrack, sampler: AVAudioUnitSampler) {
         // Use variant's MIDI program if available, otherwise default
-        let program = track.variant?.midiProgram ?? programNumber(for: track.instrument)
-        let preferSystemBank = track.instrument == .guitar
-        var didLoad = false
+        let fallbackProgram = track.variant?.midiProgram ?? programNumber(for: track.instrument)
+        let customURL = resolvedCustomBankURL()
+        let program = resolvedProgram(
+            for: track,
+            customBankURL: customURL,
+            fallbackProgram: fallbackProgram
+        )
 
-        if preferSystemBank, let systemURL = systemSoundBankURL() {
-            didLoad = attemptLoad(
-                sampler,
-                url: systemURL,
-                program: program,
-                bankMSB: appleBankMSB(for: track.instrument),
-                bankLSB: UInt8(kAUSampler_DefaultBankLSB),
-                logFailure: false
-            )
-            if didLoad {
-                return
-            }
-        }
-
-        if let url = resolvedCustomBankURL() {
+        if let url = customURL {
             let logFailure: Bool
             if case .unknown = customBankStatus {
                 logFailure = true
@@ -359,11 +349,11 @@ final class StudioPlaybackEngine: ObservableObject {
             customBankStatus = .unavailable
         }
 
-        if !didLoad, let systemURL = systemSoundBankURL() {
+        if let systemURL = systemSoundBankURL() {
             _ = attemptLoad(
                 sampler,
                 url: systemURL,
-                program: program,
+                program: fallbackProgram,
                 bankMSB: appleBankMSB(for: track.instrument),
                 bankLSB: UInt8(kAUSampler_DefaultBankLSB),
                 logFailure: false
@@ -382,7 +372,7 @@ final class StudioPlaybackEngine: ObservableObject {
         case .synth:
             return 89 // Warm Pad
         case .guitar:
-            return 24 // Acoustic Guitar (nylon)
+            return 26 // Electric Guitar (jazz) for cleaner tuning
         case .bass:
             return 32 // Acoustic Bass
         case .drums, .audio:
@@ -404,6 +394,35 @@ final class StudioPlaybackEngine: ObservableObject {
             }
         }
         return nil
+    }
+
+    private func resolvedProgram(
+        for track: StudioTrack,
+        customBankURL: URL?,
+        fallbackProgram: UInt8
+    ) -> UInt8 {
+        guard track.instrument == .guitar,
+              let variant = track.variant,
+              let customBankURL,
+              isArachnoSoundFont(customBankURL) else {
+            return fallbackProgram
+        }
+
+        // Arachno's nylon/jazz guitars are reported as detuned; use alternate programs.
+        switch variant {
+        case .acousticGuitar:
+            return 25 // Acoustic Guitar (steel)
+        case .cleanGuitar:
+            return 28 // Electric Guitar (muted)
+        case .electricGuitar:
+            return fallbackProgram
+        default:
+            return fallbackProgram
+        }
+    }
+
+    private func isArachnoSoundFont(_ url: URL) -> Bool {
+        url.lastPathComponent.localizedCaseInsensitiveContains("arachno")
     }
 
     private func resolvedCustomBankURL() -> URL? {
