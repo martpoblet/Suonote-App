@@ -76,6 +76,32 @@ struct ChordCountBadge: View {
     }
 }
 
+// MARK: - Recording Count Badge
+
+struct RecordingCountBadge: View {
+    let count: Int
+    let color: Color
+    
+    var body: some View {
+        HStack(spacing: DesignSystem.Spacing.xxxs) {
+            Image(systemName: "waveform.badge.mic")
+                .font(.system(size: 8))
+            Text("\(count)")
+                .font(DesignSystem.Typography.caption2.weight(.semibold))
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, DesignSystem.Spacing.xs)
+        .padding(.vertical, DesignSystem.Spacing.xxxs)
+        .background(
+            Capsule()
+                .fill(color.opacity(0.3))
+                .overlay(
+                    Capsule().stroke(color, lineWidth: 1)
+                )
+        )
+    }
+}
+
 // MARK: - Preview
 #Preview {
     VStack(spacing: DesignSystem.Spacing.md) {

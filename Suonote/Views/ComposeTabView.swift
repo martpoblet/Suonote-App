@@ -644,8 +644,9 @@ struct SectionTimelineCard: View {
                     HStack(spacing: DesignSystem.Spacing.xxs) {
                         Badge("\(section.bars) bars", color: sectionColor)
                         
+                        // Add waveform.badge.mic icon
                         if linkedRecordingsCount > 0 {
-                            Badge("\(linkedRecordingsCount) 🎙", color: DesignSystem.Colors.accent)
+                            RecordingCountBadge(count: linkedRecordingsCount, color: sectionColor)
                         }
                     }
                     
@@ -1063,7 +1064,6 @@ struct BarRow: View {
     @State private var isBarDropTargeted = false
     @State private var isBarRowDropTargeted = false
     @State private var lastChordReorderTargetId: UUID?
-    @State private var showingBarReorderSheet = false
     
     private let slotSpacing: CGFloat = 6
     
@@ -1084,25 +1084,11 @@ struct BarRow: View {
             .onDrop(of: [barRowDragUTType], isTargeted: $isBarRowDropTargeted) { providers in
                 handleBarRowDrop(providers)
             }
-            .sheet(isPresented: $showingBarReorderSheet) {
-                BarReorderSheet(
-                    section: section,
-                    onReorder: { newOrder in
-                        applyBarOrder(newOrder)
-                    }
-                )
-            }
         }
     }
     
     private var swipeActions: [SwipeActionItem] {
         var items: [SwipeActionItem] = []
-        
-        items.append(
-            SwipeActionItem(systemImage: "speaker.slash.fill", tint: .purple, role: nil) {
-                makeBarSilent()
-            }
-        )
         
         items.append(
             SwipeActionItem(systemImage: "doc.on.doc.fill", tint: .blue, role: nil) {
@@ -1122,16 +1108,39 @@ struct BarRow: View {
     }
 
     private var leadingSwipeActions: [SwipeActionItem] {
-        [
-            SwipeActionItem(systemImage: "arrow.up.arrow.down.circle.fill", tint: .teal, role: nil) {
-                showingBarReorderSheet = true
-            }
-        ]
+        var items: [SwipeActionItem] = []
+
+        if barIndex > 0 {
+            items.append(
+                SwipeActionItem(systemImage: "arrow.up.circle.fill", tint: .teal, role: nil) {
+                    moveBarUp()
+                }
+            )
+        }
+
+        if barIndex < section.bars - 1 {
+            items.append(
+                SwipeActionItem(systemImage: "arrow.down.circle.fill", tint: .teal, role: nil) {
+                    moveBarDown()
+                }
+            )
+        }
+
+        return items
     }
-    
-    private func makeBarSilent() {
-        // Remove all chords in this bar
-        section.chordEvents.removeAll { $0.barIndex == barIndex }
+
+    private func moveBarUp() {
+        guard barIndex > 0 else { return }
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+            moveBar(from: barIndex, to: barIndex - 1)
+        }
+    }
+
+    private func moveBarDown() {
+        guard barIndex < section.bars - 1 else { return }
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+            moveBar(from: barIndex, to: barIndex + 1)
+        }
     }
     
     private func cloneBar() {
@@ -1515,19 +1524,6 @@ struct BarRow: View {
         }
     }
 
-    private func applyBarOrder(_ order: [Int]) {
-        var mapping: [Int: Int] = [:]
-        for (newIndex, originalIndex) in order.enumerated() {
-            mapping[originalIndex] = newIndex
-        }
-
-        for chord in section.chordEvents {
-            if let newIndex = mapping[chord.barIndex] {
-                chord.barIndex = newIndex
-            }
-        }
-    }
-
     private func handleChordSlotHover(targetChord: ChordEvent) {
         guard let dragInfo = draggingChord,
               dragInfo.chordId != targetChord.id,
@@ -1814,49 +1810,6 @@ struct BarRow: View {
             .first { $0.id == id }
     }
 
-}
-
-struct BarReorderSheet: View {
-    let section: SectionTemplate
-    let onReorder: ([Int]) -> Void
-    @Environment(\.dismiss) private var dismiss
-    @State private var editMode: EditMode = .active
-    @State private var barOrder: [Int]
-
-    init(section: SectionTemplate, onReorder: @escaping ([Int]) -> Void) {
-        self.section = section
-        self.onReorder = onReorder
-        _barOrder = State(initialValue: Array(0..<section.bars))
-    }
-
-    var body: some View {
-        NavigationStack {
-            List {
-                ForEach(barOrder, id: \.self) { index in
-                    HStack {
-                        Image(systemName: "line.3.horizontal")
-                            .foregroundStyle(.secondary)
-                        Text("Bar \(index + 1)")
-                            .font(.body.weight(.medium))
-                    }
-                }
-                .onMove { offsets, destination in
-                    barOrder.move(fromOffsets: offsets, toOffset: destination)
-                    onReorder(barOrder)
-                }
-            }
-            .navigationTitle("Reorder Bars")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-            }
-        }
-        .environment(\.editMode, $editMode)
-    }
 }
 
 struct ChordSlotButton: View {
