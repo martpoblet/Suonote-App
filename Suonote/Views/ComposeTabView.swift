@@ -763,6 +763,8 @@ struct ChordGridView: View {
     let project: Project
     @Binding var selectedChordSlot: ChordSlot?
     @Binding var draggingChord: ChordDragInfo?
+    @Namespace private var barRowNamespace
+    @State private var barRowIds: [UUID]
     
     private var beatsPerBar: Int { project.timeTop }
     private let barRowHeight: CGFloat = 104
@@ -773,8 +775,22 @@ struct ChordGridView: View {
         guard count > 0 else { return 0 }
         return (count * barRowHeight) + (max(0, count - 1) * barRowSpacing)
     }
+
+    init(
+        section: SectionTemplate,
+        project: Project,
+        selectedChordSlot: Binding<ChordSlot?>,
+        draggingChord: Binding<ChordDragInfo?>
+    ) {
+        self.section = section
+        self.project = project
+        self._selectedChordSlot = selectedChordSlot
+        self._draggingChord = draggingChord
+        _barRowIds = State(initialValue: (0..<max(0, section.bars)).map { _ in UUID() })
+    }
     
     var body: some View {
+        let rowIds = resolvedBarRowIds()
         VStack(spacing: DesignSystem.Spacing.sm) {
             // Show only the bars defined in section.bars
             LazyVStack(spacing: barRowSpacing) {
@@ -785,7 +801,12 @@ struct ChordGridView: View {
                         barIndex: barIndex,
                         beatsPerBar: beatsPerBar,
                         selectedChordSlot: $selectedChordSlot,
-                        draggingChord: $draggingChord
+                        draggingChord: $draggingChord,
+                        barRowId: rowIds[barIndex],
+                        barRowNamespace: barRowNamespace,
+                        onBarMoved: moveBarId,
+                        onBarInserted: insertBarId,
+                        onBarDeleted: removeBarId
                     )
                     .frame(height: barRowHeight)
                 }
@@ -795,6 +816,7 @@ struct ChordGridView: View {
             // Add Bar button
             Button {
                 haptic(.light)
+                insertBarId(at: section.bars)
                 section.bars += 1
             } label: {
                 HStack(spacing: DesignSystem.Spacing.xxs) {
@@ -818,6 +840,50 @@ struct ChordGridView: View {
             }
             .buttonStyle(.haptic(.light))
         }
+        .onAppear {
+            syncBarRowIds()
+        }
+        .onChange(of: section.bars) { _, _ in
+            syncBarRowIds()
+        }
+    }
+
+    private func syncBarRowIds() {
+        if barRowIds.count < section.bars {
+            let missing = section.bars - barRowIds.count
+            barRowIds.append(contentsOf: (0..<missing).map { _ in UUID() })
+        } else if barRowIds.count > section.bars {
+            barRowIds.removeLast(barRowIds.count - section.bars)
+        }
+    }
+
+    private func resolvedBarRowIds() -> [UUID] {
+        if barRowIds.count == section.bars {
+            return barRowIds
+        }
+        if barRowIds.count > section.bars {
+            return Array(barRowIds.prefix(section.bars))
+        }
+        let missing = section.bars - barRowIds.count
+        return barRowIds + (0..<missing).map { _ in UUID() }
+    }
+
+    private func insertBarId(at index: Int) {
+        let clamped = min(max(0, index), barRowIds.count)
+        barRowIds.insert(UUID(), at: clamped)
+    }
+
+    private func removeBarId(at index: Int) {
+        guard barRowIds.indices.contains(index) else { return }
+        barRowIds.remove(at: index)
+    }
+
+    private func moveBarId(from sourceIndex: Int, to targetIndex: Int) {
+        guard barRowIds.indices.contains(sourceIndex) else { return }
+        let clampedTarget = min(max(0, targetIndex), barRowIds.count - 1)
+        guard sourceIndex != clampedTarget else { return }
+        let id = barRowIds.remove(at: sourceIndex)
+        barRowIds.insert(id, at: clampedTarget)
     }
 }
 
@@ -1062,6 +1128,11 @@ struct BarRow: View {
     let beatsPerBar: Int
     @Binding var selectedChordSlot: ChordSlot?
     @Binding var draggingChord: ChordDragInfo?
+    let barRowId: UUID
+    let barRowNamespace: Namespace.ID
+    let onBarMoved: (Int, Int) -> Void
+    let onBarInserted: (Int) -> Void
+    let onBarDeleted: (Int) -> Void
     @State private var isBarDropTargeted = false
     @State private var isBarRowDropTargeted = false
     @State private var lastChordReorderTargetId: UUID?
@@ -1076,8 +1147,9 @@ struct BarRow: View {
             SwipeActionRow(actions: swipeActions, leadingActions: leadingSwipeActions) {
                 barContent(slots: slots)
                     .id("bar-\(barIndex)")
-                    .offset(y: reorderNudge)
             }
+            .matchedGeometryEffect(id: barRowId, in: barRowNamespace)
+            .offset(y: reorderNudge)
             .onDrag {
                 NSItemProvider(
                     item: barRowPayload() as NSString,
@@ -1136,6 +1208,7 @@ struct BarRow: View {
         guard barIndex > 0 else { return }
         triggerReorderNudge(-8)
         withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+            onBarMoved(barIndex, barIndex - 1)
             moveBar(from: barIndex, to: barIndex - 1)
         }
     }
@@ -1144,6 +1217,7 @@ struct BarRow: View {
         guard barIndex < section.bars - 1 else { return }
         triggerReorderNudge(8)
         withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+            onBarMoved(barIndex, barIndex + 1)
             moveBar(from: barIndex, to: barIndex + 1)
         }
     }
@@ -1162,10 +1236,11 @@ struct BarRow: View {
     private func cloneBar() {
         // Clone all chords in this bar to the next bar
         let chordsInBar = section.chordEvents.filter { $0.barIndex == barIndex }
+        let newBarIndex = barIndex + 1
         
         // Add new bar
+        onBarInserted(newBarIndex)
         section.bars += 1
-        let newBarIndex = barIndex + 1
         
         // Shift existing chords after this bar
         for chord in section.chordEvents where chord.barIndex >= newBarIndex {
@@ -1190,6 +1265,7 @@ struct BarRow: View {
     
     private func deleteBar() {
         guard section.bars > 1 else { return }
+        onBarDeleted(barIndex)
         
         // Remove all chords in this bar
         section.chordEvents.removeAll { $0.barIndex == barIndex }
@@ -1472,6 +1548,7 @@ struct BarRow: View {
             guard payload.sectionId == section.id else { return }
             guard payload.barIndex != barIndex else { return }
             withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+                onBarMoved(payload.barIndex, barIndex)
                 moveBar(from: payload.barIndex, to: barIndex)
             }
         }
