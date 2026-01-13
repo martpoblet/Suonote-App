@@ -218,6 +218,7 @@ struct ImmersiveLyricsEditor: View {
                     
                     Button {
                         isTextEditorFocused = false
+                        dismiss()
                     } label: {
                         Text("Done")
                             .font(DesignSystem.Typography.bodyBold)

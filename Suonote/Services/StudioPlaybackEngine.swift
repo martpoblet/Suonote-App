@@ -375,6 +375,16 @@ final class StudioPlaybackEngine: ObservableObject {
             return 26 // Electric Guitar (jazz) for cleaner tuning
         case .bass:
             return 32 // Acoustic Bass
+        case .strings:
+            return 48 // String Ensemble
+        case .brass:
+            return 61 // Brass Section
+        case .woodwinds:
+            return 73 // Flute
+        case .organ:
+            return 16 // Drawbar Organ
+        case .mallets:
+            return 12 // Marimba
         case .drums, .audio:
             return 0
         }
@@ -410,9 +420,9 @@ final class StudioPlaybackEngine: ObservableObject {
 
         // Arachno's nylon/jazz guitars are reported as detuned; use alternate programs.
         switch variant {
-        case .acousticGuitar:
+        case .acousticNylonGuitar:
             return 25 // Acoustic Guitar (steel)
-        case .cleanGuitar:
+        case .jazzGuitar, .cleanGuitar:
             return 28 // Electric Guitar (muted)
         case .electricGuitar:
             return fallbackProgram

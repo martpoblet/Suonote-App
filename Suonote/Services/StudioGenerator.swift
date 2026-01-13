@@ -15,7 +15,18 @@ struct StudioGenerator {
     ) -> [StudioTrack] {
         let timeline = buildTimeline(for: project)
         let diatonicMap = diatonicQualityMap(forKey: project.keyRoot, mode: project.keyMode)
-        let instruments: [StudioInstrument] = [.piano, .synth, .guitar, .bass, .drums]
+        let instruments: [StudioInstrument] = [
+            .piano,
+            .synth,
+            .guitar,
+            .bass,
+            .strings,
+            .brass,
+            .woodwinds,
+            .organ,
+            .mallets,
+            .drums
+        ]
         var tracks: [StudioTrack] = []
         let defaultDrumPreset = DrumPreset.defaultPreset(
             for: style,
@@ -252,7 +263,7 @@ struct StudioGenerator {
                 intensity: intensity,
                 complexity: complexity
             )
-        case .guitar, .synth, .piano:
+        case .guitar, .synth, .piano, .strings, .brass, .woodwinds, .organ, .mallets:
             return chordPadNotes(
                 chords: chords,
                 instrument: instrument,
@@ -729,6 +740,16 @@ struct StudioGenerator {
             return 52...76  // E3 to E5 (standard guitar tuning range, avoiding very low notes)
         case .bass:
             return 28...52  // E1 to E3
+        case .strings:
+            return 48...88  // C3 to E6
+        case .brass:
+            return 46...82  // Bb2 to A5
+        case .woodwinds:
+            return 55...91  // G3 to F#6
+        case .organ:
+            return 40...84  // E2 to C6
+        case .mallets:
+            return 60...96  // C4 to C7
         case .drums, .audio:
             return 36...72
         }
@@ -745,20 +766,23 @@ struct StudioGenerator {
         case .rock:
             return 0
         case .lofi:
-            if instrument == .piano || instrument == .synth {
+            if instrument == .piano || instrument == .synth || instrument == .strings {
                 return -12
             }
             return 0
         case .edm:
             return instrument == .synth ? 12 : 0
         case .jazz:
-            return instrument == .piano ? 12 : 0
+            return (instrument == .piano || instrument == .brass) ? 12 : 0
         case .hiphop:
-            return instrument == .bass ? -12 : 0
+            return (instrument == .bass || instrument == .synth) ? -12 : 0
         case .funk:
             return instrument == .bass ? -12 : 0
         case .ambient:
-            return instrument == .synth ? 12 : (instrument == .piano ? 12 : 0)
+            if instrument == .synth || instrument == .strings || instrument == .organ {
+                return 12
+            }
+            return instrument == .piano ? 12 : 0
         }
     }
 
@@ -1358,6 +1382,61 @@ struct StudioGenerator {
             clapOffsets = snareOffsets
         case .offbeat:
             kickOffsets = pulseOffsets
+            snareOffsets = backbeatOffsets
+            hatSteps = stepsFromOffsets(
+                offbeatOffsets,
+                stepsPerBeat: stepsPerBeat,
+                stepsPerBar: stepsPerBar
+            )
+            clapOffsets = []
+        case .shuffle:
+            let shuffleKicks = basicKickOffsets(meter: meter) + offbeatOffsets.filter { $0 < Double(meter.beatsPerBar) }
+            kickOffsets = Array(Set(shuffleKicks)).sorted()
+            snareOffsets = backbeatOffsets.isEmpty ? [Double(max(1, meter.beatsPerBar - 1))] : backbeatOffsets
+            hatSteps = stepsFromOffsets(
+                beatOffsets + offbeatOffsets,
+                stepsPerBeat: stepsPerBeat,
+                stepsPerBar: stepsPerBar
+            )
+            clapOffsets = meter.timeBottom == 4 ? snareOffsets : []
+        case .swing:
+            kickOffsets = pulseOffsets
+            snareOffsets = backbeatOffsets
+            hatSteps = stepsFromOffsets(
+                beatOffsets + offbeatOffsets,
+                stepsPerBeat: stepsPerBeat,
+                stepsPerBar: stepsPerBar
+            )
+            clapOffsets = []
+        case .trap:
+            let trapKicks = [0.0, 1.5, 2.5].filter { $0 < Double(meter.beatsPerBar) }
+            kickOffsets = meter.timeBottom == 4 ? trapKicks : pulseOffsets
+            snareOffsets = [Double(max(1, meter.beatsPerBar / 2))]
+            hatSteps = Array(0..<stepsPerBar)
+            clapOffsets = snareOffsets
+        case .breakbeat:
+            let breakKicks = [0.0, 1.5, 2.5].filter { $0 < Double(meter.beatsPerBar) }
+            kickOffsets = meter.timeBottom == 4 ? breakKicks : pulseOffsets
+            snareOffsets = backbeatOffsets.isEmpty ? [Double(max(1, meter.beatsPerBar - 1))] : backbeatOffsets
+            hatSteps = stepsFromOffsets(
+                beatOffsets + offbeatOffsets,
+                stepsPerBeat: stepsPerBeat,
+                stepsPerBar: stepsPerBar
+            )
+            clapOffsets = snareOffsets
+        case .bossa:
+            let bossaKick = [0.0, 2.0].filter { $0 < Double(meter.beatsPerBar) }
+            kickOffsets = meter.timeBottom == 4 ? bossaKick : pulseOffsets
+            snareOffsets = offbeatOffsets
+            hatSteps = stepsFromOffsets(
+                beatOffsets,
+                stepsPerBeat: stepsPerBeat,
+                stepsPerBar: stepsPerBar
+            )
+            clapOffsets = []
+        case .latin:
+            let latinKick = [0.0, 1.5, 2.0, 3.5].filter { $0 < Double(meter.beatsPerBar) }
+            kickOffsets = meter.timeBottom == 4 ? latinKick : pulseOffsets
             snareOffsets = backbeatOffsets
             hatSteps = stepsFromOffsets(
                 offbeatOffsets,

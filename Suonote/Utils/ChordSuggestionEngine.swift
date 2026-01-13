@@ -314,6 +314,196 @@ class ChordSuggestionEngine {
         
         return suggestions
     }
+
+    // MARK: - Contextual Smart Suggestions
+
+    static func suggestContextualChords(
+        previousChords: [ChordEvent],
+        nextChords: [ChordEvent],
+        inKey keyRoot: String,
+        mode: KeyMode
+    ) -> [ChordSuggestion] {
+        let diatonic = diatonicChords(forKey: keyRoot, mode: mode)
+        let lastChord = previousChords.last
+        let nextChord = nextChords.first
+
+        var suggestions = suggestNextChord(
+            after: lastChord,
+            inKey: keyRoot,
+            mode: mode
+        )
+
+        var suggestionMap = [String: ChordSuggestion]()
+        for suggestion in suggestions {
+            suggestionMap[uniqueKey(for: suggestion)] = suggestion
+        }
+
+        func addSuggestion(_ suggestion: ChordSuggestion) {
+            suggestionMap[uniqueKey(for: suggestion)] = suggestion
+        }
+
+        if previousChords.count >= 2 {
+            let lastTwo = Array(previousChords.suffix(2))
+            if let firstIndex = diatonicIndex(for: lastTwo[0], in: diatonic),
+               let secondIndex = diatonicIndex(for: lastTwo[1], in: diatonic) {
+                if firstIndex == 1 && secondIndex == 4 {
+                    addSuggestion(
+                        ChordSuggestion(
+                            root: diatonic[0].root,
+                            quality: diatonic[0].quality,
+                            reason: "ii–V resolution",
+                            confidence: 0.95,
+                            romanNumeral: diatonic[0].romanNumeral
+                        )
+                    )
+                } else if firstIndex == 3 && secondIndex == 4 {
+                    addSuggestion(
+                        ChordSuggestion(
+                            root: diatonic[0].root,
+                            quality: diatonic[0].quality,
+                            reason: "IV–V to tonic",
+                            confidence: 0.9,
+                            romanNumeral: diatonic[0].romanNumeral
+                        )
+                    )
+                }
+            }
+        }
+
+        if let nextChord {
+            let targetRoot = nextChord.root
+            let secondaryDominant = transpose(note: targetRoot, semitones: 7)
+            addSuggestion(
+                ChordSuggestion(
+                    root: secondaryDominant,
+                    quality: .dominant7,
+                    reason: "V/\(targetRoot) leading into the next chord",
+                    confidence: 0.85
+                )
+            )
+            let secondarySupertonic = transpose(note: targetRoot, semitones: 2)
+            addSuggestion(
+                ChordSuggestion(
+                    root: secondarySupertonic,
+                    quality: .minor7,
+                    reason: "ii/V approach toward \(targetRoot)",
+                    confidence: 0.75
+                )
+            )
+            let tritoneSub = transpose(note: secondaryDominant, semitones: 6)
+            addSuggestion(
+                ChordSuggestion(
+                    root: tritoneSub,
+                    quality: .dominant7,
+                    reason: "Tritone sub into \(targetRoot)",
+                    confidence: 0.6
+                )
+            )
+        }
+
+        if mode == .major {
+            let flatSeven = transpose(note: keyRoot, semitones: -2)
+            addSuggestion(
+                ChordSuggestion(
+                    root: flatSeven,
+                    quality: .major,
+                    reason: "♭VII borrowed from Mixolydian",
+                    confidence: 0.6
+                )
+            )
+            let flatSix = transpose(note: keyRoot, semitones: -4)
+            addSuggestion(
+                ChordSuggestion(
+                    root: flatSix,
+                    quality: .major,
+                    reason: "♭VI borrowed from Aeolian",
+                    confidence: 0.55
+                )
+            )
+            if diatonic.indices.contains(3) {
+                addSuggestion(
+                    ChordSuggestion(
+                        root: diatonic[3].root,
+                        quality: .minor,
+                        reason: "iv minor for emotional color",
+                        confidence: 0.6
+                    )
+                )
+            }
+        } else {
+            if diatonic.indices.contains(4) {
+                addSuggestion(
+                    ChordSuggestion(
+                        root: diatonic[4].root,
+                        quality: .major,
+                        reason: "V major from harmonic minor",
+                        confidence: 0.7
+                    )
+                )
+                addSuggestion(
+                    ChordSuggestion(
+                        root: diatonic[4].root,
+                        quality: .dominant7,
+                        reason: "V7 for strong resolution",
+                        confidence: 0.75
+                    )
+                )
+            }
+            let flatTwo = transpose(note: keyRoot, semitones: 1)
+            addSuggestion(
+                ChordSuggestion(
+                    root: flatTwo,
+                    quality: .major,
+                    reason: "♭II (Neapolitan)",
+                    confidence: 0.55
+                )
+            )
+            addSuggestion(
+                ChordSuggestion(
+                    root: keyRoot,
+                    quality: .major,
+                    reason: "Picardy third (major tonic)",
+                    confidence: 0.5
+                )
+            )
+        }
+
+        if let lastChord {
+            let upMediant = transpose(note: lastChord.root, semitones: 4)
+            addSuggestion(
+                ChordSuggestion(
+                    root: upMediant,
+                    quality: lastChord.quality == .minor ? .major : .minor,
+                    reason: "Chromatic mediant color",
+                    confidence: 0.5
+                )
+            )
+            let downMediant = transpose(note: lastChord.root, semitones: -4)
+            addSuggestion(
+                ChordSuggestion(
+                    root: downMediant,
+                    quality: lastChord.quality == .minor ? .major : .minor,
+                    reason: "Chromatic mediant contrast",
+                    confidence: 0.5
+                )
+            )
+
+            let circleRoot = transpose(note: lastChord.root, semitones: -7)
+            let diatonicMatch = diatonic.first { $0.root == circleRoot }
+            addSuggestion(
+                ChordSuggestion(
+                    root: circleRoot,
+                    quality: diatonicMatch?.quality ?? .major,
+                    reason: "Circle of fifths motion",
+                    confidence: 0.65,
+                    romanNumeral: diatonicMatch?.romanNumeral
+                )
+            )
+        }
+
+        suggestions = suggestionMap.values.sorted { $0.confidence > $1.confidence }
+        return Array(suggestions.prefix(12))
+    }
     
     // MARK: - Popular Progressions
     
@@ -363,6 +553,20 @@ class ChordSuggestionEngine {
         
         analysis.totalChords = chords.count
         return analysis
+    }
+}
+
+private extension ChordSuggestionEngine {
+    static func diatonicIndex(for chord: ChordEvent, in diatonic: [ChordSuggestion]) -> Int? {
+        if let exactIndex = diatonic.firstIndex(where: { $0.root == chord.root && $0.quality == chord.quality }) {
+            return exactIndex
+        }
+        return diatonic.firstIndex(where: { $0.root == chord.root })
+    }
+
+    static func uniqueKey(for suggestion: ChordSuggestion) -> String {
+        let extensionKey = suggestion.extensions.joined(separator: "-")
+        return "\(suggestion.root)|\(suggestion.quality.rawValue)|\(extensionKey)"
     }
 }
 

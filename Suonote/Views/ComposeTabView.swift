@@ -2234,6 +2234,8 @@ struct ChordPaletteSheet: View {
     // Cached values to avoid recalculation
     private let existingChord: ChordEvent?
     private let cachedLastChord: ChordEvent?
+    private let cachedPreviousChords: [ChordEvent]
+    private let cachedNextChords: [ChordEvent]
     private let cachedSmartSuggestions: [ChordSuggestion]
     private let cachedDiatonicChords: [ChordSuggestion]
     private let cachedPopularProgressions: [(name: String, progression: [ChordSuggestion])]
@@ -2275,6 +2277,8 @@ struct ChordPaletteSheet: View {
     
     // Use cached values instead of computed properties for better performance
     private var lastChord: ChordEvent? { cachedLastChord }
+    private var previousChords: [ChordEvent] { cachedPreviousChords }
+    private var nextChords: [ChordEvent] { cachedNextChords }
     private var smartSuggestions: [ChordSuggestion] { cachedSmartSuggestions }
     private var diatonicChords: [ChordSuggestion] { cachedDiatonicChords }
     private var popularProgressions: [(name: String, progression: [ChordSuggestion])] { cachedPopularProgressions }
@@ -2296,7 +2300,7 @@ struct ChordPaletteSheet: View {
         _isRest = State(initialValue: existingChord?.isRest ?? false)
         
         // Calculate and cache expensive values once during initialization
-        self.cachedLastChord = section.chordEvents.filter {
+        let lastChordCandidate = section.chordEvents.filter {
             !$0.isRest &&
             ($0.barIndex < slot.barIndex ||
                 ($0.barIndex == slot.barIndex && $0.beatOffset < slot.beatOffset))
@@ -2306,9 +2310,37 @@ struct ChordPaletteSheet: View {
             }
             return a.beatOffset < b.beatOffset
         })
-        
-        self.cachedSmartSuggestions = ChordSuggestionEngine.suggestNextChord(
-            after: cachedLastChord,
+
+        self.cachedLastChord = lastChordCandidate
+
+        let orderedPreviousChords = section.chordEvents.filter {
+            !$0.isRest &&
+            ($0.barIndex < slot.barIndex ||
+                ($0.barIndex == slot.barIndex && $0.beatOffset < slot.beatOffset))
+        }.sorted { a, b in
+            if a.barIndex != b.barIndex {
+                return a.barIndex < b.barIndex
+            }
+            return a.beatOffset < b.beatOffset
+        }
+
+        let orderedNextChords = section.chordEvents.filter {
+            !$0.isRest &&
+            ($0.barIndex > slot.barIndex ||
+                ($0.barIndex == slot.barIndex && $0.beatOffset > slot.beatOffset))
+        }.sorted { a, b in
+            if a.barIndex != b.barIndex {
+                return a.barIndex < b.barIndex
+            }
+            return a.beatOffset < b.beatOffset
+        }
+
+        self.cachedPreviousChords = orderedPreviousChords
+        self.cachedNextChords = orderedNextChords
+
+        self.cachedSmartSuggestions = ChordSuggestionEngine.suggestContextualChords(
+            previousChords: orderedPreviousChords,
+            nextChords: orderedNextChords,
             inKey: project.keyRoot,
             mode: project.keyMode
         )
@@ -2413,7 +2445,8 @@ struct ChordPaletteSheet: View {
                 SmartSuggestionsModal(
                     project: project,
                     section: section,
-                    lastChord: lastChord,
+                    previousChords: previousChords,
+                    nextChords: nextChords,
                     onChordSelected: { root, quality in
                         isRest = false
                         selectedRoot = root
@@ -3338,7 +3371,8 @@ struct ViewAllSectionsCard: View {
 struct SmartSuggestionsModal: View {
     let project: Project
     let section: SectionTemplate
-    let lastChord: ChordEvent?
+    let previousChords: [ChordEvent]
+    let nextChords: [ChordEvent]
     let onChordSelected: (String, ChordQuality) -> Void
     
     @Environment(\.dismiss) private var dismiss
@@ -3351,8 +3385,9 @@ struct SmartSuggestionsModal: View {
     }
     
     private var smartSuggestions: [ChordSuggestion] {
-        ChordSuggestionEngine.suggestNextChord(
-            after: lastChord,
+        ChordSuggestionEngine.suggestContextualChords(
+            previousChords: previousChords,
+            nextChords: nextChords,
             inKey: project.keyRoot,
             mode: project.keyMode
         )
@@ -3427,6 +3462,31 @@ struct SmartSuggestionsModal: View {
                 .font(DesignSystem.Typography.title3)
                 .foregroundStyle(.white)
                 .padding(.horizontal, DesignSystem.Spacing.xl)
+
+            if !previousChords.isEmpty || !nextChords.isEmpty {
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                    Text("Context")
+                        .font(DesignSystem.Typography.callout.weight(.semibold))
+                        .foregroundStyle(.white)
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: DesignSystem.Spacing.xs) {
+                            ForEach(previousChords.suffix(3)) { chord in
+                                contextChip(text: chord.display, color: DesignSystem.Colors.accent)
+                            }
+
+                            if let nextChord = nextChords.first {
+                                Image(systemName: "arrow.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                contextChip(text: nextChord.display, color: DesignSystem.Colors.primary)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+                .padding(.horizontal, DesignSystem.Spacing.xl)
+            }
             
             ForEach(smartSuggestions) { suggestion in
                 Button {
@@ -3479,6 +3539,22 @@ struct SmartSuggestionsModal: View {
             }
             .padding(.horizontal, DesignSystem.Spacing.xl)
         }
+    }
+
+    private func contextChip(text: String, color: Color) -> some View {
+        Text(text)
+            .font(DesignSystem.Typography.caption.weight(.semibold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, DesignSystem.Spacing.sm)
+            .padding(.vertical, DesignSystem.Spacing.xxs)
+            .background(
+                Capsule()
+                    .fill(color.opacity(0.2))
+                    .overlay(
+                        Capsule()
+                            .stroke(color.opacity(0.4), lineWidth: 1)
+                    )
+            )
     }
     
     private var analysisView: some View {

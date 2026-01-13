@@ -13,6 +13,8 @@ struct CreateProjectView: View {
     @State private var showingBPMPicker = false
     @StateObject private var tempoPreviewer = TempoPreviewer()
     @FocusState private var isTitleFocused: Bool
+    private let bpmRange = 40...240
+    private let bpmStep = 1
     
     var body: some View {
         ZStack {
@@ -104,7 +106,7 @@ struct CreateProjectView: View {
                             
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: 12) {
-                                    ForEach(ProjectStatus.allCases, id: \.self) { statusOption in
+                                    ForEach(ProjectStatus.allCases.filter { $0 != .archived }, id: \.self) { statusOption in
                                         StatusSelectionCard(
                                             status: statusOption,
                                             isSelected: status == statusOption
@@ -126,7 +128,11 @@ struct CreateProjectView: View {
                                 .textCase(.uppercase)
                             
                             VStack(spacing: 16) {
-                                HStack {
+                                HStack(alignment: .bottom, spacing: 16) {
+                                    bpmAdjustButton(systemImage: "minus", isEnabled: bpm > bpmRange.lowerBound) {
+                                        adjustBpm(by: -bpmStep)
+                                    }
+                                    
                                     Text("\(bpm)")
                                         .font(.system(size: 72, weight: .bold))
                                         .foregroundStyle(
@@ -136,6 +142,11 @@ struct CreateProjectView: View {
                                                 endPoint: .bottom
                                             )
                                         )
+                                        .monospacedDigit()
+                                    
+                                    bpmAdjustButton(systemImage: "plus", isEnabled: bpm < bpmRange.upperBound) {
+                                        adjustBpm(by: bpmStep)
+                                    }
                                     
                                     Text("BPM")
                                         .font(.title3.weight(.medium))
@@ -146,7 +157,7 @@ struct CreateProjectView: View {
                                 Slider(value: Binding(
                                     get: { Double(bpm) },
                                     set: { bpm = Int($0) }
-                                ), in: 40...240, step: 1)
+                                ), in: Double(bpmRange.lowerBound)...Double(bpmRange.upperBound), step: Double(bpmStep))
                                 .tint(
                                     LinearGradient(
                                         colors: [.purple, .blue, .cyan],
@@ -270,6 +281,30 @@ struct CreateProjectView: View {
             }
             tagInput = ""
         }
+    }
+
+    private func adjustBpm(by delta: Int) {
+        bpm = min(max(bpm + delta, bpmRange.lowerBound), bpmRange.upperBound)
+    }
+
+    private func bpmAdjustButton(systemImage: String, isEnabled: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            action()
+        } label: {
+            Image(systemName: systemImage)
+                .font(.headline)
+                .foregroundStyle(isEnabled ? .white : .white.opacity(0.3))
+                .frame(width: 36, height: 36)
+                .background(
+                    Circle()
+                        .fill(Color.white.opacity(isEnabled ? 0.12 : 0.05))
+                        .overlay(
+                            Circle()
+                                .stroke(Color.white.opacity(isEnabled ? 0.2 : 0.05), lineWidth: 1)
+                        )
+                )
+        }
+        .disabled(!isEnabled)
     }
     
     private func createProject() {

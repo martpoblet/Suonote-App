@@ -13,8 +13,7 @@ struct StudioTabView: View {
     @State private var showingAddTrackMenu = false
     @State private var pendingAddTrackAfterStyle = false
     @State private var selectedTrackId: UUID?
-    @State private var editingTrackId: UUID?
-    @State private var showingTrackEditor = false
+    @State private var editingTrack: StudioTrack?
     @State private var needsRebuild = true
     @State private var lastProjectSignature = ""
     @StateObject private var playback = StudioPlaybackEngine()
@@ -26,11 +25,6 @@ struct StudioTabView: View {
     private var selectedTrack: StudioTrack? {
         guard let selectedTrackId else { return nil }
         return project.studioTracks.first { $0.id == selectedTrackId }
-    }
-
-    private var editingTrack: StudioTrack? {
-        guard let editingTrackId else { return nil }
-        return project.studioTracks.first { $0.id == editingTrackId }
     }
 
     private var hasGeneratedTracks: Bool {
@@ -117,8 +111,7 @@ struct StudioTabView: View {
                             onDelete: deleteTrack,
                             onOpenEditor: { track in
                                 selectedTrackId = track.id
-                                editingTrackId = track.id
-                                showingTrackEditor = true
+                                editingTrack = track
                             }
                         )
                         StudioTrackEditorHint(
@@ -253,25 +246,23 @@ struct StudioTabView: View {
         } message: {
             Text("This will rebuild notes for the current generated tracks.")
         }
-        .fullScreenCover(isPresented: $showingTrackEditor, onDismiss: {
-            editingTrackId = nil
-        }) {
-            if let editingTrack {
-                StudioTrackEditorView(
-                    project: project,
-                    track: editingTrack,
-                    totalBars: totalBars,
-                    beatsPerBar: project.timeTop,
-                    timeBottom: project.timeBottom,
-                    style: project.studioStyle,
-                    timelineSegments: timelineSegments,
-                    playback: playback,
-                    onNotesChanged: { needsRebuild = true },
-                    onPlay: handlePlay,
-                    onPause: playback.pause,
-                    onStop: handleStop
-                )
-            }
+        .fullScreenCover(item: $editingTrack, onDismiss: {
+            editingTrack = nil
+        }) { track in
+            StudioTrackEditorView(
+                project: project,
+                track: track,
+                totalBars: totalBars,
+                beatsPerBar: project.timeTop,
+                timeBottom: project.timeBottom,
+                style: project.studioStyle,
+                timelineSegments: timelineSegments,
+                playback: playback,
+                onNotesChanged: { needsRebuild = true },
+                onPlay: handlePlay,
+                onPause: playback.pause,
+                onStop: handleStop
+            )
         }
     }
 
@@ -387,9 +378,8 @@ struct StudioTabView: View {
         }
         modelContext.delete(track)
 
-        if editingTrackId == track.id {
-            showingTrackEditor = false
-            editingTrackId = nil
+        if editingTrack?.id == track.id {
+            editingTrack = nil
         }
 
         if selectedTrackId == track.id {
@@ -744,7 +734,6 @@ struct StudioTrackEditorView: View {
 
     private var infoItems: [StudioInfoChipData] {
         let items: [StudioInfoChipData] = [
-            StudioInfoChipData(icon: "music.note.list", text: project.title),
             StudioInfoChipData(icon: "key.fill", text: keyLabel),
             StudioInfoChipData(icon: "metronome", text: "\(project.bpm) BPM"),
             StudioInfoChipData(icon: "music.quarternote.3", text: "\(project.timeTop)/\(project.timeBottom)")
@@ -836,17 +825,17 @@ struct StudioTrackEditorView: View {
                 }
             }
 
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 120), spacing: 8, alignment: .leading)],
-                spacing: 8
-            ) {
-                ForEach(infoItems) { item in
-                    StudioInfoChip(
-                        icon: item.icon,
-                        text: item.text,
-                        color: accentColor
-                    )
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(infoItems) { item in
+                        StudioInfoChip(
+                            icon: item.icon,
+                            text: item.text,
+                            color: accentColor
+                        )
+                    }
                 }
+                .padding(.vertical, 2)
             }
         }
         .padding(DesignSystem.Spacing.lg)
@@ -1694,7 +1683,7 @@ struct PitchRow: Identifiable {
                 PitchRow(pitch: 42, label: "Hat"),
                 PitchRow(pitch: 39, label: "Clap")
             ]
-        case .bass, .guitar, .synth, .piano:
+        case .bass, .guitar, .synth, .piano, .strings, .brass, .woodwinds, .organ, .mallets:
             let range = StudioGenerator.instrumentRange(
                 for: instrument,
                 style: style,

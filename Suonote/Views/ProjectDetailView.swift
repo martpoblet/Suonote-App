@@ -742,6 +742,8 @@ struct BPMSelector: View {
     private let gradientColors: [Color] = [.white, .white.opacity(0.7)]
     private let sliderGradient: [Color] = [.purple, .blue, .cyan]
     private let presets = [60, 90, 120, 140, 180]
+    private let bpmRange = 40...240
+    private let bpmStep = 1
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -767,7 +769,11 @@ struct BPMSelector: View {
     }
     
     private var bpmDisplay: some View {
-        HStack {
+        HStack(alignment: .bottom, spacing: 16) {
+            bpmAdjustButton(systemImage: "minus", isEnabled: bpm > bpmRange.lowerBound) {
+                adjustBpm(by: -bpmStep)
+            }
+            
             Text("\(bpm)")
                 .font(.system(size: 72, weight: .bold))
                 .foregroundStyle(
@@ -778,6 +784,10 @@ struct BPMSelector: View {
                     )
                 )
                 .monospacedDigit()
+            
+            bpmAdjustButton(systemImage: "plus", isEnabled: bpm < bpmRange.upperBound) {
+                adjustBpm(by: bpmStep)
+            }
             
             Text("BPM")
                 .font(.title3.weight(.medium))
@@ -790,7 +800,7 @@ struct BPMSelector: View {
         Slider(value: Binding(
             get: { Double(bpm) },
             set: { bpm = Int($0) }
-        ), in: 40...240, step: 1)
+        ), in: Double(bpmRange.lowerBound)...Double(bpmRange.upperBound), step: Double(bpmStep))
         .tint(
             LinearGradient(
                 colors: sliderGradient,
@@ -837,6 +847,30 @@ struct BPMSelector: View {
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(Color.cyan.opacity(0.3), lineWidth: 1)
             )
+    }
+
+    private func adjustBpm(by delta: Int) {
+        bpm = min(max(bpm + delta, bpmRange.lowerBound), bpmRange.upperBound)
+    }
+
+    private func bpmAdjustButton(systemImage: String, isEnabled: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            action()
+        } label: {
+            Image(systemName: systemImage)
+                .font(.headline)
+                .foregroundStyle(isEnabled ? .white : .white.opacity(0.35))
+                .frame(width: 36, height: 36)
+                .background(
+                    Circle()
+                        .fill(Color.white.opacity(isEnabled ? 0.12 : 0.05))
+                        .overlay(
+                            Circle()
+                                .stroke(Color.white.opacity(isEnabled ? 0.2 : 0.05), lineWidth: 1)
+                        )
+                )
+        }
+        .disabled(!isEnabled)
     }
 }
 

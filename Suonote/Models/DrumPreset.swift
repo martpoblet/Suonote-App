@@ -7,6 +7,12 @@ enum DrumPreset: String, Codable, CaseIterable, Identifiable {
     case sparse
     case fourOnFloor
     case offbeat
+    case shuffle
+    case swing
+    case trap
+    case breakbeat
+    case bossa
+    case latin
 
     var id: String { rawValue }
 
@@ -18,6 +24,12 @@ enum DrumPreset: String, Codable, CaseIterable, Identifiable {
         case .sparse: return "Sparse"
         case .fourOnFloor: return "4 On Floor"
         case .offbeat: return "Offbeat"
+        case .shuffle: return "Shuffle"
+        case .swing: return "Swing"
+        case .trap: return "Trap"
+        case .breakbeat: return "Breakbeat"
+        case .bossa: return "Bossa"
+        case .latin: return "Latin"
         }
     }
 
@@ -30,21 +42,21 @@ enum DrumPreset: String, Codable, CaseIterable, Identifiable {
 
         switch style {
         case .pop:
-            return [.basic, .drive, .halfTime]
+            return [.basic, .drive, .halfTime, .shuffle, .bossa]
         case .rock:
-            return [.drive, .halfTime, .basic]
+            return [.drive, .halfTime, .basic, .breakbeat, .shuffle]
         case .lofi:
-            return [.sparse, .basic, .offbeat]
+            return [.sparse, .basic, .offbeat, .swing, .bossa]
         case .edm:
-            return canFourOnFloor ? [.fourOnFloor, .offbeat, .drive] : [.offbeat, .drive, .basic]
+            return canFourOnFloor ? [.fourOnFloor, .offbeat, .drive, .trap, .breakbeat] : [.offbeat, .drive, .trap, .basic]
         case .jazz:
-            return [.sparse, .offbeat, .basic]
+            return [.swing, .sparse, .offbeat, .bossa, .shuffle]
         case .hiphop:
-            return [.drive, .halfTime, .basic]
+            return [.trap, .halfTime, .drive, .basic]
         case .funk:
-            return [.offbeat, .drive, .basic]
+            return [.offbeat, .drive, .breakbeat, .basic, .shuffle]
         case .ambient:
-            return [.sparse, .basic, .halfTime]
+            return [.sparse, .basic, .halfTime, .bossa]
         }
     }
 
