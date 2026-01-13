@@ -541,8 +541,6 @@ final class StudioTrack {
     }
 }
 
-extension StudioTrack: Identifiable {}
-
 @Model
 final class StudioNote {
     var id: UUID
