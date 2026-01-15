@@ -247,7 +247,19 @@ enum StudioInstrument: String, Codable, CaseIterable, Identifiable {
                 .tubularBells,
                 .dulcimer
             ]
-        case .drums, .audio:
+        case .drums:
+            return [
+                .standardDrumKit,
+                .roomDrumKit,
+                .powerDrumKit,
+                .electronicDrumKit,
+                .tr808DrumKit,
+                .jazzDrumKit,
+                .brushDrumKit,
+                .orchestraDrumKit,
+                .sfxDrumKit
+            ]
+        case .audio:
             return []
         }
     }
@@ -355,6 +367,17 @@ enum InstrumentVariant: String, Codable, CaseIterable {
     case xylophone = "Xylophone"
     case tubularBells = "Tubular Bells"
     case dulcimer = "Dulcimer"
+
+    // Drum variants
+    case standardDrumKit = "Standard Kit"
+    case roomDrumKit = "Room Kit"
+    case powerDrumKit = "Power Kit"
+    case electronicDrumKit = "Electronic Kit"
+    case tr808DrumKit = "TR-808 Kit"
+    case jazzDrumKit = "Jazz Kit"
+    case brushDrumKit = "Brush Kit"
+    case orchestraDrumKit = "Orchestra Kit"
+    case sfxDrumKit = "SFX Kit"
     
     var midiProgram: UInt8 {
         switch self {
@@ -459,6 +482,17 @@ enum InstrumentVariant: String, Codable, CaseIterable {
         case .xylophone: return 13
         case .tubularBells: return 14
         case .dulcimer: return 15
+
+        // Drums (GM kits on channel 10)
+        case .standardDrumKit: return 0
+        case .roomDrumKit: return 8
+        case .powerDrumKit: return 16
+        case .electronicDrumKit: return 24
+        case .tr808DrumKit: return 25
+        case .jazzDrumKit: return 32
+        case .brushDrumKit: return 40
+        case .orchestraDrumKit: return 48
+        case .sfxDrumKit: return 56
         }
     }
 }

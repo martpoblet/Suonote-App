@@ -852,7 +852,7 @@ struct StudioTrackEditorView: View {
     }
 
     private var trackControls: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Track Controls")
                     .font(.headline)
@@ -871,8 +871,8 @@ struct StudioTrackEditorView: View {
                                 .font(.caption.weight(.semibold))
                         }
                         .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
                         .background(
                             Capsule()
                                 .fill(accentColor.opacity(canRegenerate ? 0.3 : 0.15))
@@ -888,66 +888,29 @@ struct StudioTrackEditorView: View {
             }
 
             if !track.instrument.variants.isEmpty {
-                HStack {
-                    Text("Variant")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-
-                    Spacer()
-
-                    Menu {
-                        ForEach(track.instrument.variants, id: \.self) { variant in
-                            Button {
-                                track.variant = variant
-                                onNotesChanged()
-                            } label: {
-                                HStack {
-                                    Text(variant.rawValue)
-                                    if track.variant == variant {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(track.variant?.rawValue ?? track.instrument.variants.first?.rawValue ?? track.instrument.title)
-                                .font(.caption.weight(.semibold))
-                            Image(systemName: "chevron.down")
-                                .font(.caption2)
-                        }
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(
-                            Capsule()
-                                .fill(accentColor.opacity(0.2))
-                                .overlay(
-                                    Capsule()
-                                        .stroke(accentColor.opacity(0.5), lineWidth: 1)
-                                )
-                        )
-                    }
-                }
+                trackVariantPicker
             }
 
-            trackSlider(
-                icon: "speaker.wave.2.fill",
-                title: "Volume",
-                valueText: "\(Int(track.volume * 100))%",
-                value: $track.volume,
-                range: 0...1
-            )
+            // Compact mix controls so the editor has more vertical space.
+            HStack(spacing: 12) {
+                trackSliderCompact(
+                    icon: "speaker.wave.2.fill",
+                    title: "Volume",
+                    valueText: "\(Int(track.volume * 100))%",
+                    value: $track.volume,
+                    range: 0...1
+                )
 
-            trackSlider(
-                icon: "l.joystick.fill",
-                title: "Pan",
-                valueText: panLabel,
-                value: $track.pan,
-                range: -1...1
-            )
+                trackSliderCompact(
+                    icon: "l.joystick.fill",
+                    title: "Pan",
+                    valueText: panLabel,
+                    value: $track.pan,
+                    range: -1...1
+                )
+            }
         }
-        .padding(16)
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 18)
@@ -957,6 +920,50 @@ struct StudioTrackEditorView: View {
                         .stroke(accentColor.opacity(0.4), lineWidth: 1)
                 )
         )
+    }
+
+    private var trackVariantPicker: some View {
+        HStack {
+            Text("Variant")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Menu {
+                ForEach(track.instrument.variants, id: \.self) { variant in
+                    Button {
+                        track.variant = variant
+                        onNotesChanged()
+                    } label: {
+                        HStack {
+                            Text(variant.rawValue)
+                            if track.variant == variant {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Text(track.variant?.rawValue ?? track.instrument.variants.first?.rawValue ?? track.instrument.title)
+                        .font(.caption.weight(.semibold))
+                    Image(systemName: "chevron.down")
+                        .font(.caption2)
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule()
+                        .fill(accentColor.opacity(0.2))
+                        .overlay(
+                            Capsule()
+                                .stroke(accentColor.opacity(0.5), lineWidth: 1)
+                        )
+                )
+            }
+        }
     }
 
     @ViewBuilder
@@ -983,24 +990,24 @@ struct StudioTrackEditorView: View {
         }
     }
 
-    private func trackSlider(
+    private func trackSliderCompact(
         icon: String,
         title: String,
         valueText: String,
         value: Binding<Float>,
         range: ClosedRange<Float>
     ) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.caption)
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
                 Text(title)
-                    .font(.caption.weight(.medium))
+                    .font(.caption2.weight(.medium))
                     .foregroundStyle(.secondary)
                 Spacer()
                 Text(valueText)
-                    .font(.caption.monospacedDigit())
+                    .font(.caption2.monospacedDigit())
                     .foregroundStyle(.white)
             }
 
@@ -1010,6 +1017,7 @@ struct StudioTrackEditorView: View {
                     updateTrackMix()
                 }
         }
+        .frame(maxWidth: .infinity)
     }
 
     private func updateTrackMix() {
@@ -1390,9 +1398,14 @@ struct StudioNoteEditor: View {
         )
     }
 
+    // Cache row indexes by pitch to avoid repeated scans while rendering notes.
+    private var pitchRowIndexByPitch: [Int: Int] {
+        Dictionary(uniqueKeysWithValues: pitchRows.enumerated().map { ($0.element.pitch, $0.offset) })
+    }
+
     private var gridHeight: CGFloat {
         let contentHeight = CGFloat(pitchRows.count) * cellHeight
-        return min(contentHeight, 260)
+        return min(contentHeight, 360)
     }
 
     private var selectedNote: StudioNote? {
@@ -1457,7 +1470,7 @@ struct StudioNoteEditor: View {
                             )
 
                             ForEach(track.notes, id: \.id) { note in
-                                if let rowIndex = pitchRows.firstIndex(where: { $0.pitch == note.pitch }) {
+                                if let rowIndex = pitchRowIndexByPitch[note.pitch] {
                                     StudioNoteBlock(
                                         note: note,
                                         rowIndex: rowIndex,
@@ -1514,26 +1527,22 @@ struct StudioNoteEditor: View {
 
     private var octaveControl: some View {
         HStack(spacing: 6) {
-            Button {
+            octaveButton(
+                systemName: "minus",
+                isEnabled: track.octaveShift > octaveRange.lowerBound
+            ) {
                 adjustOctave(-1)
-            } label: {
-                Image(systemName: "minus")
-                    .font(.caption.weight(.bold))
-                    .frame(width: 20, height: 20)
             }
-            .disabled(track.octaveShift <= octaveRange.lowerBound)
 
             Text("Oct \(track.octaveShift >= 0 ? "+\(track.octaveShift)" : "\(track.octaveShift)")")
                 .font(.caption.weight(.semibold))
 
-            Button {
+            octaveButton(
+                systemName: "plus",
+                isEnabled: track.octaveShift < octaveRange.upperBound
+            ) {
                 adjustOctave(1)
-            } label: {
-                Image(systemName: "plus")
-                    .font(.caption.weight(.bold))
-                    .frame(width: 20, height: 20)
             }
-            .disabled(track.octaveShift >= octaveRange.upperBound)
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 10)
@@ -1543,6 +1552,24 @@ struct StudioNoteEditor: View {
                 .fill(track.instrument.color.opacity(0.2))
         )
         .buttonStyle(.plain)
+    }
+
+    private func octaveButton(
+        systemName: String,
+        isEnabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.caption.weight(.bold))
+                .frame(width: 28, height: 28)
+                .background(
+                    Circle()
+                        .fill(track.instrument.color.opacity(0.25))
+                )
+        }
+        .disabled(!isEnabled)
+        .contentShape(Circle())
     }
 
     private func handleGridTap(location: CGPoint) {
@@ -1567,7 +1594,7 @@ struct StudioNoteEditor: View {
 
     private func noteAt(location: CGPoint) -> StudioNote? {
         for note in track.notes {
-            guard let rowIndex = pitchRows.firstIndex(where: { $0.pitch == note.pitch }) else { continue }
+            guard let rowIndex = pitchRowIndexByPitch[note.pitch] else { continue }
             let x = CGFloat(note.startBeat / stepLength) * cellWidth
             let width = CGFloat(note.duration / stepLength) * cellWidth
             let y = CGFloat(rowIndex) * cellHeight
