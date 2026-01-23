@@ -136,8 +136,7 @@ struct ProjectsListView: View {
         } message: { project in
             Text("Are you sure you want to delete '\(project.title)'? This action cannot be undone.")
         }
-        .preferredColorScheme(.dark)
-    }
+            }
     
     private var customHeader: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
@@ -149,17 +148,17 @@ struct ProjectsListView: View {
             if !allProjects.isEmpty {
                 Text("\(allProjects.count) project\(allProjects.count == 1 ? "" : "s")")
                     .font(DesignSystem.Typography.callout)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
             }
             
             // Search bar con glassmorphism
             HStack(spacing: DesignSystem.Spacing.sm) {
                 Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
                 
                 TextField("Search ideas...", text: $searchText)
                     .textFieldStyle(.plain)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
                 
                 if !searchText.isEmpty {
                     Button {
@@ -168,7 +167,7 @@ struct ProjectsListView: View {
                         }
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
                     }
                 }
             }
@@ -197,7 +196,7 @@ struct ProjectsListView: View {
                 if !allTags.isEmpty {
                     Divider()
                         .frame(height: 30)
-                        .overlay(Color.white.opacity(0.2))
+                        .overlay(DesignSystem.Colors.border.opacity(0.5))
                     
                     ForEach(allTags, id: \.self) { tag in
                         ModernFilterChip(
@@ -369,10 +368,10 @@ struct ModernFilterChip: View {
                             )
                     } else {
                         RoundedRectangle(cornerRadius: 20)
-                            .fill(Color.white.opacity(0.05))
+                            .fill(DesignSystem.Colors.surfaceSecondary)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 20)
-                                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                    .stroke(DesignSystem.Colors.border, lineWidth: 1)
                             )
                     }
                 }
@@ -398,7 +397,7 @@ struct ModernProjectCard: View {
                 // Title
                 Text(project.title)
                     .font(DesignSystem.Typography.headline)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
                     .lineLimit(1)
                 
                 // Metadata
@@ -414,7 +413,7 @@ struct ModernProjectCard: View {
                             .font(DesignSystem.Typography.caption)
                     }
                 }
-                .foregroundStyle(.secondary)
+                .foregroundStyle(DesignSystem.Colors.textSecondary)
                 
                 // Tags
                 if !project.tags.isEmpty {
@@ -431,7 +430,7 @@ struct ModernProjectCard: View {
                         if project.tags.count > 2 {
                             Text("+\(project.tags.count - 2)")
                                 .font(DesignSystem.Typography.caption2)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(DesignSystem.Colors.textSecondary)
                         }
                     }
                 }
@@ -442,13 +441,12 @@ struct ModernProjectCard: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white.opacity(0.05))
+                .fill(DesignSystem.Colors.surfaceSecondary)
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                        .stroke(DesignSystem.Colors.border, lineWidth: 1)
                 )
         )
-        .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
     }
     
     private var statusColor: Color {
@@ -505,12 +503,11 @@ struct FloatingActionButton: View {
                         )
                     )
                     .frame(width: 64, height: 64)
-                    .shadow(color: Color.purple.opacity(0.5), radius: 20, x: 0, y: 10)
                 
                 Image(systemName: "plus")
                     .font(DesignSystem.Typography.sm)
                     .fontWeight(.bold)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
             }
         }
         .scaleEffect(1.0)
@@ -545,9 +542,13 @@ struct FilterChip: View {
                 .font(DesignSystem.Typography.subheadline)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(isSelected ? Color.accentColor : Color(uiColor: .secondarySystemBackground))
-                .foregroundStyle(isSelected ? .white : .primary)
+                .background(isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.surface)
+                .foregroundStyle(isSelected ? .white : DesignSystem.Colors.textPrimary)
                 .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(isSelected ? Color.clear : DesignSystem.Colors.border, lineWidth: 1)
+                )
         }
     }
 }
@@ -560,7 +561,7 @@ struct ProjectCardView: View {
             HStack {
                 Text(project.title)
                     .font(DesignSystem.Typography.headline)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
                 
                 Spacer()
                 
@@ -571,17 +572,17 @@ struct ProjectCardView: View {
                 if !project.keyRoot.isEmpty {
                     Label("\(project.keyRoot) \(project.keyMode.rawValue)", systemImage: "music.note")
                         .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
                 
                 Label("\(project.bpm) BPM", systemImage: "metronome")
                     .font(DesignSystem.Typography.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
                 
                 if project.recordingsCount > 0 {
                     Label("\(project.recordingsCount) takes", systemImage: "waveform")
                         .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
             }
             
@@ -598,17 +599,17 @@ struct ProjectCardView: View {
                     if project.tags.count > 3 {
                         Text("+\(project.tags.count - 3)")
                             .font(DesignSystem.Typography.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
                     }
                 }
             }
             
             Text("Edited \(project.updatedAt.timeAgo())")
                 .font(DesignSystem.Typography.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(DesignSystem.Colors.textTertiary)
         }
         .padding()
-        .background(Color(uiColor: .secondarySystemBackground))
+        .background(DesignSystem.Colors.surface)
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }

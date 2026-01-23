@@ -18,7 +18,7 @@ final class SectionTemplate {
     
     // Computed property: Color from hex string
     var color: Color {
-        Color(hex: colorHex ?? "#A855F7") ?? SectionColor.purple.color
+        Color(hex: colorHex ?? "#6B7B6B") ?? SectionColor.sage.color
     }
     
     // Computed property: total beats in the section
@@ -45,7 +45,7 @@ final class SectionTemplate {
         patternPreset: PatternPreset = .simple,
         lyricsText: String = "",
         notesText: String = "",
-        colorHex: String = "#A855F7"  // Default purple
+        colorHex: String = "#6B7B6B"  // Default sage
     ) {
         self.id = UUID()
         self.name = name
@@ -65,35 +65,45 @@ enum PatternPreset: String, Codable, CaseIterable {
     case custom = "Custom"
 }
 
-// MARK: - Section Colors
+// MARK: - Section Colors (Muted palette for light mode)
 enum SectionColor: String, CaseIterable, Identifiable {
-    case purple = "Purple"
-    case blue = "Blue"
-    case cyan = "Cyan"
-    case green = "Green"
-    case yellow = "Yellow"
-    case orange = "Orange"
-    case red = "Red"
-    case pink = "Pink"
-    
+    case sage = "Sage"
+    case ocean = "Ocean"
+    case sky = "Sky"
+    case moss = "Moss"
+    case sand = "Sand"
+    case coral = "Coral"
+    case berry = "Berry"
+    case lavender = "Lavender"
+
     var id: String { rawValue }
-    
+
     var hex: String {
         switch self {
-        case .purple: return "#A855F7"
-        case .blue: return "#3B82F6"
-        case .cyan: return "#06B6D4"
-        case .green: return "#10B981"
-        case .yellow: return "#F59E0B"
-        case .orange: return "#F97316"
-        case .red: return "#EF4444"
-        case .pink: return "#EC4899"
+        case .sage: return "#6B7B6B"      // Sage green (primary)
+        case .ocean: return "#4A6FA5"     // Muted blue
+        case .sky: return "#5B9EA6"       // Teal
+        case .moss: return "#7A9A7A"      // Soft green
+        case .sand: return "#B8A07A"      // Warm beige
+        case .coral: return "#C47D6D"     // Muted coral
+        case .berry: return "#8B6B8B"     // Muted purple
+        case .lavender: return "#9B8BB5"  // Soft lavender
         }
     }
-    
+
     var color: Color {
-        Color(hex: hex) ?? .purple
+        Color(hex: hex) ?? .gray
     }
+
+    // Legacy mapping
+    static var purple: SectionColor { .berry }
+    static var blue: SectionColor { .ocean }
+    static var cyan: SectionColor { .sky }
+    static var green: SectionColor { .moss }
+    static var yellow: SectionColor { .sand }
+    static var orange: SectionColor { .coral }
+    static var red: SectionColor { .coral }
+    static var pink: SectionColor { .lavender }
 }
 
 // MARK: - Color Extension

@@ -199,10 +199,10 @@ struct StudioDrumEditor: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Drum Groove")
                     .font(DesignSystem.Typography.headline)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
                 Text("Tap to toggle · Long press for ghost/normal/accent")
                     .font(DesignSystem.Typography.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
             }
 
             Spacer()
@@ -210,7 +210,7 @@ struct StudioDrumEditor: View {
             VStack(alignment: .trailing, spacing: 6) {
                 Text("\(beatsPerBar)/\(timeBottom) · \(stepsPerBeat)x grid")
                     .font(DesignSystem.Typography.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
 
                 HStack(spacing: 8) {
                     Menu {
@@ -245,7 +245,7 @@ struct StudioDrumEditor: View {
                             Text(copyLabel)
                         }
                         .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                         .background(
@@ -262,7 +262,7 @@ struct StudioDrumEditor: View {
                             Text("Clear")
                         }
                         .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                         .background(
@@ -502,7 +502,7 @@ struct DrumLabelColumn: View {
                         .frame(width: 8, height: 8)
                     Text(lane.name)
                         .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                 }
                 .frame(height: rowHeight)
                 .frame(width: columnWidth, alignment: .trailing)
@@ -563,7 +563,7 @@ struct DrumBarRuler: View {
                 HStack(spacing: 6) {
                     Text("Bar \(bar + 1)")
                         .font(DesignSystem.Typography.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
                     Spacer()
                 }
                 .frame(width: barWidth, alignment: .leading)
@@ -708,7 +708,7 @@ struct DrumVelocityLegend: View {
             legendItem(title: "Accent", opacity: 0.95)
         }
         .font(DesignSystem.Typography.caption2)
-        .foregroundStyle(.secondary)
+        .foregroundStyle(DesignSystem.Colors.textSecondary)
     }
 
     private func legendItem(title: String, opacity: Double) -> some View {

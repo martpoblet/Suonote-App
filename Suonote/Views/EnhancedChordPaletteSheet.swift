@@ -46,7 +46,7 @@ struct EnhancedChordPaletteSheet: View {
             }
         }
         .background(DesignSystem.Colors.backgroundSecondary)
-        .preferredColorScheme(.dark)
+        
     }
     
     // MARK: - Header
@@ -56,7 +56,7 @@ struct EnhancedChordPaletteSheet: View {
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxs) {
                 Text("Chord Palette")
                     .font(DesignSystem.Typography.title2)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
                 
                 HStack(spacing: DesignSystem.Spacing.xs) {
                     Image(systemName: DesignSystem.Icons.key)
@@ -64,7 +64,7 @@ struct EnhancedChordPaletteSheet: View {
                     Text("\(project.keyRoot) \(project.keyMode == .major ? "Major" : "Minor")")
                         .font(DesignSystem.Typography.caption)
                 }
-                .foregroundStyle(.secondary)
+                .foregroundStyle(DesignSystem.Colors.textSecondary)
             }
             
             Spacer()
@@ -74,7 +74,7 @@ struct EnhancedChordPaletteSheet: View {
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(DesignSystem.Typography.title2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
             }
         }
         .padding(DesignSystem.Spacing.lg)
@@ -134,7 +134,7 @@ struct EnhancedChordPaletteSheet: View {
                     .foregroundStyle(DesignSystem.Colors.accent)
                 Text("Smart Suggestions")
                     .font(DesignSystem.Typography.title3)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
             }
             
             let suggestions = ChordSuggestionEngine.suggestNextChord(
@@ -165,7 +165,7 @@ struct EnhancedChordPaletteSheet: View {
                 HStack {
                     Text(suggestion.display)
                         .font(DesignSystem.Typography.title3)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                     
                     Spacer()
                     
@@ -196,7 +196,7 @@ struct EnhancedChordPaletteSheet: View {
                 
                 Text(suggestion.reason)
                     .font(DesignSystem.Typography.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
                     .lineLimit(2)
                 
                 // Confidence stars
@@ -226,7 +226,7 @@ struct EnhancedChordPaletteSheet: View {
                     .foregroundStyle(DesignSystem.Colors.primary)
                 Text("Popular Progressions")
                     .font(DesignSystem.Typography.title3)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
             }
             
             let progressions = ChordSuggestionEngine.popularProgressions(
@@ -246,13 +246,13 @@ struct EnhancedChordPaletteSheet: View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
             Text(progression.name)
                 .font(DesignSystem.Typography.caption)
-                .foregroundStyle(.white)
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
             
             HStack(spacing: DesignSystem.Spacing.xs) {
                 ForEach(progression.progression.prefix(4)) { chord in
                     Text(chord.display)
                         .font(DesignSystem.Typography.caption2)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                         .padding(.horizontal, DesignSystem.Spacing.sm)
                         .padding(.vertical, DesignSystem.Spacing.xxs)
                         .background(
@@ -274,7 +274,7 @@ struct EnhancedChordPaletteSheet: View {
                     .foregroundStyle(DesignSystem.Colors.secondary)
                 Text("Add Color")
                     .font(DesignSystem.Typography.title3)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
             }
             
             let extensions = ChordSuggestionEngine.commonExtensions(
@@ -355,11 +355,11 @@ struct EnhancedChordPaletteSheet: View {
             VStack(spacing: DesignSystem.Spacing.xxs) {
                 Text(selectedRoot + quality.symbol)
                     .font(DesignSystem.Typography.bodyBold)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
                 
                 Text(quality.displayName)
                     .font(DesignSystem.Typography.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity)
@@ -394,7 +394,7 @@ struct EnhancedChordPaletteSheet: View {
                     .foregroundStyle(DesignSystem.Colors.info)
                 Text("Progression Analysis")
                     .font(DesignSystem.Typography.title3)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
             }
             
             // Stats
@@ -419,14 +419,14 @@ struct EnhancedChordPaletteSheet: View {
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                     Text("Progression")
                         .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
                     
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: DesignSystem.Spacing.xs) {
                             ForEach(analysis.romanNumerals, id: \.self) { numeral in
                                 Text(numeral)
                                     .font(DesignSystem.Typography.caption)
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(DesignSystem.Colors.textPrimary)
                                     .padding(.horizontal, DesignSystem.Spacing.sm)
                                     .padding(.vertical, DesignSystem.Spacing.xxs)
                                     .glassStyle(cornerRadius: DesignSystem.CornerRadius.sm)
@@ -449,7 +449,7 @@ struct EnhancedChordPaletteSheet: View {
             
             Text(title)
                 .font(DesignSystem.Typography.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(DesignSystem.Colors.textSecondary)
         }
         .frame(maxWidth: .infinity)
         .padding(DesignSystem.Spacing.md)
@@ -463,12 +463,12 @@ struct EnhancedChordPaletteSheet: View {
                     .foregroundStyle(DesignSystem.Colors.accent)
                 Text("Scale Suggestions")
                     .font(DesignSystem.Typography.title3)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
             }
             
             Text("Notes in \(project.keyRoot) \(project.keyMode == .major ? "Major" : "Minor")")
                 .font(DesignSystem.Typography.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(DesignSystem.Colors.textSecondary)
             
             let scaleNotes = NoteUtils.scaleNotes(
                 root: project.keyRoot,
@@ -479,7 +479,7 @@ struct EnhancedChordPaletteSheet: View {
                 ForEach(scaleNotes, id: \.self) { note in
                     Text(note)
                         .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                         .frame(width: 36, height: 36)
                         .background(
                             Circle()
@@ -505,11 +505,11 @@ struct EnhancedChordPaletteSheet: View {
             VStack(spacing: DesignSystem.Spacing.xxs) {
                 Text(suggestion.display)
                     .font(DesignSystem.Typography.callout)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
                 
                 Text(suggestion.quality.displayName)
                     .font(DesignSystem.Typography.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity)

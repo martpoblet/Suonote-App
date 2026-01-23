@@ -61,7 +61,7 @@ private struct PianoChordDiagram: View {
         VStack(spacing: 12) {
             Text("Piano")
                 .font(DesignSystem.Typography.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(DesignSystem.Colors.textSecondary)
             
             GeometryReader { geometry in
                 let keyWidth = geometry.size.width / 7
@@ -146,7 +146,7 @@ private struct GuitarChordDiagram: View {
         VStack(spacing: 12) {
             Text("Guitar")
                 .font(DesignSystem.Typography.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(DesignSystem.Colors.textSecondary)
             
             VStack(spacing: 0) {
                 // String markers (X or O)
@@ -310,7 +310,7 @@ private struct ChordNoteChips: View {
         HStack(spacing: 8) {
             Text(display)
                 .font(.headline)
-                .foregroundStyle(.white)
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 .background(
@@ -327,7 +327,7 @@ private struct ChordNoteChips: View {
             ForEach(notes, id: \.self) { note in
                 Text(note)
                     .font(DesignSystem.Typography.caption)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(
@@ -389,6 +389,6 @@ private enum ChordNoteCalculator {
 
 #Preview {
     ChordDiagramView(root: "C", quality: .major, extensions: [], accentColor: .purple)
-        .preferredColorScheme(.dark)
+        
         .background(Color.black)
 }

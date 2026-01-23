@@ -167,17 +167,17 @@ struct RecordingsTabView: View {
                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxxs) {
                         Text("Start Recording")
                             .font(DesignSystem.Typography.body)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
                         
                         Text("Take \(project.recordings.count + 1) • \(selectedRecordingType.rawValue)")
                             .font(DesignSystem.Typography.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
                     }
                     
                     Spacer()
                     
                     Image(systemName: "chevron.right")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
                 .padding(DesignSystem.Spacing.md)
                 .background(
@@ -204,7 +204,7 @@ struct RecordingsTabView: View {
             HStack {
                 Text("Takes")
                     .font(DesignSystem.Typography.title3)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
                 
                 Badge("\(recordings.count)", color: DesignSystem.Colors.surface)
                 
@@ -275,7 +275,7 @@ struct RecordingsTabView: View {
                         Text("Filter")
                             .font(DesignSystem.Typography.caption)
                     }
-                    .foregroundStyle(.white)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
                     .frame(width: 70, height: 60)
                     .background(
                         RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
@@ -522,16 +522,15 @@ struct ModernTakeCard: View {
                             LinearGradient(colors: [recording.recordingType.color.opacity(0.3), recording.recordingType.color.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing)
                     )
                     .frame(width: 56, height: 56)
-                    .shadow(color: isPlaying ? Color.green.opacity(0.3) : recording.recordingType.color.opacity(0.2), radius: 8)
                 
                 if isPlaying {
                     Image(systemName: "pause.fill")
                         .font(DesignSystem.Typography.title3)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                 } else {
                     Image(systemName: "play.fill")
                         .font(DesignSystem.Typography.title3)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                         .offset(x: 2)
                 }
             }
@@ -544,7 +543,7 @@ struct ModernTakeCard: View {
                 HStack(spacing: 8) {
                     Text(recording.name)
                         .font(DesignSystem.Typography.headline)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                     
                     Image(systemName: recording.recordingType.icon)
                         .font(DesignSystem.Typography.caption)
@@ -575,13 +574,13 @@ struct ModernTakeCard: View {
                                 Text("Link Section")
                                     .font(DesignSystem.Typography.caption)
                             }
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(
                                 Capsule()
-                                    .fill(Color.white.opacity(0.05))
-                                    .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 1))
+                                    .fill(DesignSystem.Colors.surfaceSecondary)
+                                    .overlay(Capsule().stroke(DesignSystem.Colors.border.opacity(0.5), lineWidth: 1))
                             )
                         }
                         .buttonStyle(.plain)
@@ -617,7 +616,7 @@ struct ModernTakeCard: View {
                     Text(recording.createdAt.formatted(date: .abbreviated, time: .shortened))
                         .font(DesignSystem.Typography.caption)
                 }
-                .foregroundStyle(.secondary)
+                .foregroundStyle(DesignSystem.Colors.textSecondary)
             }
             
             Spacer()
@@ -643,7 +642,7 @@ struct ModernTakeCard: View {
         } else if isPlaying {
             return .green.opacity(0.5)
         } else {
-            return Color.white.opacity(0.1)
+            return DesignSystem.Colors.border
         }
     }
     
@@ -685,7 +684,7 @@ struct MiniWaveformView: View {
         HStack(spacing: 1) {
             ForEach(0..<20, id: \.self) { _ in
                 RoundedRectangle(cornerRadius: 1)
-                    .fill(Color.white.opacity(0.3))
+                    .fill(DesignSystem.Colors.textMuted)
                     .frame(width: 2, height: CGFloat.random(in: 4...20))
             }
         }
@@ -707,7 +706,7 @@ struct SectionLinkSheet: View {
                 VStack(spacing: 8) {
                     Text(recording.name)
                         .font(DesignSystem.Typography.headline)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                     
                     HStack(spacing: 6) {
                         Image(systemName: recording.recordingType.icon)
@@ -724,16 +723,16 @@ struct SectionLinkSheet: View {
                     VStack(spacing: 20) {
                         Image(systemName: "music.note.list")
                             .font(DesignSystem.Typography.jumbo)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
                         
                         VStack(spacing: 8) {
                             Text("No sections available")
                                 .font(DesignSystem.Typography.headline)
-                                .foregroundStyle(.white)
+                                .foregroundStyle(DesignSystem.Colors.textPrimary)
                             
                             Text("Create sections in Compose first")
                                 .font(DesignSystem.Typography.subheadline)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(DesignSystem.Colors.textSecondary)
                                 .multilineTextAlignment(.center)
                         }
                     }
@@ -750,20 +749,20 @@ struct SectionLinkSheet: View {
                                     VStack(spacing: 8) {
                                         Text(section.name)
                                             .font(.subheadline)
-                                            .foregroundStyle(.white)
+                                            .foregroundStyle(DesignSystem.Colors.textPrimary)
                                         
                                         Text("\(section.bars) bars")
                                             .font(DesignSystem.Typography.caption)
-                                            .foregroundStyle(.secondary)
+                                            .foregroundStyle(DesignSystem.Colors.textSecondary)
                                     }
                                     .frame(maxWidth: .infinity)
                                     .frame(height: 80)
                                     .background(
                                         RoundedRectangle(cornerRadius: 16)
-                                            .fill(recording.linkedSectionId == section.id ? Color.purple.opacity(0.2) : Color.white.opacity(0.05))
+                                            .fill(recording.linkedSectionId == section.id ? Color.purple.opacity(0.2) : DesignSystem.Colors.surfaceSecondary)
                                             .overlay(
                                                 RoundedRectangle(cornerRadius: 16)
-                                                    .stroke(recording.linkedSectionId == section.id ? Color.purple : Color.white.opacity(0.1), lineWidth: recording.linkedSectionId == section.id ? 2 : 1)
+                                                    .stroke(recording.linkedSectionId == section.id ? Color.purple : DesignSystem.Colors.border, lineWidth: recording.linkedSectionId == section.id ? 2 : 1)
                                             )
                                     )
                                 }
@@ -785,7 +784,7 @@ struct SectionLinkSheet: View {
                                     
                                     Text("Remove Link")
                                         .font(.subheadline)
-                                        .foregroundStyle(.white)
+                                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                                 }
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 50)
@@ -809,15 +808,7 @@ struct SectionLinkSheet: View {
             }
             .padding(.vertical, 24)
             .background(
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.05, green: 0.05, blue: 0.15),
-                        Color(red: 0.1, green: 0.05, blue: 0.2),
-                        Color.black
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
+                DesignSystem.Colors.background
             )
             .navigationTitle("Link to Section")
             .navigationBarTitleDisplayMode(.inline)
@@ -827,8 +818,7 @@ struct SectionLinkSheet: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
-        .presentationDetents([.height(600)])
+                .presentationDetents([.height(600)])
     }
 }
 
@@ -872,5 +862,4 @@ struct FilterChipView: View {
     
     return RecordingsTabView(project: project)
         .modelContainer(container)
-        .preferredColorScheme(.dark)
-}
+        }

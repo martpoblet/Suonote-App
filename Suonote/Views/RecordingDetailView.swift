@@ -54,7 +54,7 @@ struct RecordingDetailView: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
+        
         .presentationDetents([.large])
         .sheet(isPresented: $showingTypePicker) {
             RecordingTypePickerSheet(selectedType: Binding(
@@ -102,11 +102,11 @@ struct RecordingDetailView: View {
                     Text(recording.name)
                         .font(DesignSystem.Typography.title3)
                         .fontWeight(.bold)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                     
                     Text(formatDuration(recording.duration))
                         .font(DesignSystem.Typography.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
                 
                 Spacer()
@@ -126,18 +126,18 @@ struct RecordingDetailView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Basic Info")
                 .font(DesignSystem.Typography.headline)
-                .foregroundStyle(.white)
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
             
             // Name
             VStack(alignment: .leading, spacing: 8) {
                 Text("Name")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
                 
                 HStack {
                     TextField("Recording name", text: $tempName)
                         .textFieldStyle(.plain)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                         .onChange(of: tempName) { _, newValue in
                             recording.name = newValue
                         }
@@ -169,7 +169,7 @@ struct RecordingDetailView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Recording Type")
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
                         
                         HStack(spacing: 8) {
                             Image(systemName: recording.recordingType.icon)
@@ -182,7 +182,7 @@ struct RecordingDetailView: View {
                     Spacer()
                     
                     Image(systemName: "chevron.right")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
                 .padding(12)
                 .background(
@@ -206,7 +206,7 @@ struct RecordingDetailView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Audio Effects")
                 .font(DesignSystem.Typography.headline)
-                .foregroundStyle(.white)
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
             
             // Reverb
             EffectToggle(
@@ -334,12 +334,12 @@ struct RecordingDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Link to Section")
                 .font(DesignSystem.Typography.headline)
-                .foregroundStyle(.white)
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
             
             if sections.isEmpty {
                 Text("No sections available")
                     .font(DesignSystem.Typography.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 20)
             } else {
@@ -381,9 +381,9 @@ struct RecordingDetailView: View {
                                     
                                     Text("\(section.bars) bars")
                                         .font(DesignSystem.Typography.caption2)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(DesignSystem.Colors.textSecondary)
                                 }
-                                .foregroundStyle(.white)
+                                .foregroundStyle(DesignSystem.Colors.textPrimary)
                                 .frame(width: 100, height: 80)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
@@ -473,7 +473,7 @@ struct EffectToggle<Content: View>: View {
                         .foregroundStyle(color)
                     Text(title)
                         .font(.subheadline)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                 }
             }
             .tint(color)
@@ -505,11 +505,11 @@ struct EffectSlider: View {
             HStack {
                 Text(title)
                     .font(DesignSystem.Typography.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
                 Spacer()
                 Text(String(format: format, value))
                     .font(.caption.monospacedDigit())
-                    .foregroundStyle(.white)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
             }
             
             Slider(value: $value, in: range)

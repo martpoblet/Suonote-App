@@ -1,49 +1,37 @@
 import SwiftUI
 
 // MARK: - App Typography
-/// Piazzolla: Títulos y display
-/// Manrope: Body y textos pequeños
+/// Piazzolla: Títulos, headlines, display, chord names
+/// Manrope: Body, captions, UI elements
 
 struct AppFonts {
-    // Los nombres PostScript de las fuentes variables de Google Fonts
     static let piazzolla = "Piazzolla"
     static let manrope = "Manrope"
 
-    /// Debug: Imprime todas las fuentes instaladas para encontrar los nombres correctos
-    static func printAvailableFonts() {
-        print("\n=== FUENTES DISPONIBLES ===")
-        for family in UIFont.familyNames.sorted() {
-            print("\nFamily: \(family)")
-            for name in UIFont.fontNames(forFamilyName: family) {
-                print("  → \(name)")
-            }
-        }
-        print("\n===========================\n")
-    }
-
-    /// Verifica si las fuentes están cargadas
     static func checkFonts() {
+        #if DEBUG
         let piazzollaOK = UIFont(name: piazzolla, size: 12) != nil
         let manropeOK = UIFont(name: manrope, size: 12) != nil
         print("Piazzolla: \(piazzollaOK ? "✓" : "✗")")
         print("Manrope: \(manropeOK ? "✓" : "✗")")
-
-        if !piazzollaOK || !manropeOK {
-            print("\n⚠️ Alguna fuente no carga. Ejecuta AppFonts.printAvailableFonts() para ver los nombres correctos")
-        }
+        #endif
     }
 }
 
 // MARK: - Font Extension
 extension Font {
 
-    // MARK: - Primary (Piazzolla) - Títulos
+    // MARK: - Piazzolla (Primary - Titles & Display)
 
     static func piazzolla(_ size: CGFloat) -> Font {
         .custom(AppFonts.piazzolla, size: size)
     }
 
-    // MARK: - Secondary (Manrope) - Body
+    static func piazzollaItalic(_ size: CGFloat) -> Font {
+        .custom(AppFonts.piazzolla, size: size).italic()
+    }
+
+    // MARK: - Manrope (Secondary - Body & UI)
 
     static func manrope(_ size: CGFloat) -> Font {
         .custom(AppFonts.manrope, size: size)
@@ -71,9 +59,12 @@ extension Font {
     static var delightTitle2: Font { piazzolla(22) }
     static var delightTitle3: Font { piazzolla(20) }
 
+    // MARK: - Headline (Piazzolla for emphasis)
+
+    static var delightHeadline: Font { piazzolla(17) }
+
     // MARK: - Body Sizes (Manrope)
 
-    static var delightHeadline: Font { manrope(17) }
     static var delightSubheadline: Font { manrope(15) }
     static var delightBody: Font { manrope(15) }
     static var delightBodyBold: Font { manrope(15) }
@@ -93,8 +84,8 @@ extension Font {
 
     static func app(size: CGFloat) -> Font { piazzolla(size) }
     static func delight(size: CGFloat) -> Font { piazzolla(size) }
-    static func appItalic(size: CGFloat) -> Font { piazzolla(size).italic() }
-    static func delightItalic(size: CGFloat) -> Font { piazzolla(size).italic() }
+    static func appItalic(size: CGFloat) -> Font { piazzollaItalic(size) }
+    static func delightItalic(size: CGFloat) -> Font { piazzollaItalic(size) }
     static func primary(size: CGFloat) -> Font { piazzolla(size) }
     static func secondary(size: CGFloat) -> Font { manrope(size) }
 }

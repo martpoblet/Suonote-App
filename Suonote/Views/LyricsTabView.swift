@@ -72,12 +72,12 @@ struct LyricsSectionCard: View {
                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxs) {
                         Text(section.name)
                             .font(DesignSystem.Typography.title3)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
                         
                         if usageCount > 1 {
                             Text("Used \(usageCount) times")
                                 .font(DesignSystem.Typography.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(DesignSystem.Colors.textSecondary)
                         }
                     }
                     
@@ -85,14 +85,14 @@ struct LyricsSectionCard: View {
                     
                     Image(systemName: "chevron.right")
                         .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
                 
                 // Lyrics preview
                 if !section.lyricsText.isEmpty {
                     Text(section.lyricsText)
                         .font(DesignSystem.Typography.body)
-                        .foregroundStyle(.white.opacity(0.8))
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                         .lineLimit(3)
                         .padding(DesignSystem.Spacing.md)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -104,11 +104,11 @@ struct LyricsSectionCard: View {
                     HStack {
                         Image(systemName: "text.cursor")
                             .font(DesignSystem.Typography.title2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
                         
                         Text("No lyrics yet")
                             .font(DesignSystem.Typography.callout)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, DesignSystem.Spacing.xl)
@@ -138,17 +138,9 @@ struct ImmersiveLyricsEditor: View {
     
     var body: some View {
         ZStack {
-            // Gradient background
-            LinearGradient(
-                colors: [
-                    Color(red: 0.15, green: 0.05, blue: 0.2),
-                    Color(red: 0.05, green: 0.05, blue: 0.15),
-                    Color.black
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            // Background
+            DesignSystem.Colors.background
+                .ignoresSafeArea()
             
             VStack(spacing: 0) {
                 // Header
@@ -161,7 +153,7 @@ struct ImmersiveLyricsEditor: View {
                             Text("Back")
                         }
                         .font(DesignSystem.Typography.body)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                     }
                     .animatedPress()
                     
@@ -169,7 +161,7 @@ struct ImmersiveLyricsEditor: View {
                     
                     Text(section.name)
                         .font(DesignSystem.Typography.body)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                     
                     Spacer()
                     
@@ -189,18 +181,18 @@ struct ImmersiveLyricsEditor: View {
                         VStack(spacing: DesignSystem.Spacing.md) {
                             Image(systemName: "text.quote")
                                 .font(DesignSystem.Typography.jumbo)
-                                .foregroundStyle(.white.opacity(0.1))
+                                .foregroundStyle(DesignSystem.Colors.textPrimary)
 
-                            Text("Start writing your lyrics...")
+                            Text("Start writing your lyrics..")
                                 .font(DesignSystem.Typography.title3)
-                                .foregroundStyle(.white.opacity(0.3))
+                                .foregroundStyle(DesignSystem.Colors.textPrimary)
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                     
                     TextEditor(text: $section.lyricsText)
                         .font(DesignSystem.Typography.title3)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                         .scrollContentBackground(.hidden)
                         .focused($isTextEditorFocused)
                         .padding(.horizontal, DesignSystem.Spacing.xl)
@@ -212,7 +204,7 @@ struct ImmersiveLyricsEditor: View {
                 HStack(spacing: DesignSystem.Spacing.lg) {
                     Text("\(section.lyricsText.count) characters")
                         .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
                     
                     Spacer()
                     
@@ -235,8 +227,7 @@ struct ImmersiveLyricsEditor: View {
                 )
             }
         }
-        .preferredColorScheme(.dark)
-        .onAppear {
+                .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 isTextEditorFocused = true
             }
@@ -261,5 +252,4 @@ struct ImmersiveLyricsEditor: View {
     
     return LyricsTabView(project: project)
         .modelContainer(container)
-        .preferredColorScheme(.dark)
-}
+        }

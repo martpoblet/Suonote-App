@@ -38,11 +38,11 @@ struct ExportView: View {
                             Text("Export Project")
                                 .font(DesignSystem.Typography.title)
                                 .fontWeight(.bold)
-                                .foregroundStyle(.white)
+                                .foregroundStyle(DesignSystem.Colors.textPrimary)
                             
                             Text(project.title)
                                 .font(DesignSystem.Typography.subheadline)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(DesignSystem.Colors.textSecondary)
                         }
                         .padding(.top, 20)
                         
@@ -89,7 +89,7 @@ struct ExportView: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
+        
         .sheet(isPresented: $showingShareSheet) {
             if let item = shareItem {
                 ShareSheet(items: [item.url])
@@ -145,11 +145,11 @@ struct ExportOptionCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
                         .font(DesignSystem.Typography.headline)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                     
                     Text(subtitle)
                         .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
                         .multilineTextAlignment(.leading)
                 }
                 

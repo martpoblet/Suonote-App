@@ -89,7 +89,7 @@ struct ChordPaletteView: View {
                 .frame(maxWidth: .infinity)
                 .padding()
                 .background(Color.accentColor)
-                .foregroundStyle(.white)
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
         }
     }

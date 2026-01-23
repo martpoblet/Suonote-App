@@ -78,7 +78,7 @@ struct TempoPreviewButton: View {
                 Text(previewer.isPlaying ? "Stop" : label)
             }
             .font(DesignSystem.Typography.caption)
-            .foregroundStyle(.white)
+            .foregroundStyle(DesignSystem.Colors.textPrimary)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(

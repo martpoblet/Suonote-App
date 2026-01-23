@@ -63,7 +63,7 @@ struct ComposeTabView: View {
             /// Barra superior con controles de exportar, tonalidad, BPM, etc.
             topControlsBar
             
-            Divider().overlay(Color.white.opacity(0.1))
+            Divider().overlay(DesignSystem.Colors.border)
             
             // MARK: Content Area
             if project.arrangementItems.isEmpty {
@@ -224,11 +224,12 @@ struct ComposeTabView: View {
             } label: {
                 Image(systemName: DesignSystem.Icons.export)
                     .font(DesignSystem.Typography.title3)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
                     .padding(DesignSystem.Spacing.xs)
                     .background(
                         Circle()
-                            .fill(DesignSystem.Colors.surface)
+                            .fill(DesignSystem.Colors.surfaceSecondary)
+                            .overlay(Circle().stroke(DesignSystem.Colors.border, lineWidth: 1))
                     )
             }
             .buttonStyle(.haptic(.light))
@@ -274,13 +275,13 @@ struct ComposeTabView: View {
                 Text("Arrangement")
                     .font(DesignSystem.Typography.title3)
                     .fontWeight(.bold)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
                 
                 Spacer()
                 
                 Text("\(project.arrangementItems.count) sections")
                     .font(DesignSystem.Typography.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
             }
             
             ScrollView(.horizontal, showsIndicators: false) {
@@ -430,23 +431,28 @@ struct ComposeTabView: View {
         
         return VStack(alignment: .leading, spacing: DesignSystem.Spacing.lg) {
             HStack {
+                // Color dot indicator
+                Circle()
+                    .fill(sectionColor)
+                    .frame(width: 12, height: 12)
+                
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxs) {
                     Text(section.name)
                         .font(DesignSystem.Typography.title2)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                     
                     HStack(spacing: DesignSystem.Spacing.sm) {
                         Text("\(section.bars) bars × \(project.timeTop)/\(project.timeBottom)")
                             .font(DesignSystem.Typography.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
                         
                         Text("•")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
                         
                         Text("\(completionPercentage)% filled")
                             .font(DesignSystem.Typography.caption)
                             .foregroundStyle(completionPercentage > 80 ? DesignSystem.Colors.success : 
-                                           completionPercentage > 50 ? DesignSystem.Colors.warning : .secondary)
+                                           completionPercentage > 50 ? DesignSystem.Colors.warning : DesignSystem.Colors.textSecondary)
                     }
                 }
                 
@@ -478,10 +484,10 @@ struct ComposeTabView: View {
         .padding(DesignSystem.Spacing.lg)
         .background(
             RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
-                .fill(sectionColor.opacity(0.2))
+                .fill(DesignSystem.Colors.surface)
                 .overlay(
                     RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
-                        .stroke(sectionColor.opacity(0.3), lineWidth: 2)
+                        .stroke(sectionColor, lineWidth: 2)
                 )
         )
     }
@@ -522,13 +528,13 @@ struct ComposeTabView: View {
                     
                     Text("Linked Recordings (\(recordings.count))")
                         .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                     
                     Spacer()
                     
                     Image(systemName: isExpanded ? "chevron.up.circle.fill" : "chevron.down.circle.fill")
                         .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
             }
             .buttonStyle(.plain)
@@ -614,62 +620,76 @@ struct SectionTimelineCard: View {
             haptic(.selection)
             onSelect()
         }) {
-            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
                 HStack {
-                    // Section number badge
+                    // Section number
                     Text("\(index + 1)")
                         .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(.white)
-                        .frame(width: 24, height: 24)
-                        .background(Circle().fill(sectionColor))
-                    
+                        .fontWeight(.semibold)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+
                     Spacer()
-                    
+
                     // Delete button
                     Button(action: { showingDeleteConfirmation = true }) {
                         Image(systemName: "xmark.circle.fill")
                             .font(DesignSystem.Typography.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(DesignSystem.Colors.textTertiary)
                     }
                     .buttonStyle(.plain)
                 }
-                
-                // Section name
-                Text(section.name)
-                    .font(DesignSystem.Typography.callout)
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                
-                // Metadata with badges
-                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxs) {
-                    HStack(spacing: DesignSystem.Spacing.xxs) {
-                        Badge("\(section.bars) bars", color: sectionColor)
-                        
-                        // Add waveform.badge.mic icon
-                        if linkedRecordingsCount > 0 {
-                            RecordingCountBadge(count: linkedRecordingsCount, color: sectionColor)
-                        }
-                    }
+
+                // Section name with color indicator
+                HStack(spacing: DesignSystem.Spacing.xs) {
+                    // Subtle color circle
+                    Circle()
+                        .fill(sectionColor)
+                        .frame(width: 10, height: 10)
                     
-                    HStack(spacing: DesignSystem.Spacing.xxs) {
-                        if section.chordEvents.isEmpty {
-                            Badge("Empty", color: DesignSystem.Colors.warning.opacity(0.5))
-                        } else {
-                            ChordCountBadge(count: section.chordEvents.count, color: sectionColor)
+                    Text(section.name)
+                        .font(DesignSystem.Typography.headline)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
+                        .lineLimit(1)
+                }
+
+                // Metadata badges
+                HStack(spacing: DesignSystem.Spacing.xs) {
+                    Text("\(section.bars) bars")
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        .padding(.horizontal, DesignSystem.Spacing.xs)
+                        .padding(.vertical, DesignSystem.Spacing.xxxs)
+                        .background(
+                            Capsule()
+                                .stroke(DesignSystem.Colors.border, lineWidth: 1)
+                        )
+
+                    if !section.chordEvents.isEmpty {
+                        HStack(spacing: 2) {
+                            Image(systemName: "music.note")
+                                .font(DesignSystem.Typography.nano)
+                            Text("\(section.chordEvents.count)")
+                                .font(DesignSystem.Typography.caption)
                         }
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        .padding(.horizontal, DesignSystem.Spacing.xs)
+                        .padding(.vertical, DesignSystem.Spacing.xxxs)
+                        .background(
+                            Capsule()
+                                .stroke(DesignSystem.Colors.border, lineWidth: 1)
+                        )
                     }
                 }
             }
-            .padding(DesignSystem.Spacing.sm)
-            .frame(width: 145)
+            .padding(DesignSystem.Spacing.md)
+            .frame(width: 155)
             .background(
-                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
-                    .fill(isSelected ? sectionColor.opacity(0.2) : DesignSystem.Colors.surface)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
-                            .stroke(isSelected ? sectionColor : DesignSystem.Colors.border, 
-                                   lineWidth: isSelected ? 2 : 1)
-                    )
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.xl)
+                    .fill(DesignSystem.Colors.surface)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.xl)
+                    .stroke(isSelected ? sectionColor : DesignSystem.Colors.border, lineWidth: isSelected ? 2 : 1)
             )
         }
         .buttonStyle(.plain)
@@ -1008,7 +1028,7 @@ struct SwipeActionRow<Content: View>: View {
                     Image(systemName: item.systemImage)
                         .font(DesignSystem.Typography.callout)
                         .fontWeight(.semibold)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                         .frame(width: buttonSize, height: buttonSize)
                         .background(Circle().fill(item.tint))
                 }
@@ -1035,7 +1055,7 @@ struct SwipeActionRow<Content: View>: View {
                     Image(systemName: item.systemImage)
                         .font(DesignSystem.Typography.callout)
                         .fontWeight(.semibold)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                         .frame(width: buttonSize, height: buttonSize)
                         .background(Circle().fill(item.tint))
                 }
@@ -1310,14 +1330,14 @@ struct BarRow: View {
         return HStack {
             Text("Bar \(barIndex + 1)")
                 .font(DesignSystem.Typography.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(DesignSystem.Colors.textSecondary)
             
             Spacer()
             
             if used > 0 {
                 Text("\(String(format: "%.1f", used))/\(beatsPerBar) beats")
                     .font(DesignSystem.Typography.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
             }
         }
     }
@@ -2013,7 +2033,7 @@ struct SectionCreatorView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Quick Templates")
                         .font(DesignSystem.Typography.headline)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                     
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                         ForEach(SectionPreset.allCases) { preset in
@@ -2036,26 +2056,26 @@ struct SectionCreatorView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Section Name")
                             .font(.subheadline)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
                         
                         TextField("e.g., Verse 1", text: $sectionName)
                             .textFieldStyle(.plain)
                             .padding(12)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color.white.opacity(0.05))
+                                    .fill(DesignSystem.Colors.surfaceSecondary)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                            .stroke(DesignSystem.Colors.border, lineWidth: 1)
                                     )
                             )
-                            .foregroundStyle(.white)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
                     }
                     
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Color")
                             .font(.subheadline)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
                         
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 12) {
                             ForEach(SectionColor.allCases) { color in
@@ -2070,7 +2090,7 @@ struct SectionCreatorView: View {
                                         if selectedColor == color {
                                             Image(systemName: "checkmark.circle.fill")
                                                 .font(DesignSystem.Typography.title3)
-                                                .foregroundStyle(.white)
+                                                .foregroundStyle(DesignSystem.Colors.textPrimary)
                                         }
                                     }
                                 }
@@ -2086,23 +2106,18 @@ struct SectionCreatorView: View {
                 } label: {
                     Text("Create Section")
                         .font(DesignSystem.Typography.headline)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .background(
                             Capsule()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [.purple, .blue],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
+                                .fill(DesignSystem.Colors.primaryGradient)
                         )
                 }
                 .disabled(sectionName.isEmpty)
             }
             .padding(24)
+            .background(DesignSystem.Colors.background)
             .navigationTitle("New Section")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -2111,7 +2126,6 @@ struct SectionCreatorView: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
         .onAppear {
             sectionName = selectedTemplate.name
         }
@@ -2198,16 +2212,16 @@ struct PresetCard: View {
                 
                 Text(preset.name)
                     .font(.subheadline)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 20)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(isSelected ? preset.color.opacity(0.2) : Color.white.opacity(0.05))
+                    .fill(isSelected ? preset.color.opacity(0.2) : DesignSystem.Colors.surfaceSecondary)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke(isSelected ? preset.color : Color.white.opacity(0.1), lineWidth: isSelected ? 2 : 1)
+                            .stroke(isSelected ? preset.color : DesignSystem.Colors.border, lineWidth: isSelected ? 2 : 1)
                     )
             )
         }
@@ -2434,7 +2448,7 @@ struct ChordPaletteSheet: View {
                     } label: {
                         Text(existingChord == nil ? "Add" : "Save")
                             .font(.subheadline)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
                             .background(
@@ -2463,15 +2477,7 @@ struct ChordPaletteSheet: View {
     }
     
     private var backgroundGradient: some View {
-        LinearGradient(
-            colors: [
-                Color(red: 0.05, green: 0.05, blue: 0.15),
-                Color(red: 0.1, green: 0.05, blue: 0.2),
-                Color.black
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        DesignSystem.Colors.background
     }
     
     private var chordPreviewSection: some View {
@@ -2485,7 +2491,7 @@ struct ChordPaletteSheet: View {
                     
                     Text("Bar \(slot.barIndex + 1) • Beat \(slot.beatOffset + 1)")
                         .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
                 
                 Spacer()
@@ -2508,7 +2514,7 @@ struct ChordPaletteSheet: View {
                     .padding(.vertical, 8)
                     .background(
                         Capsule()
-                            .fill(isRest ? Color.white.opacity(0.1) : (showingDiagram ? accentColor.opacity(0.3) : accentColor))
+                            .fill(isRest ? DesignSystem.Colors.border : (showingDiagram ? accentColor.opacity(0.3) : accentColor))
                     )
                 }
                 .disabled(isRest)
@@ -2530,7 +2536,7 @@ struct ChordPaletteSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Note Type")
                 .font(.subheadline)
-                .foregroundStyle(.white)
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
 
             Picker("Note Type", selection: $isRest) {
                 Text("Chord").tag(false)
@@ -2547,17 +2553,17 @@ struct ChordPaletteSheet: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Silence")
                             .font(.subheadline)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
                         Text("No harmony will be generated during this beat range.")
                             .font(DesignSystem.Typography.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
                     }
                     Spacer()
                 }
                 .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.white.opacity(0.05))
+                        .fill(DesignSystem.Colors.surfaceSecondary)
                 )
             }
         }
@@ -2585,12 +2591,12 @@ struct ChordPaletteSheet: View {
                         .foregroundStyle(accentColor)
                     Text("Suggestions")
                         .font(DesignSystem.Typography.headline)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                     
                     Spacer()
                     
                     Image(systemName: showingSuggestions ? "chevron.up.circle.fill" : "chevron.down.circle.fill")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
             }
             
@@ -2630,7 +2636,7 @@ struct ChordPaletteSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Root Note")
                 .font(.subheadline)
-                .foregroundStyle(.white)
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
             
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 8) {
                 ForEach(roots, id: \.self) { root in
@@ -2644,7 +2650,7 @@ struct ChordPaletteSheet: View {
                             .frame(maxWidth: .infinity)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(selectedRoot == root ? accentColor : Color.white.opacity(0.05))
+                                    .fill(selectedRoot == root ? accentColor : DesignSystem.Colors.surfaceSecondary)
                             )
                     }
                 }
@@ -2656,7 +2662,7 @@ struct ChordPaletteSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Quality")
                 .font(.subheadline)
-                .foregroundStyle(.white)
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
             
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 8) {
                 ForEach(ChordQuality.allCases, id: \.self) { quality in
@@ -2670,7 +2676,7 @@ struct ChordPaletteSheet: View {
                             .frame(maxWidth: .infinity)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(selectedQuality == quality ? accentColor : Color.white.opacity(0.05))
+                                    .fill(selectedQuality == quality ? accentColor : DesignSystem.Colors.surfaceSecondary)
                             )
                     }
                 }
@@ -2682,7 +2688,7 @@ struct ChordPaletteSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Extensions (Max 2)")
                 .font(.subheadline)
-                .foregroundStyle(.white)
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
             
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 8) {
                 ForEach(commonExtensions, id: \.self) { ext in
@@ -2700,7 +2706,7 @@ struct ChordPaletteSheet: View {
                             .frame(maxWidth: .infinity)
                             .background(
                                 RoundedRectangle(cornerRadius: 10)
-                                    .fill(selectedExtensions.contains(ext) ? accentColor : Color.white.opacity(0.05))
+                                    .fill(selectedExtensions.contains(ext) ? accentColor : DesignSystem.Colors.surfaceSecondary)
                             )
                             .opacity((selectedExtensions.count >= 2 && !selectedExtensions.contains(ext)) ? 0.5 : 1.0)
                     }
@@ -2721,13 +2727,13 @@ struct ChordPaletteSheet: View {
             HStack {
                 Text("Duration")
                     .font(.subheadline)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
                 
                 Spacer()
                 
                 Text("Max: \(String(format: "%.1f", maxAvailableDuration)) beats")
                     .font(DesignSystem.Typography.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
             }
             
             // Quick duration buttons
@@ -2750,7 +2756,7 @@ struct ChordPaletteSheet: View {
                         .frame(height: 65)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(duration == dur ? accentColor : Color.white.opacity(0.05))
+                                .fill(duration == dur ? accentColor : DesignSystem.Colors.surfaceSecondary)
                         )
                     }
                     .disabled(!isAvailable)
@@ -2777,12 +2783,12 @@ struct ChordPaletteSheet: View {
                     Text(String(format: "%.1f", duration))
                         .font(DesignSystem.Typography.lg)
                         .fontWeight(.bold)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                         .monospacedDigit()
                     
                     Text("beats")
                         .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
                 
                 Spacer()
@@ -2801,7 +2807,7 @@ struct ChordPaletteSheet: View {
             .padding(16)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.white.opacity(0.05))
+                    .fill(DesignSystem.Colors.surfaceSecondary)
             )
         }
         .padding(16)
@@ -2817,7 +2823,7 @@ struct ChordPaletteSheet: View {
         } label: {
             Text(isRest ? (existingChord == nil ? "Add Rest" : "Save Rest") : (existingChord == nil ? "Add Chord" : "Save Chord"))
                 .font(DesignSystem.Typography.headline)
-                .foregroundStyle(.white)
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
                 .background(
@@ -2833,7 +2839,7 @@ struct ChordPaletteSheet: View {
         } label: {
             Text("Remove Chord")
                 .font(DesignSystem.Typography.headline)
-                .foregroundStyle(.white)
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
                 .background(
@@ -2857,11 +2863,11 @@ struct ChordPaletteSheet: View {
             if let last = lastChord {
                 Text("After \(last.display)")
                     .font(DesignSystem.Typography.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
             } else {
                 Text("Start your progression")
                     .font(DesignSystem.Typography.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
             }
             
             ScrollView(.horizontal, showsIndicators: false) {
@@ -2895,14 +2901,14 @@ struct ChordPaletteSheet: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(progression.name)
                         .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                     
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 6) {
                             ForEach(progression.progression) { chord in
                                 Text(chord.display)
                                     .font(DesignSystem.Typography.caption)
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(DesignSystem.Colors.textPrimary)
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 6)
                                     .background(
@@ -2923,7 +2929,7 @@ struct ChordPaletteSheet: View {
                 .padding(10)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.white.opacity(0.05))
+                        .fill(DesignSystem.Colors.surfaceSecondary)
                         .overlay(
                             RoundedRectangle(cornerRadius: 10)
                                 .stroke(accentColor.opacity(0.2), lineWidth: 1)
@@ -3006,11 +3012,11 @@ struct SuggestionChip: View {
             VStack(spacing: 4) {
                 Text(suggestion.display)
                     .font(DesignSystem.Typography.headline)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
                 
                 Text(suggestion.reason)
                     .font(DesignSystem.Typography.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
                     .lineLimit(1)
             }
             .padding(.horizontal, 12)
@@ -3047,16 +3053,15 @@ struct LinkedRecordingCard: View {
                                 LinearGradient(colors: [recording.recordingType.color.opacity(0.3), recording.recordingType.color.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing)
                         )
                         .frame(width: 26, height: 26)
-                        .shadow(color: isPlaying ? Color.green.opacity(0.3) : recording.recordingType.color.opacity(0.2), radius: 6)
                     
                     if isPlaying {
                         Image(systemName: "pause.fill")
                             .font(DesignSystem.Typography.caption)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
                     } else {
                         Image(systemName: "play.fill")
                             .font(DesignSystem.Typography.caption)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
                             .offset(x: 1)
                     }
                 }
@@ -3073,12 +3078,12 @@ struct LinkedRecordingCard: View {
                     
                     Text(recording.name)
                         .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                         .lineLimit(1)
                     
                     Text(formatDuration(recording.duration))
                         .font(DesignSystem.Typography.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
             }
             .padding(10)
@@ -3087,14 +3092,14 @@ struct LinkedRecordingCard: View {
                     .fill(
                         isPlaying ?
                             Color.green.opacity(0.1) :
-                            Color.white.opacity(0.05)
+                            DesignSystem.Colors.surfaceSecondary
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
                             .stroke(
                                 isPlaying ?
                                     Color.green.opacity(0.5) :
-                                    Color.white.opacity(0.1),
+                                    DesignSystem.Colors.border,
                                 lineWidth: isPlaying ? 1.5 : 1
                             )
                     )
@@ -3125,26 +3130,26 @@ struct SectionEditorSheet: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Section Name")
                         .font(.subheadline)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                     
                     TextField("e.g., Verse 1", text: $tempName)
                         .textFieldStyle(.plain)
                         .padding(12)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.white.opacity(0.05))
+                                .fill(DesignSystem.Colors.surfaceSecondary)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                        .stroke(DesignSystem.Colors.border, lineWidth: 1)
                                 )
                         )
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                 }
                 
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Color")
                         .font(.subheadline)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                     
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 12) {
                         ForEach(SectionColor.allCases) { color in
@@ -3159,7 +3164,7 @@ struct SectionEditorSheet: View {
                                     if selectedColor == color {
                                         Image(systemName: "checkmark.circle.fill")
                                             .font(DesignSystem.Typography.title3)
-                                            .foregroundStyle(.white)
+                                            .foregroundStyle(DesignSystem.Colors.textPrimary)
                                     }
                                 }
                             }
@@ -3174,7 +3179,7 @@ struct SectionEditorSheet: View {
                 } label: {
                     Text("Save Changes")
                         .font(DesignSystem.Typography.headline)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .background(
@@ -3191,17 +3196,7 @@ struct SectionEditorSheet: View {
                 .disabled(tempName.isEmpty)
             }
             .padding(24)
-            .background(
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.05, green: 0.05, blue: 0.15),
-                        Color(red: 0.1, green: 0.05, blue: 0.2),
-                        Color.black
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
+            .background(DesignSystem.Colors.background)
             .navigationTitle("Edit Section")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -3210,7 +3205,6 @@ struct SectionEditorSheet: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
         .presentationDetents([.medium])
         .onAppear {
             tempName = section.name
@@ -3244,7 +3238,7 @@ struct KeyPickerSheet: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Root Note")
                         .font(DesignSystem.Typography.headline)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                     
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 8) {
                         ForEach(roots, id: \.self) { root in
@@ -3258,7 +3252,7 @@ struct KeyPickerSheet: View {
                                     .frame(maxWidth: .infinity)
                                     .background(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .fill(project.keyRoot == root ? Color.purple : Color.white.opacity(0.05))
+                                            .fill(project.keyRoot == root ? Color.purple : DesignSystem.Colors.surfaceSecondary)
                                     )
                             }
                         }
@@ -3268,7 +3262,7 @@ struct KeyPickerSheet: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Mode")
                         .font(DesignSystem.Typography.headline)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                     
                     HStack(spacing: 12) {
                         Button {
@@ -3281,7 +3275,7 @@ struct KeyPickerSheet: View {
                                 .frame(height: 50)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(project.keyMode == .major ? Color.blue : Color.white.opacity(0.05))
+                                        .fill(project.keyMode == .major ? Color.blue : DesignSystem.Colors.surfaceSecondary)
                                 )
                         }
                         
@@ -3295,7 +3289,7 @@ struct KeyPickerSheet: View {
                                 .frame(height: 50)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(project.keyMode == .minor ? Color.blue : Color.white.opacity(0.05))
+                                        .fill(project.keyMode == .minor ? Color.blue : DesignSystem.Colors.surfaceSecondary)
                                 )
                         }
                     }
@@ -3308,7 +3302,7 @@ struct KeyPickerSheet: View {
                 } label: {
                     Text("Done")
                         .font(DesignSystem.Typography.headline)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .background(
@@ -3327,7 +3321,7 @@ struct KeyPickerSheet: View {
             .navigationTitle("Change Key")
             .navigationBarTitleDisplayMode(.inline)
         }
-        .preferredColorScheme(.dark)
+        
     }
 }
 
@@ -3342,28 +3336,28 @@ struct ViewAllSectionsCard: View {
                 HStack {
                     Image(systemName: "square.grid.2x2.fill")
                         .font(DesignSystem.Typography.title3)
-                        .foregroundStyle(isSelected ? .white : .secondary)
+                        .foregroundStyle(isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.textPrimary)
                     
                     Spacer()
                 }
                 
                 Text("View All")
                     .font(.subheadline)
-                    .foregroundStyle(isSelected ? .white : .secondary)
+                    .foregroundStyle(isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.textPrimary)
                     .lineLimit(1)
                 
                 Text("Sections")
                     .font(DesignSystem.Typography.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
             }
             .padding(12)
             .frame(width: 120)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.white.opacity(0.05))
+                    .fill(DesignSystem.Colors.surface)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke(isSelected ? Color.purple : Color.white.opacity(0.1), lineWidth: isSelected ? 2 : 1)
+                            .stroke(isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.border, lineWidth: isSelected ? 2 : 1)
                     )
             )
         }
@@ -3438,17 +3432,7 @@ struct SmartSuggestionsModal: View {
                 }
                 .padding(.vertical, DesignSystem.Spacing.lg)
             }
-            .background(
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.05, green: 0.05, blue: 0.15),
-                        Color(red: 0.1, green: 0.05, blue: 0.2),
-                        Color.black
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
+            .background(DesignSystem.Colors.background)
             .navigationTitle("Smart Suggestions")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -3457,7 +3441,6 @@ struct SmartSuggestionsModal: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
         .presentationDetents([.large])
     }
     
@@ -3465,14 +3448,14 @@ struct SmartSuggestionsModal: View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
             Text("Next Chord Suggestions")
                 .font(DesignSystem.Typography.title3)
-                .foregroundStyle(.white)
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
                 .padding(.horizontal, DesignSystem.Spacing.xl)
 
             if !previousChords.isEmpty || !nextChords.isEmpty {
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                     Text("Context")
                         .font(DesignSystem.Typography.callout)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
 
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: DesignSystem.Spacing.xs) {
@@ -3483,7 +3466,7 @@ struct SmartSuggestionsModal: View {
                             if let nextChord = nextChords.first {
                                 Image(systemName: "arrow.right")
                                     .font(DesignSystem.Typography.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(DesignSystem.Colors.textSecondary)
                                 contextChip(text: nextChord.display, color: DesignSystem.Colors.primary)
                             }
                         }
@@ -3507,7 +3490,7 @@ struct SmartSuggestionsModal: View {
                             
                             Text(suggestion.quality.displayName)
                                 .font(DesignSystem.Typography.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(DesignSystem.Colors.textSecondary)
                         }
                         
                         Spacer()
@@ -3522,14 +3505,14 @@ struct SmartSuggestionsModal: View {
                             
                             Text(suggestion.reason)
                                 .font(DesignSystem.Typography.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(DesignSystem.Colors.textSecondary)
                                 .multilineTextAlignment(.trailing)
                             
                             confidenceBadge(suggestion.confidence)
                         }
                         
                         Image(systemName: "chevron.right")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
                     }
                     .padding(DesignSystem.Spacing.md)
                     .background(
@@ -3550,7 +3533,7 @@ struct SmartSuggestionsModal: View {
     private func contextChip(text: String, color: Color) -> some View {
         Text(text)
             .font(DesignSystem.Typography.caption)
-            .foregroundStyle(.white)
+            .foregroundStyle(DesignSystem.Colors.textPrimary)
             .padding(.horizontal, DesignSystem.Spacing.sm)
             .padding(.vertical, DesignSystem.Spacing.xxs)
             .background(
@@ -3567,7 +3550,7 @@ struct SmartSuggestionsModal: View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.lg) {
             Text("Progression Analysis")
                 .font(DesignSystem.Typography.title3)
-                .foregroundStyle(.white)
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
                 .padding(.horizontal, DesignSystem.Spacing.xl)
             
             VStack(spacing: DesignSystem.Spacing.md) {
@@ -3596,7 +3579,7 @@ struct SmartSuggestionsModal: View {
                     }
                 }
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(DesignSystem.Colors.textPrimary)
             .padding(DesignSystem.Spacing.md)
             .background(
                 RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
@@ -3610,7 +3593,7 @@ struct SmartSuggestionsModal: View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
             Text("Popular Progressions")
                 .font(DesignSystem.Typography.title3)
-                .foregroundStyle(.white)
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
                 .padding(.horizontal, DesignSystem.Spacing.xl)
             
             ForEach(popularProgressions.indices, id: \.self) { index in
@@ -3619,7 +3602,7 @@ struct SmartSuggestionsModal: View {
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
                     Text(progression.name)
                         .font(DesignSystem.Typography.callout)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                     
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: DesignSystem.Spacing.xs) {
@@ -3634,7 +3617,7 @@ struct SmartSuggestionsModal: View {
                                         if let roman = suggestion.romanNumeral {
                                             Text(roman)
                                                 .font(DesignSystem.Typography.caption)
-                                                .foregroundStyle(.secondary)
+                                                .foregroundStyle(DesignSystem.Colors.textSecondary)
                                         }
                                     }
                                     .foregroundStyle(DesignSystem.Colors.accent)

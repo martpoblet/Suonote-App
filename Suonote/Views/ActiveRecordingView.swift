@@ -29,15 +29,7 @@ struct ActiveRecordingView: View {
     var body: some View {
         ZStack(alignment: .top) {
             // Background gradient
-            LinearGradient(
-                colors: [
-                    Color(red: 0.1, green: 0.05, blue: 0.15),
-                    Color.black,
-                    Color.black
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+            DesignSystem.Colors.background
             .ignoresSafeArea()
             
             // Pulse border overlay with blur
@@ -87,8 +79,7 @@ struct ActiveRecordingView: View {
             .frame(maxHeight: .infinity, alignment: .top)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .preferredColorScheme(.dark)
-        .sheet(isPresented: $showingTypePicker) {
+                .sheet(isPresented: $showingTypePicker) {
             RecordingTypePickerSheet(selectedType: $selectedRecordingType)
         }
         .onDisappear {
@@ -107,9 +98,9 @@ struct ActiveRecordingView: View {
                 } label: {
                     Image(systemName: "xmark")
                         .font(DesignSystem.Typography.title3)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                         .frame(width: 44, height: 44)
-                        .background(Circle().fill(Color.white.opacity(0.1)))
+                        .background(Circle().fill(DesignSystem.Colors.border))
                 }
                 
                 Spacer()
@@ -117,7 +108,7 @@ struct ActiveRecordingView: View {
                 VStack(spacing: 2) {
                     Text("Take \(project.recordings.count + 1)")
                         .font(DesignSystem.Typography.headline)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                     
                     HStack(spacing: 6) {
                         Image(systemName: selectedRecordingType.icon)
@@ -143,12 +134,12 @@ struct ActiveRecordingView: View {
             VStack(spacing: 12) {
                 Text("Get Ready")
                     .font(DesignSystem.Typography.title3)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
                 
                 Text("\(max(0, tempoBeatsPerBar - countInBeats))")
                     .font(DesignSystem.Typography.hero)
                     .fontWeight(.bold)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
                     .monospacedDigit()
                     .contentTransition(.numericText())
             }
@@ -156,7 +147,7 @@ struct ActiveRecordingView: View {
             HStack(spacing: 20) {
                 ForEach(0..<tempoBeatsPerBar, id: \.self) { beat in
                     Circle()
-                        .fill(beat < countInBeats % tempoBeatsPerBar ? Color.orange : Color.white.opacity(0.2))
+                        .fill(beat < countInBeats % tempoBeatsPerBar ? Color.orange : DesignSystem.Colors.border.opacity(0.5))
                         .frame(width: 16, height: 16)
                         .shadow(color: beat < countInBeats % tempoBeatsPerBar ? Color.orange.opacity(0.6) : .clear, radius: 8)
                 }
@@ -171,11 +162,11 @@ struct ActiveRecordingView: View {
                 Text("Ready to Record")
                     .font(DesignSystem.Typography.title)
                     .fontWeight(.bold)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
                 
                 Text("Take \(project.recordings.count + 1)")
                     .font(DesignSystem.Typography.title3)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
             }
             
             // Recording type badge
@@ -204,29 +195,29 @@ struct ActiveRecordingView: View {
                     Text("\(project.bpm)")
                         .font(DesignSystem.Typography.huge)
                         .fontWeight(.bold)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                     Text("BPM")
                         .font(DesignSystem.Typography.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
 
                 VStack(spacing: 8) {
                     Text("\(project.timeTop)/\(project.timeBottom)")
                         .font(DesignSystem.Typography.huge)
                         .fontWeight(.bold)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                     Text("Time")
                         .font(DesignSystem.Typography.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
             }
             .padding(32)
             .background(
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(Color.white.opacity(0.05))
+                    .fill(DesignSystem.Colors.surfaceSecondary)
                     .overlay(
                         RoundedRectangle(cornerRadius: 20)
-                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                            .stroke(DesignSystem.Colors.border, lineWidth: 1)
                     )
             )
             
@@ -251,18 +242,18 @@ struct ActiveRecordingView: View {
                         .shadow(color: Color.red.opacity(0.4), radius: 20, x: 0, y: 10)
                     
                     Circle()
-                        .stroke(Color.white.opacity(0.3), lineWidth: 3)
+                        .stroke(DesignSystem.Colors.textMuted, lineWidth: 3)
                         .frame(width: 120, height: 120)
                     
                     Image(systemName: "circle.fill")
                         .font(DesignSystem.Typography.xl)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                 }
             }
             
             Text("Tap to start recording")
                 .font(DesignSystem.Typography.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(DesignSystem.Colors.textSecondary)
             
             Spacer()
         }
@@ -295,7 +286,7 @@ struct ActiveRecordingView: View {
             Text(formatTime(elapsedTime))
                 .font(DesignSystem.Typography.giant)
                 .fontWeight(.medium)
-                .foregroundStyle(.white)
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
                 .monospacedDigit()
             
             // Waveform
@@ -309,24 +300,24 @@ struct ActiveRecordingView: View {
                     VStack(spacing: 8) {
                         Text("BAR")
                             .font(DesignSystem.Typography.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
                         
                         Text("\(currentBar + 1)")
                             .font(DesignSystem.Typography.xl)
                             .fontWeight(.bold)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
                             .monospacedDigit()
                     }
                     
                     VStack(spacing: 8) {
                         Text("BEAT")
                             .font(DesignSystem.Typography.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
                         
                         HStack(spacing: 10) {
                             ForEach(0..<tempoBeatsPerBar, id: \.self) { beat in
                                 Circle()
-                                    .fill(beat == currentBeat ? Color.red : Color.white.opacity(0.3))
+                                    .fill(beat == currentBeat ? Color.red : DesignSystem.Colors.textMuted)
                                     .frame(width: beat == currentBeat ? 18 : 14, height: beat == currentBeat ? 18 : 14)
                                     .shadow(color: beat == currentBeat ? Color.red.opacity(0.6) : .clear, radius: 10)
                                     .animation(.spring(response: 0.2), value: currentBeat)
@@ -340,7 +331,7 @@ struct ActiveRecordingView: View {
                         .fill(Color.white.opacity(0.03))
                         .overlay(
                             RoundedRectangle(cornerRadius: 20)
-                                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                .stroke(DesignSystem.Colors.border, lineWidth: 1)
                         )
                 )
             }
@@ -357,10 +348,10 @@ struct ActiveRecordingView: View {
                     Text("\(project.bpm) BPM")
                         .font(DesignSystem.Typography.subheadline)
                 }
-                .foregroundStyle(.secondary)
+                .foregroundStyle(DesignSystem.Colors.textSecondary)
                 
                 Circle()
-                    .fill(Color.white.opacity(0.3))
+                    .fill(DesignSystem.Colors.textMuted)
                     .frame(width: 4, height: 4)
                 
                 HStack(spacing: 8) {
@@ -369,7 +360,7 @@ struct ActiveRecordingView: View {
                     Text("\(project.timeTop)/\(project.timeBottom)")
                         .font(DesignSystem.Typography.subheadline)
                 }
-                .foregroundStyle(.secondary)
+                .foregroundStyle(DesignSystem.Colors.textSecondary)
             }
             
             // Stop button
@@ -383,7 +374,7 @@ struct ActiveRecordingView: View {
                     Text("Stop & Save")
                         .font(DesignSystem.Typography.headline)
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 18)
                 .background(
@@ -496,7 +487,7 @@ struct RecordingTypePickerSheet: View {
             VStack(spacing: 16) {
                 Text("What are you recording?")
                     .font(DesignSystem.Typography.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
                     .padding(.top, 8)
                 
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 12) {
@@ -512,16 +503,16 @@ struct RecordingTypePickerSheet: View {
                                 
                                 Text(type.rawValue)
                                     .font(DesignSystem.Typography.subheadline)
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(DesignSystem.Colors.textPrimary)
                             }
                             .frame(maxWidth: .infinity)
                             .frame(height: 100)
                             .background(
                                 RoundedRectangle(cornerRadius: 16)
-                                    .fill(selectedType == type ? type.color.opacity(0.2) : Color.white.opacity(0.05))
+                                    .fill(selectedType == type ? type.color.opacity(0.2) : DesignSystem.Colors.surfaceSecondary)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 16)
-                                            .stroke(selectedType == type ? type.color : Color.white.opacity(0.1), lineWidth: selectedType == type ? 2 : 1)
+                                            .stroke(selectedType == type ? type.color : DesignSystem.Colors.border, lineWidth: selectedType == type ? 2 : 1)
                                     )
                             )
                         }
@@ -534,15 +525,7 @@ struct RecordingTypePickerSheet: View {
             }
             .padding(.vertical, 24)
             .background(
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.05, green: 0.05, blue: 0.15),
-                        Color(red: 0.1, green: 0.05, blue: 0.2),
-                        Color.black
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
+                DesignSystem.Colors.background
             )
             .navigationTitle("Recording Type")
             .navigationBarTitleDisplayMode(.inline)
@@ -552,8 +535,7 @@ struct RecordingTypePickerSheet: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
-        .presentationDetents([.height(600)])
+                .presentationDetents([.height(600)])
     }
 }
 
@@ -586,7 +568,7 @@ struct RealTimeWaveformView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white.opacity(0.02))
+                .fill(DesignSystem.Colors.surfaceSecondary.opacity(0.3))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
                         .stroke(Color.red.opacity(0.2), lineWidth: 1)

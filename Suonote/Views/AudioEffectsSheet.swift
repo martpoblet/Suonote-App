@@ -135,7 +135,7 @@ struct AudioEffectsSheet: View {
                             Text("Apply Effects")
                                 .font(DesignSystem.Typography.headline)
                         }
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .background(
@@ -152,17 +152,7 @@ struct AudioEffectsSheet: View {
                 }
                 .padding(24)
             }
-            .background(
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.05, green: 0.05, blue: 0.15),
-                        Color(red: 0.1, green: 0.05, blue: 0.2),
-                        Color.black
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
+            .background(DesignSystem.Colors.background)
             .navigationTitle("Audio Effects")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -180,7 +170,7 @@ struct AudioEffectsSheet: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
+        
     }
     
     private func resetAll() {
@@ -208,7 +198,7 @@ struct EffectSection<Content: View>: View {
                     
                     Text(title)
                         .font(DesignSystem.Typography.headline)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                 }
             }
             .tint(color)
@@ -221,10 +211,10 @@ struct EffectSection<Content: View>: View {
         .padding(20)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white.opacity(0.05))
+                .fill(DesignSystem.Colors.surfaceSecondary)
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(isEnabled ? color.opacity(0.5) : Color.white.opacity(0.1), lineWidth: isEnabled ? 2 : 1)
+                        .stroke(isEnabled ? color.opacity(0.5) : DesignSystem.Colors.border, lineWidth: isEnabled ? 2 : 1)
                 )
         )
         .animation(.spring(response: 0.3), value: isEnabled)
@@ -245,17 +235,17 @@ struct SliderControl: View {
             HStack {
                 Image(systemName: icon)
                     .font(DesignSystem.Typography.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
                 
                 Text(title)
                     .font(DesignSystem.Typography.subheadline)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
                 
                 Spacer()
                 
                 Text(String(format: format, value))
                     .font(.subheadline.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
             }
             
             Slider(value: $value, in: range)
@@ -264,7 +254,7 @@ struct SliderControl: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color.white.opacity(0.05))
+                .fill(DesignSystem.Colors.surfaceSecondary)
         )
     }
 }

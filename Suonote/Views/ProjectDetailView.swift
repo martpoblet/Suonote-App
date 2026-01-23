@@ -99,7 +99,7 @@ struct ProjectDetailView: View {
                     // Título del proyecto
                     Text(project.title)
                         .font(DesignSystem.Typography.headline)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                     
                     // Badge de estado (Idea, In Progress, etc.)
                     Button {
@@ -128,7 +128,7 @@ struct ProjectDetailView: View {
                 } label: {
                     Image(systemName: "slider.horizontal.3")
                         .font(DesignSystem.Typography.headline)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                 }
             }
         }
@@ -140,7 +140,7 @@ struct ProjectDetailView: View {
             StatusPickerSheet(project: project)
         }
         .toolbarBackground(.hidden, for: .navigationBar)
-        .preferredColorScheme(.dark)
+        
     }
     
     // MARK: - Helper Methods
@@ -170,15 +170,7 @@ struct ProjectDetailView: View {
 }
 
 struct ProjectBackgroundView: View {
-    static let gradient = LinearGradient(
-        colors: [
-            Color(red: 0.05, green: 0.05, blue: 0.15),
-            Color(red: 0.1, green: 0.05, blue: 0.2),
-            Color.black
-        ],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-    )
+    static let gradient = DesignSystem.Colors.background
     
     var body: some View {
         Self.gradient
@@ -234,7 +226,7 @@ struct EditProjectSheet: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Project Title")
                             .font(.subheadline)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
                         
                         TextField("Project name", text: $tempTitle)
                             .textFieldStyle(.plain)
@@ -242,20 +234,20 @@ struct EditProjectSheet: View {
                             .padding(16)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color.white.opacity(0.05))
+                                    .fill(DesignSystem.Colors.surfaceSecondary)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                            .stroke(DesignSystem.Colors.border, lineWidth: 1)
                                     )
                             )
-                            .foregroundStyle(.white)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
                     }
                     
                     // Status
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Status")
                             .font(.subheadline)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
                         
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 12) {
                             ForEach(ProjectStatus.allCases, id: \.self) { status in
@@ -273,10 +265,10 @@ struct EditProjectSheet: View {
                                     .frame(height: 44)
                                     .background(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .fill(tempStatus == status ? statusColorFor(status).opacity(0.3) : Color.white.opacity(0.05))
+                                            .fill(tempStatus == status ? statusColorFor(status).opacity(0.3) : DesignSystem.Colors.surfaceSecondary)
                                             .overlay(
                                                 RoundedRectangle(cornerRadius: 12)
-                                                    .stroke(tempStatus == status ? statusColorFor(status) : Color.white.opacity(0.1), lineWidth: tempStatus == status ? 2 : 1)
+                                                    .stroke(tempStatus == status ? statusColorFor(status) : DesignSystem.Colors.border, lineWidth: tempStatus == status ? 2 : 1)
                                             )
                                     )
                                 }
@@ -291,7 +283,7 @@ struct EditProjectSheet: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Time Signature")
                             .font(.subheadline)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
                         
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 12) {
                             ForEach(timeSignatures) { signature in
@@ -306,10 +298,10 @@ struct EditProjectSheet: View {
                                         .frame(height: 44)
                                         .background(
                                             RoundedRectangle(cornerRadius: 12)
-                                                .fill(isSelected(signature) ? Color.orange.opacity(0.3) : Color.white.opacity(0.05))
+                                                .fill(isSelected(signature) ? Color.orange.opacity(0.3) : DesignSystem.Colors.surfaceSecondary)
                                                 .overlay(
                                                     RoundedRectangle(cornerRadius: 12)
-                                                        .stroke(isSelected(signature) ? Color.orange : Color.white.opacity(0.1), lineWidth: isSelected(signature) ? 2 : 1)
+                                                        .stroke(isSelected(signature) ? Color.orange : DesignSystem.Colors.border, lineWidth: isSelected(signature) ? 2 : 1)
                                                 )
                                         )
                                 }
@@ -322,7 +314,7 @@ struct EditProjectSheet: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Key")
                             .font(.subheadline)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
                         
                         // Root note
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 8) {
@@ -337,7 +329,7 @@ struct EditProjectSheet: View {
                                         .frame(maxWidth: .infinity)
                                         .background(
                                             RoundedRectangle(cornerRadius: 12)
-                                                .fill(tempKeyRoot == root ? Color.purple : Color.white.opacity(0.05))
+                                                .fill(tempKeyRoot == root ? Color.purple : DesignSystem.Colors.surfaceSecondary)
                                         )
                                 }
                             }
@@ -355,7 +347,7 @@ struct EditProjectSheet: View {
                                     .frame(height: 44)
                                     .background(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .fill(tempKeyMode == .major ? Color.purple : Color.white.opacity(0.05))
+                                            .fill(tempKeyMode == .major ? Color.purple : DesignSystem.Colors.surfaceSecondary)
                                     )
                             }
                             
@@ -369,7 +361,7 @@ struct EditProjectSheet: View {
                                     .frame(height: 44)
                                     .background(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .fill(tempKeyMode == .minor ? Color.purple : Color.white.opacity(0.05))
+                                            .fill(tempKeyMode == .minor ? Color.purple : DesignSystem.Colors.surfaceSecondary)
                                     )
                             }
                         }
@@ -379,7 +371,7 @@ struct EditProjectSheet: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Tags")
                             .font(.subheadline)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
                         
                         // Current tags
                         if !tempTags.isEmpty {
@@ -396,7 +388,7 @@ struct EditProjectSheet: View {
                                                 .font(DesignSystem.Typography.caption)
                                         }
                                     }
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(DesignSystem.Colors.textPrimary)
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 8)
                                     .background(
@@ -414,9 +406,9 @@ struct EditProjectSheet: View {
                                 .padding(12)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.white.opacity(0.05))
+                                        .fill(DesignSystem.Colors.surfaceSecondary)
                                 )
-                                .foregroundStyle(.white)
+                                .foregroundStyle(DesignSystem.Colors.textPrimary)
                                 .onSubmit {
                                     addTag()
                                 }
@@ -434,17 +426,7 @@ struct EditProjectSheet: View {
                 }
                 .padding(24)
             }
-            .background(
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.05, green: 0.05, blue: 0.15),
-                        Color(red: 0.1, green: 0.05, blue: 0.2),
-                        Color.black
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
+            .background(DesignSystem.Colors.background)
             .navigationTitle("Edit Project")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -466,7 +448,7 @@ struct EditProjectSheet: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
+        
         .alert("Change Time Signature?", isPresented: $showingTimeSignatureWarning) {
             Button("Cancel", role: .cancel) {}
             Button("Save Anyway", role: .destructive) {
@@ -565,7 +547,7 @@ struct StatusPickerSheet: View {
                 VStack(spacing: 16) {
                     Text("Update project status to track your progress")
                         .font(DesignSystem.Typography.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.top, 8)
                 
@@ -583,11 +565,11 @@ struct StatusPickerSheet: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(status.rawValue)
                                         .font(DesignSystem.Typography.headline)
-                                        .foregroundStyle(.white)
+                                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                                     
                                     Text(statusDescription(for: status))
                                         .font(DesignSystem.Typography.caption)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(DesignSystem.Colors.textSecondary)
                                 }
                                 
                                 Spacer()
@@ -600,10 +582,10 @@ struct StatusPickerSheet: View {
                             .padding(16)
                             .background(
                                 RoundedRectangle(cornerRadius: 16)
-                                    .fill(project.status == status ? statusColor(for: status).opacity(0.15) : Color.white.opacity(0.05))
+                                    .fill(project.status == status ? statusColor(for: status).opacity(0.15) : DesignSystem.Colors.surfaceSecondary)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 16)
-                                            .stroke(project.status == status ? statusColor(for: status) : Color.white.opacity(0.1), 
+                                            .stroke(project.status == status ? statusColor(for: status) : DesignSystem.Colors.border, 
                                                    lineWidth: project.status == status ? 2 : 1)
                                     )
                             )
@@ -616,17 +598,7 @@ struct StatusPickerSheet: View {
             }
             .padding(24)
             }
-            .background(
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.05, green: 0.05, blue: 0.15),
-                        Color(red: 0.1, green: 0.05, blue: 0.2),
-                        Color.black
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
+            .background(DesignSystem.Colors.background)
             .navigationTitle("Project Status")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -635,7 +607,6 @@ struct StatusPickerSheet: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
         .presentationDetents([.medium])
     }
     
@@ -750,7 +721,7 @@ struct BPMSelector: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Tempo")
                 .font(.subheadline)
-                .foregroundStyle(.white)
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
             
             VStack(spacing: 16) {
                 bpmDisplay
@@ -793,7 +764,7 @@ struct BPMSelector: View {
 
             Text("BPM")
                 .font(DesignSystem.Typography.title3)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(DesignSystem.Colors.textSecondary)
                 .padding(.top, 40)
         }
     }
@@ -833,7 +804,7 @@ struct BPMSelector: View {
                 .padding(.vertical, 8)
                 .background(
                     Capsule()
-                        .fill(bpm == preset ? Color.cyan.opacity(0.2) : Color.white.opacity(0.05))
+                        .fill(bpm == preset ? Color.cyan.opacity(0.2) : DesignSystem.Colors.surfaceSecondary)
                         .overlay(
                             Capsule()
                                 .stroke(bpm == preset ? Color.cyan : Color.clear, lineWidth: 1)
@@ -844,7 +815,7 @@ struct BPMSelector: View {
     
     private var bpmBackground: some View {
         RoundedRectangle(cornerRadius: 12)
-            .fill(Color.white.opacity(0.05))
+            .fill(DesignSystem.Colors.surfaceSecondary)
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(Color.cyan.opacity(0.3), lineWidth: 1)

@@ -19,15 +19,7 @@ struct CreateProjectView: View {
     var body: some View {
         ZStack {
             // Gradient background
-            LinearGradient(
-                colors: [
-                    Color(red: 0.05, green: 0.05, blue: 0.15),
-                    Color(red: 0.15, green: 0.05, blue: 0.25),
-                    Color.black
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+            DesignSystem.Colors.background
             .ignoresSafeArea()
             
             VStack(spacing: 0) {
@@ -38,7 +30,7 @@ struct CreateProjectView: View {
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(DesignSystem.Typography.title2)
-                            .foregroundStyle(.white.opacity(0.6))
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
                     }
                     
                     Spacer()
@@ -46,7 +38,7 @@ struct CreateProjectView: View {
                     Text("New Idea")
                         .font(DesignSystem.Typography.title3)
                         .fontWeight(.bold)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                     
                     Spacer()
                     
@@ -56,11 +48,7 @@ struct CreateProjectView: View {
                         Text("Create")
                             .font(DesignSystem.Typography.headline)
                             .foregroundStyle(
-                                LinearGradient(
-                                    colors: [.purple, .blue],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
+                                DesignSystem.Colors.primaryGradient
                             )
                     }
                     .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -75,24 +63,24 @@ struct CreateProjectView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Label("Title", systemImage: "music.note")
                                 .font(DesignSystem.Typography.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(DesignSystem.Colors.textSecondary)
                                 .textCase(.uppercase)
                             
                             TextField("My awesome idea...", text: $title)
                                 .font(DesignSystem.Typography.title2)
                                 .fontWeight(.bold)
-                                .foregroundStyle(.white)
+                                .foregroundStyle(DesignSystem.Colors.textPrimary)
                                 .focused($isTitleFocused)
                                 .padding(20)
                                 .background(
                                     RoundedRectangle(cornerRadius: 20)
-                                        .fill(Color.white.opacity(0.05))
+                                        .fill(DesignSystem.Colors.surfaceSecondary)
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 20)
                                                 .stroke(
                                                     isTitleFocused ? 
-                                                    LinearGradient(colors: [.purple, .blue], startPoint: .leading, endPoint: .trailing) :
-                                                    LinearGradient(colors: [Color.white.opacity(0.1)], startPoint: .leading, endPoint: .trailing),
+                                                    DesignSystem.Colors.primaryGradient :
+                                                    LinearGradient(colors: [DesignSystem.Colors.border], startPoint: .leading, endPoint: .trailing),
                                                     lineWidth: 2
                                                 )
                                         )
@@ -103,7 +91,7 @@ struct CreateProjectView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Label("Status", systemImage: "flag.fill")
                                 .font(DesignSystem.Typography.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(DesignSystem.Colors.textSecondary)
                                 .textCase(.uppercase)
                             
                             ScrollView(.horizontal, showsIndicators: false) {
@@ -126,7 +114,7 @@ struct CreateProjectView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Label("Tempo", systemImage: "metronome")
                                 .font(DesignSystem.Typography.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(DesignSystem.Colors.textSecondary)
                                 .textCase(.uppercase)
                             
                             VStack(spacing: 16) {
@@ -153,7 +141,7 @@ struct CreateProjectView: View {
                                     
                                     Text("BPM")
                                         .font(DesignSystem.Typography.title3)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(DesignSystem.Colors.textSecondary)
                                         .padding(.top, 40)
                                 }
                                 
@@ -183,7 +171,7 @@ struct CreateProjectView: View {
                                                 .padding(.vertical, 8)
                                                 .background(
                                                     Capsule()
-                                                        .fill(bpm == preset ? Color.white.opacity(0.15) : Color.clear)
+                                                        .fill(bpm == preset ? DesignSystem.Colors.primary.opacity(0.2) : Color.clear)
                                                 )
                                         }
                                     }
@@ -200,10 +188,10 @@ struct CreateProjectView: View {
                             .padding(24)
                             .background(
                                 RoundedRectangle(cornerRadius: 24)
-                                    .fill(Color.white.opacity(0.03))
+                                    .fill(DesignSystem.Colors.surfaceSecondary.opacity(0.5))
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 24)
-                                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                            .stroke(DesignSystem.Colors.border, lineWidth: 1)
                                     )
                             )
                         }
@@ -212,14 +200,14 @@ struct CreateProjectView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Label("Tags", systemImage: "tag.fill")
                                 .font(DesignSystem.Typography.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(DesignSystem.Colors.textSecondary)
                                 .textCase(.uppercase)
                             
                             VStack(spacing: 12) {
                                 HStack(spacing: 12) {
                                     TextField("Add tag", text: $tagInput)
                                         .textFieldStyle(.plain)
-                                        .foregroundStyle(.white)
+                                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                                         .onSubmit {
                                             addTag()
                                         }
@@ -243,10 +231,10 @@ struct CreateProjectView: View {
                                 .padding(16)
                                 .background(
                                     RoundedRectangle(cornerRadius: 16)
-                                        .fill(Color.white.opacity(0.05))
+                                        .fill(DesignSystem.Colors.surfaceSecondary)
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 16)
-                                                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                                .stroke(DesignSystem.Colors.border, lineWidth: 1)
                                         )
                                 )
                                 
@@ -273,8 +261,7 @@ struct CreateProjectView: View {
         .onAppear {
             isTitleFocused = true
         }
-        .preferredColorScheme(.dark)
-    }
+            }
     
     private func addTag() {
         let trimmed = tagInput.trimmingCharacters(in: .whitespaces)
@@ -362,10 +349,10 @@ struct StatusSelectionCard: View {
             .frame(width: 100, height: 100)
             .background(
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(isSelected ? color.opacity(0.15) : Color.white.opacity(0.03))
+                    .fill(isSelected ? color.opacity(0.15) : DesignSystem.Colors.surfaceSecondary.opacity(0.5))
                     .overlay(
                         RoundedRectangle(cornerRadius: 20)
-                            .stroke(isSelected ? color : Color.white.opacity(0.1), lineWidth: isSelected ? 2 : 1)
+                            .stroke(isSelected ? color : DesignSystem.Colors.border, lineWidth: isSelected ? 2 : 1)
                     )
             )
         }
