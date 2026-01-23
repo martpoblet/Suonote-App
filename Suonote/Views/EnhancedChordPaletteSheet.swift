@@ -60,7 +60,7 @@ struct EnhancedChordPaletteSheet: View {
                 
                 HStack(spacing: DesignSystem.Spacing.xs) {
                     Image(systemName: DesignSystem.Icons.key)
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                     Text("\(project.keyRoot) \(project.keyMode == .major ? "Major" : "Minor")")
                         .font(DesignSystem.Typography.caption)
                 }
@@ -73,7 +73,7 @@ struct EnhancedChordPaletteSheet: View {
                 isPresented = false
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.title2)
+                    .font(DesignSystem.Typography.title2)
                     .foregroundStyle(.secondary)
             }
         }
@@ -100,7 +100,7 @@ struct EnhancedChordPaletteSheet: View {
             }
         } label: {
             Text(tab.rawValue)
-                .font(DesignSystem.Typography.callout.weight(.semibold))
+                .font(DesignSystem.Typography.callout)
                 .foregroundStyle(selectedTab == tab ? .white : .secondary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, DesignSystem.Spacing.sm)
@@ -203,7 +203,7 @@ struct EnhancedChordPaletteSheet: View {
                 HStack(spacing: 2) {
                     ForEach(0..<5) { index in
                         Image(systemName: "star.fill")
-                            .font(.system(size: 8))
+                            .font(DesignSystem.Typography.nano)
                             .foregroundStyle(
                                 Double(index) < suggestion.confidence * 5 ?
                                     DesignSystem.Colors.accent :
@@ -245,7 +245,7 @@ struct EnhancedChordPaletteSheet: View {
     private func progressionRow(_ progression: (name: String, progression: [ChordSuggestion])) -> some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
             Text(progression.name)
-                .font(DesignSystem.Typography.caption.weight(.semibold))
+                .font(DesignSystem.Typography.caption)
                 .foregroundStyle(.white)
             
             HStack(spacing: DesignSystem.Spacing.xs) {
@@ -318,7 +318,7 @@ struct EnhancedChordPaletteSheet: View {
                         }
                     } label: {
                         Text(category.rawValue)
-                            .font(DesignSystem.Typography.callout.weight(.semibold))
+                            .font(DesignSystem.Typography.callout)
                             .foregroundStyle(selectedCategory == category ? .white : .secondary)
                             .padding(.horizontal, DesignSystem.Spacing.md)
                             .padding(.vertical, DesignSystem.Spacing.sm)
@@ -418,14 +418,14 @@ struct EnhancedChordPaletteSheet: View {
             if !analysis.romanNumerals.isEmpty {
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                     Text("Progression")
-                        .font(DesignSystem.Typography.caption.weight(.semibold))
+                        .font(DesignSystem.Typography.caption)
                         .foregroundStyle(.secondary)
                     
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: DesignSystem.Spacing.xs) {
                             ForEach(analysis.romanNumerals, id: \.self) { numeral in
                                 Text(numeral)
-                                    .font(DesignSystem.Typography.caption.weight(.bold))
+                                    .font(DesignSystem.Typography.caption)
                                     .foregroundStyle(.white)
                                     .padding(.horizontal, DesignSystem.Spacing.sm)
                                     .padding(.vertical, DesignSystem.Spacing.xxs)
@@ -443,7 +443,8 @@ struct EnhancedChordPaletteSheet: View {
     private func statCard(title: String, value: String, color: Color) -> some View {
         VStack(spacing: DesignSystem.Spacing.xxs) {
             Text(value)
-                .font(.system(size: 32, weight: .bold))
+                .font(DesignSystem.Typography.md)
+                .fontWeight(.bold)
                 .foregroundStyle(color)
             
             Text(title)
@@ -477,7 +478,7 @@ struct EnhancedChordPaletteSheet: View {
             HStack(spacing: DesignSystem.Spacing.xs) {
                 ForEach(scaleNotes, id: \.self) { note in
                     Text(note)
-                        .font(DesignSystem.Typography.caption.weight(.semibold))
+                        .font(DesignSystem.Typography.caption)
                         .foregroundStyle(.white)
                         .frame(width: 36, height: 36)
                         .background(
@@ -503,7 +504,7 @@ struct EnhancedChordPaletteSheet: View {
         } label: {
             VStack(spacing: DesignSystem.Spacing.xxs) {
                 Text(suggestion.display)
-                    .font(DesignSystem.Typography.callout.weight(.semibold))
+                    .font(DesignSystem.Typography.callout)
                     .foregroundStyle(.white)
                 
                 Text(suggestion.quality.displayName)

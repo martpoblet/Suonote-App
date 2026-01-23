@@ -106,7 +106,7 @@ struct ActiveRecordingView: View {
                     dismiss()
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.title3)
+                        .font(DesignSystem.Typography.title3)
                         .foregroundStyle(.white)
                         .frame(width: 44, height: 44)
                         .background(Circle().fill(Color.white.opacity(0.1)))
@@ -116,14 +116,14 @@ struct ActiveRecordingView: View {
                 
                 VStack(spacing: 2) {
                     Text("Take \(project.recordings.count + 1)")
-                        .font(.headline)
+                        .font(DesignSystem.Typography.headline)
                         .foregroundStyle(.white)
                     
                     HStack(spacing: 6) {
                         Image(systemName: selectedRecordingType.icon)
-                            .font(.caption2)
+                            .font(DesignSystem.Typography.caption2)
                         Text(selectedRecordingType.rawValue)
-                            .font(.caption)
+                            .font(DesignSystem.Typography.caption)
                     }
                     .foregroundStyle(selectedRecordingType.color)
                 }
@@ -142,11 +142,12 @@ struct ActiveRecordingView: View {
         VStack(spacing: 40) {
             VStack(spacing: 12) {
                 Text("Get Ready")
-                    .font(.title3)
+                    .font(DesignSystem.Typography.title3)
                     .foregroundStyle(.secondary)
                 
                 Text("\(max(0, tempoBeatsPerBar - countInBeats))")
-                    .font(.system(size: 120, weight: .bold))
+                    .font(DesignSystem.Typography.hero)
+                    .fontWeight(.bold)
                     .foregroundStyle(.white)
                     .monospacedDigit()
                     .contentTransition(.numericText())
@@ -168,11 +169,12 @@ struct ActiveRecordingView: View {
             // Project info
             VStack(spacing: 12) {
                 Text("Ready to Record")
-                    .font(.title.bold())
+                    .font(DesignSystem.Typography.title)
+                    .fontWeight(.bold)
                     .foregroundStyle(.white)
                 
                 Text("Take \(project.recordings.count + 1)")
-                    .font(.title3)
+                    .font(DesignSystem.Typography.title3)
                     .foregroundStyle(.secondary)
             }
             
@@ -182,9 +184,9 @@ struct ActiveRecordingView: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: selectedRecordingType.icon)
-                        .font(.title2)
+                        .font(DesignSystem.Typography.title2)
                     Text("Recording Type: \(selectedRecordingType.rawValue)")
-                        .font(.title3.weight(.semibold))
+                        .font(DesignSystem.Typography.title3)
                 }
                 .foregroundStyle(selectedRecordingType.color)
                 .padding(.horizontal, 24)
@@ -200,19 +202,21 @@ struct ActiveRecordingView: View {
             HStack(spacing: 40) {
                 VStack(spacing: 8) {
                     Text("\(project.bpm)")
-                        .font(.system(size: 48, weight: .bold))
+                        .font(DesignSystem.Typography.huge)
+                        .fontWeight(.bold)
                         .foregroundStyle(.white)
                     Text("BPM")
-                        .font(.subheadline)
+                        .font(DesignSystem.Typography.subheadline)
                         .foregroundStyle(.secondary)
                 }
-                
+
                 VStack(spacing: 8) {
                     Text("\(project.timeTop)/\(project.timeBottom)")
-                        .font(.system(size: 48, weight: .bold))
+                        .font(DesignSystem.Typography.huge)
+                        .fontWeight(.bold)
                         .foregroundStyle(.white)
                     Text("Time")
-                        .font(.subheadline)
+                        .font(DesignSystem.Typography.subheadline)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -251,13 +255,13 @@ struct ActiveRecordingView: View {
                         .frame(width: 120, height: 120)
                     
                     Image(systemName: "circle.fill")
-                        .font(.system(size: 40))
+                        .font(DesignSystem.Typography.xl)
                         .foregroundStyle(.white)
                 }
             }
             
             Text("Tap to start recording")
-                .font(.subheadline)
+                .font(DesignSystem.Typography.subheadline)
                 .foregroundStyle(.secondary)
             
             Spacer()
@@ -275,7 +279,7 @@ struct ActiveRecordingView: View {
                     .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: audioManager.isRecording)
                 
                 Text("RECORDING")
-                    .font(.subheadline.weight(.bold))
+                    .font(.subheadline)
                     .foregroundStyle(.red)
                     .tracking(2)
             }
@@ -289,7 +293,8 @@ struct ActiveRecordingView: View {
             
             // Time display
             Text(formatTime(elapsedTime))
-                .font(.system(size: 56, weight: .medium))
+                .font(DesignSystem.Typography.giant)
+                .fontWeight(.medium)
                 .foregroundStyle(.white)
                 .monospacedDigit()
             
@@ -303,18 +308,19 @@ struct ActiveRecordingView: View {
                 HStack(spacing: 50) {
                     VStack(spacing: 8) {
                         Text("BAR")
-                            .font(.caption.weight(.semibold))
+                            .font(DesignSystem.Typography.caption)
                             .foregroundStyle(.secondary)
                         
                         Text("\(currentBar + 1)")
-                            .font(.system(size: 40, weight: .bold))
+                            .font(DesignSystem.Typography.xl)
+                            .fontWeight(.bold)
                             .foregroundStyle(.white)
                             .monospacedDigit()
                     }
                     
                     VStack(spacing: 8) {
                         Text("BEAT")
-                            .font(.caption.weight(.semibold))
+                            .font(DesignSystem.Typography.caption)
                             .foregroundStyle(.secondary)
                         
                         HStack(spacing: 10) {
@@ -347,9 +353,9 @@ struct ActiveRecordingView: View {
             HStack(spacing: 24) {
                 HStack(spacing: 8) {
                     Image(systemName: "metronome")
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                     Text("\(project.bpm) BPM")
-                        .font(.subheadline.weight(.medium))
+                        .font(DesignSystem.Typography.subheadline)
                 }
                 .foregroundStyle(.secondary)
                 
@@ -359,9 +365,9 @@ struct ActiveRecordingView: View {
                 
                 HStack(spacing: 8) {
                     Image(systemName: "music.note")
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                     Text("\(project.timeTop)/\(project.timeBottom)")
-                        .font(.subheadline.weight(.medium))
+                        .font(DesignSystem.Typography.subheadline)
                 }
                 .foregroundStyle(.secondary)
             }
@@ -373,9 +379,9 @@ struct ActiveRecordingView: View {
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "stop.fill")
-                        .font(.title2)
+                        .font(DesignSystem.Typography.title2)
                     Text("Stop & Save")
-                        .font(.headline)
+                        .font(DesignSystem.Typography.headline)
                 }
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
@@ -489,7 +495,7 @@ struct RecordingTypePickerSheet: View {
         NavigationStack {
             VStack(spacing: 16) {
                 Text("What are you recording?")
-                    .font(.subheadline)
+                    .font(DesignSystem.Typography.subheadline)
                     .foregroundStyle(.secondary)
                     .padding(.top, 8)
                 
@@ -501,11 +507,11 @@ struct RecordingTypePickerSheet: View {
                         } label: {
                             VStack(spacing: 12) {
                                 Image(systemName: type.icon)
-                                    .font(.title)
+                                    .font(DesignSystem.Typography.title)
                                     .foregroundStyle(type.color)
                                 
                                 Text(type.rawValue)
-                                    .font(.subheadline.weight(.semibold))
+                                    .font(DesignSystem.Typography.subheadline)
                                     .foregroundStyle(.white)
                             }
                             .frame(maxWidth: .infinity)

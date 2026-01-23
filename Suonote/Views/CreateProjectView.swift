@@ -37,14 +37,15 @@ struct CreateProjectView: View {
                         dismiss()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.title2)
+                            .font(DesignSystem.Typography.title2)
                             .foregroundStyle(.white.opacity(0.6))
                     }
                     
                     Spacer()
                     
                     Text("New Idea")
-                        .font(.title3.bold())
+                        .font(DesignSystem.Typography.title3)
+                        .fontWeight(.bold)
                         .foregroundStyle(.white)
                     
                     Spacer()
@@ -53,7 +54,7 @@ struct CreateProjectView: View {
                         createProject()
                     } label: {
                         Text("Create")
-                            .font(.headline)
+                            .font(DesignSystem.Typography.headline)
                             .foregroundStyle(
                                 LinearGradient(
                                     colors: [.purple, .blue],
@@ -73,12 +74,13 @@ struct CreateProjectView: View {
                         // Title Section
                         VStack(alignment: .leading, spacing: 12) {
                             Label("Title", systemImage: "music.note")
-                                .font(.caption.weight(.semibold))
+                                .font(DesignSystem.Typography.caption)
                                 .foregroundStyle(.secondary)
                                 .textCase(.uppercase)
                             
                             TextField("My awesome idea...", text: $title)
-                                .font(.title2.bold())
+                                .font(DesignSystem.Typography.title2)
+                                .fontWeight(.bold)
                                 .foregroundStyle(.white)
                                 .focused($isTitleFocused)
                                 .padding(20)
@@ -100,7 +102,7 @@ struct CreateProjectView: View {
                         // Status Section
                         VStack(alignment: .leading, spacing: 12) {
                             Label("Status", systemImage: "flag.fill")
-                                .font(.caption.weight(.semibold))
+                                .font(DesignSystem.Typography.caption)
                                 .foregroundStyle(.secondary)
                                 .textCase(.uppercase)
                             
@@ -123,7 +125,7 @@ struct CreateProjectView: View {
                         // BPM Section
                         VStack(alignment: .leading, spacing: 12) {
                             Label("Tempo", systemImage: "metronome")
-                                .font(.caption.weight(.semibold))
+                                .font(DesignSystem.Typography.caption)
                                 .foregroundStyle(.secondary)
                                 .textCase(.uppercase)
                             
@@ -134,7 +136,8 @@ struct CreateProjectView: View {
                                     }
                                     
                                     Text("\(bpm)")
-                                        .font(.system(size: 72, weight: .bold))
+                                        .font(DesignSystem.Typography.mega)
+                                        .fontWeight(.bold)
                                         .foregroundStyle(
                                             LinearGradient(
                                                 colors: [.white, .white.opacity(0.7)],
@@ -149,7 +152,7 @@ struct CreateProjectView: View {
                                     }
                                     
                                     Text("BPM")
-                                        .font(.title3.weight(.medium))
+                                        .font(DesignSystem.Typography.title3)
                                         .foregroundStyle(.secondary)
                                         .padding(.top, 40)
                                 }
@@ -174,7 +177,7 @@ struct CreateProjectView: View {
                                             }
                                         } label: {
                                             Text("\(preset)")
-                                                .font(.caption.weight(.semibold))
+                                                .font(DesignSystem.Typography.caption)
                                                 .foregroundStyle(bpm == preset ? .white : .white.opacity(0.5))
                                                 .padding(.horizontal, 12)
                                                 .padding(.vertical, 8)
@@ -208,7 +211,7 @@ struct CreateProjectView: View {
                         // Tags Section
                         VStack(alignment: .leading, spacing: 12) {
                             Label("Tags", systemImage: "tag.fill")
-                                .font(.caption.weight(.semibold))
+                                .font(DesignSystem.Typography.caption)
                                 .foregroundStyle(.secondary)
                                 .textCase(.uppercase)
                             
@@ -226,7 +229,7 @@ struct CreateProjectView: View {
                                             addTag()
                                         } label: {
                                             Image(systemName: "plus.circle.fill")
-                                                .font(.title3)
+                                                .font(DesignSystem.Typography.title3)
                                                 .foregroundStyle(
                                                     LinearGradient(
                                                         colors: [.cyan, .blue],
@@ -292,7 +295,7 @@ struct CreateProjectView: View {
             action()
         } label: {
             Image(systemName: systemImage)
-                .font(.headline)
+                .font(DesignSystem.Typography.headline)
                 .foregroundStyle(isEnabled ? .white : .white.opacity(0.3))
                 .frame(width: 36, height: 36)
                 .background(
@@ -349,11 +352,11 @@ struct StatusSelectionCard: View {
         Button(action: action) {
             VStack(spacing: 8) {
                 Image(systemName: icon)
-                    .font(.title2)
+                    .font(DesignSystem.Typography.title2)
                     .foregroundStyle(isSelected ? color : .white.opacity(0.4))
                 
                 Text(status.rawValue)
-                    .font(.caption.weight(.semibold))
+                    .font(DesignSystem.Typography.caption)
                     .foregroundStyle(isSelected ? .white : .white.opacity(0.6))
             }
             .frame(width: 100, height: 100)
@@ -397,11 +400,12 @@ struct TagChip: View {
     var body: some View {
         HStack(spacing: 6) {
             Text(tag)
-                .font(.subheadline.weight(.medium))
+                .font(DesignSystem.Typography.subheadline)
             
             Button(action: onDelete) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(DesignSystem.Typography.micro)
+                    .fontWeight(.bold)
             }
         }
         .padding(.horizontal, 12)

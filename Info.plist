@@ -22,6 +22,12 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Suonote needs microphone to record audio takes</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Piazzolla-VariableFont_opsz,wght.ttf</string>
+		<string>Piazzolla-Italic-VariableFont_opsz,wght.ttf</string>
+		<string>Manrope-VariableFont_wght.ttf</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

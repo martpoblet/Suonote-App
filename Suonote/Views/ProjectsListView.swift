@@ -142,7 +142,8 @@ struct ProjectsListView: View {
     private var customHeader: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
             Text("Your Ideas")
-                .font(.system(size: 44, weight: .bold))
+                .font(DesignSystem.Typography.xxl)
+                .fontWeight(.bold)
                 .foregroundStyle(DesignSystem.Colors.primaryGradient)
             
             if !allProjects.isEmpty {
@@ -349,10 +350,11 @@ struct ModernFilterChip: View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 12, weight: .semibold))
-                
+                    .font(DesignSystem.Typography.caption)
+                    .fontWeight(.semibold)
+
                 Text(title)
-                    .font(.subheadline.weight(.medium))
+                    .font(DesignSystem.Typography.subheadline)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
@@ -395,21 +397,21 @@ struct ModernProjectCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 // Title
                 Text(project.title)
-                    .font(.headline)
+                    .font(DesignSystem.Typography.headline)
                     .foregroundStyle(.white)
                     .lineLimit(1)
                 
                 // Metadata
                 HStack(spacing: 12) {
                     Label("\(project.keyRoot)\(project.keyMode == .minor ? "m" : "")", systemImage: "music.note")
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                     
                     Label("\(project.bpm)", systemImage: "metronome")
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                     
                     if project.recordingsCount > 0 {
                         Label("\(project.recordingsCount)", systemImage: "waveform")
-                            .font(.caption)
+                            .font(DesignSystem.Typography.caption)
                     }
                 }
                 .foregroundStyle(.secondary)
@@ -419,7 +421,7 @@ struct ModernProjectCard: View {
                     HStack(spacing: 6) {
                         ForEach(project.tags.prefix(2), id: \.self) { tag in
                             Text(tag)
-                                .font(.caption2.weight(.medium))
+                                .font(DesignSystem.Typography.caption2)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 3)
                                 .background(Color.cyan.opacity(0.15))
@@ -428,7 +430,7 @@ struct ModernProjectCard: View {
                         }
                         if project.tags.count > 2 {
                             Text("+\(project.tags.count - 2)")
-                                .font(.caption2)
+                                .font(DesignSystem.Typography.caption2)
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -466,9 +468,10 @@ struct StatusBadge: View {
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.system(size: 10, weight: .bold))
+                .font(DesignSystem.Typography.micro)
+                .fontWeight(.bold)
             Text(status.rawValue)
-                .font(.caption2.weight(.bold))
+                .font(DesignSystem.Typography.caption2)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
@@ -505,7 +508,8 @@ struct FloatingActionButton: View {
                     .shadow(color: Color.purple.opacity(0.5), radius: 20, x: 0, y: 10)
                 
                 Image(systemName: "plus")
-                    .font(.system(size: 24, weight: .bold))
+                    .font(DesignSystem.Typography.sm)
+                    .fontWeight(.bold)
                     .foregroundStyle(.white)
             }
         }
@@ -538,7 +542,7 @@ struct FilterChip: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.subheadline)
+                .font(DesignSystem.Typography.subheadline)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
                 .background(isSelected ? Color.accentColor : Color(uiColor: .secondarySystemBackground))
@@ -555,7 +559,7 @@ struct ProjectCardView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(project.title)
-                    .font(.headline)
+                    .font(DesignSystem.Typography.headline)
                     .foregroundStyle(.primary)
                 
                 Spacer()
@@ -566,17 +570,17 @@ struct ProjectCardView: View {
             HStack(spacing: 12) {
                 if !project.keyRoot.isEmpty {
                     Label("\(project.keyRoot) \(project.keyMode.rawValue)", systemImage: "music.note")
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                         .foregroundStyle(.secondary)
                 }
                 
                 Label("\(project.bpm) BPM", systemImage: "metronome")
-                    .font(.caption)
+                    .font(DesignSystem.Typography.caption)
                     .foregroundStyle(.secondary)
                 
                 if project.recordingsCount > 0 {
                     Label("\(project.recordingsCount) takes", systemImage: "waveform")
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -585,7 +589,7 @@ struct ProjectCardView: View {
                 HStack(spacing: 6) {
                     ForEach(project.tags.prefix(3), id: \.self) { tag in
                         Text(tag)
-                            .font(.caption2)
+                            .font(DesignSystem.Typography.caption2)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(Color.accentColor.opacity(0.2))
@@ -593,14 +597,14 @@ struct ProjectCardView: View {
                     }
                     if project.tags.count > 3 {
                         Text("+\(project.tags.count - 3)")
-                            .font(.caption2)
+                            .font(DesignSystem.Typography.caption2)
                             .foregroundStyle(.secondary)
                     }
                 }
             }
             
             Text("Edited \(project.updatedAt.timeAgo())")
-                .font(.caption)
+                .font(DesignSystem.Typography.caption)
                 .foregroundStyle(.tertiary)
         }
         .padding()
@@ -614,7 +618,7 @@ struct StatusPill: View {
     
     var body: some View {
         Text(status.rawValue)
-            .font(.caption)
+            .font(DesignSystem.Typography.caption)
             .fontWeight(.medium)
             .padding(.horizontal, 10)
             .padding(.vertical, 4)

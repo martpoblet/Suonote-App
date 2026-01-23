@@ -492,13 +492,15 @@ struct StudioEmptyState: View {
         VStack(spacing: 16) {
             VStack(spacing: 8) {
                 Image(systemName: "square.grid.2x2")
-                    .font(.system(size: 32, weight: .semibold))
+                    .font(DesignSystem.Typography.md)
+                    .fontWeight(.semibold)
                     .foregroundStyle(accentColor)
                 Text("Build Your Studio")
-                    .font(.title2.bold())
+                    .font(DesignSystem.Typography.title2)
+                    .fontWeight(.bold)
                     .foregroundStyle(.white)
                 Text("Pick a style and add instruments from your chord progression.")
-                    .font(.subheadline)
+                    .font(DesignSystem.Typography.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
@@ -508,7 +510,7 @@ struct StudioEmptyState: View {
                     onPickStyle()
                 } label: {
                     Text("Pick Style")
-                        .font(.subheadline.weight(.semibold))
+                        .font(.subheadline)
                         .foregroundStyle(.white)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 10)
@@ -525,7 +527,7 @@ struct StudioEmptyState: View {
                         Image(systemName: "plus.circle.fill")
                         Text("Add Track")
                     }
-                    .font(.subheadline.weight(.semibold))
+                    .font(.subheadline)
                     .foregroundStyle(.white)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
@@ -594,10 +596,10 @@ struct StudioTimelineView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(currentSection?.label ?? "Timeline")
-                        .font(.headline)
+                        .font(DesignSystem.Typography.headline)
                         .foregroundStyle(.white)
                     Text(timeLabel)
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                         .foregroundStyle(.secondary)
                 }
 
@@ -608,7 +610,7 @@ struct StudioTimelineView: View {
                         onPlay()
                     } label: {
                         Image(systemName: "play.fill")
-                            .font(.title3)
+                            .font(DesignSystem.Typography.title3)
                             .foregroundStyle(.white)
                             .padding(8)
                             .background(Circle().fill(accentColor))
@@ -619,7 +621,7 @@ struct StudioTimelineView: View {
                         onPause()
                     } label: {
                         Image(systemName: "pause.fill")
-                            .font(.title3)
+                            .font(DesignSystem.Typography.title3)
                             .foregroundStyle(.white)
                             .padding(8)
                             .background(Circle().fill(Color.white.opacity(0.15)))
@@ -630,7 +632,7 @@ struct StudioTimelineView: View {
                         onStop()
                     } label: {
                         Image(systemName: "stop.fill")
-                            .font(.title3)
+                            .font(DesignSystem.Typography.title3)
                             .foregroundStyle(.white)
                             .padding(8)
                             .background(Circle().fill(Color.white.opacity(0.15)))
@@ -651,7 +653,7 @@ struct StudioTimelineView: View {
                             .frame(width: width, height: 40)
                             .overlay(
                                 Text(segment.label)
-                                    .font(.caption2.weight(.semibold))
+                                    .font(DesignSystem.Typography.caption2)
                                     .foregroundStyle(.white.opacity(width > 48 ? 0.95 : 0))
                                     .lineLimit(1)
                                     .padding(.horizontal, 6),
@@ -793,7 +795,7 @@ struct StudioTrackEditorView: View {
                     dismiss()
                 } label: {
                     Image(systemName: "chevron.left")
-                        .font(.headline)
+                        .font(DesignSystem.Typography.headline)
                         .foregroundStyle(.white)
                         .frame(width: 36, height: 36)
                         .background(Circle().fill(Color.white.opacity(0.12)))
@@ -820,7 +822,7 @@ struct StudioTrackEditorView: View {
                                 .stroke(accentColor.opacity(0.6), lineWidth: 1)
                         )
                     Image(systemName: track.instrument.icon)
-                        .font(.title3)
+                        .font(DesignSystem.Typography.title3)
                         .foregroundStyle(accentColor)
                 }
             }
@@ -855,7 +857,7 @@ struct StudioTrackEditorView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Track Controls")
-                    .font(.headline)
+                    .font(DesignSystem.Typography.headline)
                     .foregroundStyle(.white)
 
                 Spacer()
@@ -866,9 +868,9 @@ struct StudioTrackEditorView: View {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "sparkles")
-                                .font(.caption)
+                                .font(DesignSystem.Typography.caption)
                             Text("Regenerate")
-                                .font(.caption.weight(.semibold))
+                                .font(DesignSystem.Typography.caption)
                         }
                         .foregroundStyle(.white)
                         .padding(.horizontal, 10)
@@ -925,7 +927,7 @@ struct StudioTrackEditorView: View {
     private var trackVariantPicker: some View {
         HStack {
             Text("Variant")
-                .font(.caption.weight(.semibold))
+                .font(DesignSystem.Typography.caption)
                 .foregroundStyle(.secondary)
 
             Spacer()
@@ -947,9 +949,9 @@ struct StudioTrackEditorView: View {
             } label: {
                 HStack(spacing: 6) {
                     Text(track.variant?.rawValue ?? track.instrument.variants.first?.rawValue ?? track.instrument.title)
-                        .font(.caption.weight(.semibold))
+                        .font(DesignSystem.Typography.caption)
                     Image(systemName: "chevron.down")
-                        .font(.caption2)
+                        .font(DesignSystem.Typography.caption2)
                 }
                 .foregroundStyle(.white)
                 .padding(.horizontal, 10)
@@ -1000,10 +1002,10 @@ struct StudioTrackEditorView: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.caption2)
+                    .font(DesignSystem.Typography.caption2)
                     .foregroundStyle(.secondary)
                 Text(title)
-                    .font(.caption2.weight(.medium))
+                    .font(DesignSystem.Typography.caption2)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Text(valueText)
@@ -1101,7 +1103,7 @@ struct StudioTrackEditorHint: View {
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.sm) {
             Image(systemName: "arrow.up.left.and.arrow.down.right")
-                .font(.title3)
+                .font(DesignSystem.Typography.title3)
                 .foregroundStyle(accentColor)
                 .frame(width: 36, height: 36)
                 .background(
@@ -1111,7 +1113,7 @@ struct StudioTrackEditorHint: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Tap a track to edit")
-                    .font(DesignSystem.Typography.callout.weight(.semibold))
+                    .font(DesignSystem.Typography.callout)
                     .foregroundStyle(.white)
                 Text("Open the full-screen editor to write notes and grooves.")
                     .font(DesignSystem.Typography.caption)
@@ -1147,9 +1149,9 @@ private struct StudioInfoChip: View {
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.caption2)
+                .font(DesignSystem.Typography.caption2)
             Text(text)
-                .font(DesignSystem.Typography.caption2.weight(.semibold))
+                .font(DesignSystem.Typography.caption2)
                 .lineLimit(1)
         }
         .foregroundStyle(.white)
@@ -1176,7 +1178,7 @@ struct StudioTrackList: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Tracks")
-                .font(.headline)
+                .font(DesignSystem.Typography.headline)
                 .foregroundStyle(.white)
 
             VStack(spacing: 8) {
@@ -1217,13 +1219,13 @@ struct StudioTrackRow: View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 Image(systemName: track.instrument.icon)
-                    .font(.title3)
+                    .font(DesignSystem.Typography.title3)
                     .foregroundStyle(track.instrument.color)
                     .frame(width: 28)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(track.name)
-                        .font(.subheadline.weight(.semibold))
+                        .font(.subheadline)
                         .foregroundStyle(.white)
 
                     // Variant selector inline
@@ -1245,16 +1247,16 @@ struct StudioTrackRow: View {
                         } label: {
                             HStack(spacing: 4) {
                                 Text(track.variant?.rawValue ?? track.instrument.variants.first?.rawValue ?? track.instrument.title)
-                                    .font(.caption)
+                                    .font(DesignSystem.Typography.caption)
                                     .foregroundStyle(.secondary)
                                 Image(systemName: "chevron.up.chevron.down")
-                                    .font(.system(size: 8))
+                                    .font(DesignSystem.Typography.nano)
                                     .foregroundStyle(.secondary)
                             }
                         }
                     } else {
                         Text(track.instrument.title)
-                            .font(.caption)
+                            .font(DesignSystem.Typography.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -1266,7 +1268,7 @@ struct StudioTrackRow: View {
                     onTrackChange()
                 } label: {
                     Text("M")
-                        .font(.caption.weight(.bold))
+                        .font(.caption)
                         .foregroundStyle(track.isMuted ? .black : .white)
                         .frame(width: 26, height: 26)
                         .background(
@@ -1281,7 +1283,7 @@ struct StudioTrackRow: View {
                     onTrackChange()
                 } label: {
                     Text("S")
-                        .font(.caption.weight(.bold))
+                        .font(.caption)
                         .foregroundStyle(track.isSolo ? .black : .white)
                         .frame(width: 26, height: 26)
                         .background(
@@ -1324,16 +1326,16 @@ struct StudioAudioTrackView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Audio Track")
-                .font(.headline)
+                .font(DesignSystem.Typography.headline)
                 .foregroundStyle(.white)
 
             if let recording = project.recordings.first(where: { $0.id == track.audioRecordingId }) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(recording.name)
-                        .font(.subheadline.weight(.semibold))
+                        .font(.subheadline)
                         .foregroundStyle(.white)
                     Text("Starts at beat \(String(format: "%.1f", track.audioStartBeat))")
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                         .foregroundStyle(.secondary)
                 }
                 .padding(12)
@@ -1344,12 +1346,12 @@ struct StudioAudioTrackView: View {
                 )
             } else {
                 Text("Recording not found.")
-                    .font(.caption)
+                    .font(DesignSystem.Typography.caption)
                     .foregroundStyle(.secondary)
             }
 
             Text("Audio editing and playback will appear here.")
-                .font(.caption)
+                .font(DesignSystem.Typography.caption)
                 .foregroundStyle(.secondary)
         }
         .padding(16)
@@ -1417,7 +1419,7 @@ struct StudioNoteEditor: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Note Editor")
-                    .font(.headline)
+                    .font(DesignSystem.Typography.headline)
                     .foregroundStyle(.white)
 
                 Spacer()
@@ -1436,12 +1438,12 @@ struct StudioNoteEditor: View {
                     } label: {
                         HStack(spacing: 6) {
                             Text("Length")
-                                .font(.caption.weight(.semibold))
+                                .font(DesignSystem.Typography.caption)
                             Text("\(defaultDuration, specifier: "%.2g")")
-                                .font(.caption2)
+                                .font(DesignSystem.Typography.caption2)
                                 .foregroundStyle(.secondary)
                             Image(systemName: "chevron.down")
-                                .font(.caption2)
+                                .font(DesignSystem.Typography.caption2)
                         }
                         .foregroundStyle(.white)
                         .padding(.horizontal, 10)
@@ -1535,7 +1537,7 @@ struct StudioNoteEditor: View {
             }
 
             Text("Oct \(track.octaveShift >= 0 ? "+\(track.octaveShift)" : "\(track.octaveShift)")")
-                .font(.caption.weight(.semibold))
+                .font(DesignSystem.Typography.caption)
 
             octaveButton(
                 systemName: "plus",
@@ -1561,7 +1563,7 @@ struct StudioNoteEditor: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.caption.weight(.bold))
+                .font(.caption)
                 .frame(width: 28, height: 28)
                 .background(
                     Circle()
@@ -1745,7 +1747,7 @@ struct PitchLabelColumn: View {
         VStack(alignment: .trailing, spacing: 0) {
             ForEach(rows) { row in
                 Text(row.label)
-                    .font(.caption2)
+                    .font(DesignSystem.Typography.caption2)
                     .foregroundStyle(.secondary)
                     .frame(height: rowHeight)
                     .frame(width: 42, alignment: .trailing)
@@ -1878,24 +1880,24 @@ struct NoteInspector: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Note Settings")
-                .font(.caption.weight(.semibold))
+                .font(DesignSystem.Typography.caption)
                 .foregroundStyle(.secondary)
 
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Length")
-                        .font(.caption2)
+                        .font(DesignSystem.Typography.caption2)
                         .foregroundStyle(.secondary)
                     Stepper(value: $note.duration, in: stepLength...maxDuration, step: stepLength) {
                         Text("\(note.duration, specifier: "%.2g") beats")
-                            .font(.caption)
+                            .font(DesignSystem.Typography.caption)
                             .foregroundStyle(.white)
                     }
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Velocity")
-                        .font(.caption2)
+                        .font(DesignSystem.Typography.caption2)
                         .foregroundStyle(.secondary)
                     Slider(
                         value: Binding(
@@ -1944,7 +1946,8 @@ struct StudioStylePickerView: View {
         NavigationStack {
             VStack(spacing: 20) {
                 Text("Choose a Style")
-                    .font(.title2.bold())
+                    .font(DesignSystem.Typography.title2)
+                    .fontWeight(.bold)
                     .foregroundStyle(.white)
 
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
@@ -1955,18 +1958,18 @@ struct StudioStylePickerView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 HStack {
                                     Image(systemName: style.icon)
-                                        .font(.title3)
+                                        .font(DesignSystem.Typography.title3)
                                     Spacer()
                                     if currentSelection == style {
                                         Image(systemName: "checkmark.circle.fill")
-                                            .font(.title3)
+                                            .font(DesignSystem.Typography.title3)
                                     }
                                 }
 
                                 Text(style.title)
-                                    .font(.headline)
+                                    .font(DesignSystem.Typography.headline)
                                 Text(style.description)
-                                    .font(.caption)
+                                    .font(DesignSystem.Typography.caption)
                                     .foregroundStyle(.secondary)
                                     .lineLimit(2)
                             }
@@ -1995,7 +1998,7 @@ struct StudioStylePickerView: View {
                     }
                 } label: {
                     Text("Continue")
-                        .font(.headline)
+                        .font(DesignSystem.Typography.headline)
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
@@ -2034,7 +2037,8 @@ struct StudioInstrumentPickerView: View {
         NavigationStack {
             VStack(spacing: 20) {
                 Text("Add Track")
-                    .font(.title2.bold())
+                    .font(DesignSystem.Typography.title2)
+                    .fontWeight(.bold)
                     .foregroundStyle(.white)
 
                 if availableInstruments.isEmpty {
@@ -2052,19 +2056,19 @@ struct StudioInstrumentPickerView: View {
                                 VStack(alignment: .leading, spacing: 8) {
                                     HStack {
                                         Image(systemName: instrument.icon)
-                                            .font(.title3)
+                                            .font(DesignSystem.Typography.title3)
                                         Spacer()
                                         if isAdded {
                                             Image(systemName: "checkmark.circle.fill")
-                                                .font(.title3)
+                                                .font(DesignSystem.Typography.title3)
                                         }
                                     }
 
                                     Text(instrument.title)
-                                        .font(.headline)
+                                        .font(DesignSystem.Typography.headline)
 
                                     Text(isAdded ? "Already added" : "Tap to add")
-                                        .font(.caption)
+                                        .font(DesignSystem.Typography.caption)
                                         .foregroundStyle(.secondary)
                                 }
                                 .foregroundStyle(.white)
@@ -2125,12 +2129,12 @@ struct StudioRecordingPicker: View {
                                     Text(recording.name)
                                         .foregroundStyle(.white)
                                     Text(recording.recordingType.rawValue)
-                                        .font(.caption)
+                                        .font(DesignSystem.Typography.caption)
                                         .foregroundStyle(.secondary)
                                 }
                                 Spacer()
                                 Text("\(recording.duration, specifier: "%.1f")s")
-                                    .font(.caption)
+                                    .font(DesignSystem.Typography.caption)
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -2161,7 +2165,8 @@ struct AddTrackMenuView: View {
         NavigationStack {
             VStack(spacing: 24) {
                 Text("Choose Track Type")
-                    .font(.title2.bold())
+                    .font(DesignSystem.Typography.title2)
+                    .fontWeight(.bold)
                     .foregroundStyle(.white)
                     .padding(.top, 24)
                 
@@ -2171,7 +2176,7 @@ struct AddTrackMenuView: View {
                     } label: {
                         HStack(spacing: 16) {
                             Image(systemName: "music.note")
-                                .font(.title2)
+                                .font(DesignSystem.Typography.title2)
                                 .foregroundStyle(.white)
                                 .frame(width: 50, height: 50)
                                 .background(
@@ -2181,11 +2186,11 @@ struct AddTrackMenuView: View {
                             
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Add Instrument")
-                                    .font(.headline)
+                                    .font(DesignSystem.Typography.headline)
                                     .foregroundStyle(.white)
                                 
                                 Text("Piano, Guitar, Drums, Bass, Synth")
-                                    .font(.caption)
+                                    .font(DesignSystem.Typography.caption)
                                     .foregroundStyle(.secondary)
                             }
                             
@@ -2212,7 +2217,7 @@ struct AddTrackMenuView: View {
                     } label: {
                         HStack(spacing: 16) {
                             Image(systemName: "waveform")
-                                .font(.title2)
+                                .font(DesignSystem.Typography.title2)
                                 .foregroundStyle(.white)
                                 .frame(width: 50, height: 50)
                                 .background(
@@ -2222,11 +2227,11 @@ struct AddTrackMenuView: View {
                             
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Add Recording")
-                                    .font(.headline)
+                                    .font(DesignSystem.Typography.headline)
                                     .foregroundStyle(.white)
                                 
                                 Text(hasRecordings ? "Import audio from your recordings" : "No recordings available")
-                                    .font(.caption)
+                                    .font(DesignSystem.Typography.caption)
                                     .foregroundStyle(.secondary)
                             }
                             
@@ -2289,7 +2294,7 @@ struct RegenerateOptionsView: View {
             VStack(spacing: 24) {
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Regenerating: \(trackName)")
-                        .font(.headline)
+                        .font(DesignSystem.Typography.headline)
                         .foregroundStyle(.white)
                     
                     // Intensity Slider
@@ -2298,7 +2303,7 @@ struct RegenerateOptionsView: View {
                             Image(systemName: "waveform")
                                 .foregroundStyle(.purple)
                             Text("Intensity")
-                                .font(.subheadline.weight(.semibold))
+                                .font(.subheadline)
                                 .foregroundStyle(.white)
                             Spacer()
                             Text("\(Int(intensity * 100))%")
@@ -2311,16 +2316,16 @@ struct RegenerateOptionsView: View {
                         
                         HStack {
                             Text("Minimal")
-                                .font(.caption2)
+                                .font(DesignSystem.Typography.caption2)
                                 .foregroundStyle(.secondary)
                             Spacer()
                             Text("Maximum")
-                                .font(.caption2)
+                                .font(DesignSystem.Typography.caption2)
                                 .foregroundStyle(.secondary)
                         }
                         
                         Text("Controls hit frequency and velocity")
-                            .font(.caption2)
+                            .font(DesignSystem.Typography.caption2)
                             .foregroundStyle(.secondary.opacity(0.7))
                     }
                     
@@ -2330,7 +2335,7 @@ struct RegenerateOptionsView: View {
                             Image(systemName: "music.note.list")
                                 .foregroundStyle(.cyan)
                             Text("Complexity")
-                                .font(.subheadline.weight(.semibold))
+                                .font(.subheadline)
                                 .foregroundStyle(.white)
                             Spacer()
                             Text("\(Int(complexity * 100))%")
@@ -2343,16 +2348,16 @@ struct RegenerateOptionsView: View {
                         
                         HStack {
                             Text("Simple")
-                                .font(.caption2)
+                                .font(DesignSystem.Typography.caption2)
                                 .foregroundStyle(.secondary)
                             Spacer()
                             Text("Complex")
-                                .font(.caption2)
+                                .font(DesignSystem.Typography.caption2)
                                 .foregroundStyle(.secondary)
                         }
                         
                         Text("Controls note variations and rhythmic patterns")
-                            .font(.caption2)
+                            .font(DesignSystem.Typography.caption2)
                             .foregroundStyle(.secondary.opacity(0.7))
                     }
                 }
@@ -2370,7 +2375,7 @@ struct RegenerateOptionsView: View {
                         onCancel()
                     } label: {
                         Text("Cancel")
-                            .font(.headline)
+                            .font(DesignSystem.Typography.headline)
                             .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
@@ -2387,7 +2392,7 @@ struct RegenerateOptionsView: View {
                             Image(systemName: "sparkles")
                             Text("Regenerate")
                         }
-                        .font(.headline)
+                        .font(DesignSystem.Typography.headline)
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)

@@ -271,7 +271,7 @@ struct RecordingsTabView: View {
                 } label: {
                     VStack(spacing: DesignSystem.Spacing.xxs) {
                         Image(systemName: "line.3.horizontal.decrease.circle.fill")
-                            .font(.system(size: 20))
+                            .font(DesignSystem.Typography.title3)
                         Text("Filter")
                             .font(DesignSystem.Typography.caption)
                     }
@@ -526,11 +526,11 @@ struct ModernTakeCard: View {
                 
                 if isPlaying {
                     Image(systemName: "pause.fill")
-                        .font(.title3)
+                        .font(DesignSystem.Typography.title3)
                         .foregroundStyle(.white)
                 } else {
                     Image(systemName: "play.fill")
-                        .font(.title3)
+                        .font(DesignSystem.Typography.title3)
                         .foregroundStyle(.white)
                         .offset(x: 2)
                 }
@@ -543,11 +543,11 @@ struct ModernTakeCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     Text(recording.name)
-                        .font(.headline)
+                        .font(DesignSystem.Typography.headline)
                         .foregroundStyle(.white)
                     
                     Image(systemName: recording.recordingType.icon)
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                         .foregroundStyle(recording.recordingType.color)
                 }
                 
@@ -555,9 +555,9 @@ struct ModernTakeCard: View {
                     if let section = linkedSection {
                         HStack(spacing: 4) {
                             Image(systemName: "link")
-                                .font(.caption2)
+                                .font(DesignSystem.Typography.caption2)
                             Text(section.name)
-                                .font(.caption.weight(.medium))
+                                .font(DesignSystem.Typography.caption)
                         }
                         .foregroundStyle(.purple)
                         .padding(.horizontal, 8)
@@ -571,9 +571,9 @@ struct ModernTakeCard: View {
                         Button(action: onLinkSection) {
                             HStack(spacing: 4) {
                                 Image(systemName: "link.circle.fill")
-                                    .font(.caption2)
+                                    .font(DesignSystem.Typography.caption2)
                                 Text("Link Section")
-                                    .font(.caption.weight(.medium))
+                                    .font(DesignSystem.Typography.caption)
                             }
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 8)
@@ -592,7 +592,7 @@ struct ModernTakeCard: View {
                     HStack(spacing: 6) {
                         ForEach(activeEffects) { effect in
                             Image(systemName: effect.icon)
-                                .font(.caption2)
+                                .font(DesignSystem.Typography.caption2)
                                 .foregroundStyle(effect.color)
                                 .padding(6)
                                 .background(
@@ -606,16 +606,16 @@ struct ModernTakeCard: View {
                 HStack(spacing: 8) {
                     HStack(spacing: 4) {
                         Image(systemName: "clock")
-                            .font(.caption2)
+                            .font(DesignSystem.Typography.caption2)
                         Text(formatDuration(recording.duration))
-                            .font(.caption)
+                            .font(DesignSystem.Typography.caption)
                     }
                     
                     Text("•")
-                        .font(.caption2)
+                        .font(DesignSystem.Typography.caption2)
                     
                     Text(recording.createdAt.formatted(date: .abbreviated, time: .shortened))
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                 }
                 .foregroundStyle(.secondary)
             }
@@ -706,14 +706,14 @@ struct SectionLinkSheet: View {
                 // Recording info
                 VStack(spacing: 8) {
                     Text(recording.name)
-                        .font(.headline)
+                        .font(DesignSystem.Typography.headline)
                         .foregroundStyle(.white)
                     
                     HStack(spacing: 6) {
                         Image(systemName: recording.recordingType.icon)
-                            .font(.caption)
+                            .font(DesignSystem.Typography.caption)
                         Text(recording.recordingType.rawValue)
-                            .font(.caption)
+                            .font(DesignSystem.Typography.caption)
                     }
                     .foregroundStyle(recording.recordingType.color)
                 }
@@ -723,16 +723,16 @@ struct SectionLinkSheet: View {
                     // Empty state
                     VStack(spacing: 20) {
                         Image(systemName: "music.note.list")
-                            .font(.system(size: 60))
+                            .font(DesignSystem.Typography.jumbo)
                             .foregroundStyle(.secondary)
                         
                         VStack(spacing: 8) {
                             Text("No sections available")
-                                .font(.headline)
+                                .font(DesignSystem.Typography.headline)
                                 .foregroundStyle(.white)
                             
                             Text("Create sections in Compose first")
-                                .font(.subheadline)
+                                .font(DesignSystem.Typography.subheadline)
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
                         }
@@ -749,11 +749,11 @@ struct SectionLinkSheet: View {
                                 } label: {
                                     VStack(spacing: 8) {
                                         Text(section.name)
-                                            .font(.subheadline.weight(.semibold))
+                                            .font(.subheadline)
                                             .foregroundStyle(.white)
                                         
                                         Text("\(section.bars) bars")
-                                            .font(.caption)
+                                            .font(DesignSystem.Typography.caption)
                                             .foregroundStyle(.secondary)
                                     }
                                     .frame(maxWidth: .infinity)
@@ -780,11 +780,11 @@ struct SectionLinkSheet: View {
                             } label: {
                                 HStack(spacing: 12) {
                                     Image(systemName: "xmark.circle.fill")
-                                        .font(.title3)
+                                        .font(DesignSystem.Typography.title3)
                                         .foregroundStyle(.red)
                                     
                                     Text("Remove Link")
-                                        .font(.subheadline.weight(.semibold))
+                                        .font(.subheadline)
                                         .foregroundStyle(.white)
                                 }
                                 .frame(maxWidth: .infinity)
@@ -843,12 +843,12 @@ struct FilterChipView: View {
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.caption2)
+                .font(DesignSystem.Typography.caption2)
             Text(text)
-                .font(.caption.weight(.medium))
+                .font(DesignSystem.Typography.caption)
             Button(action: onRemove) {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.caption)
+                    .font(DesignSystem.Typography.caption)
             }
         }
         .foregroundStyle(color)

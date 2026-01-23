@@ -133,7 +133,7 @@ struct AudioEffectsSheet: View {
                         HStack(spacing: 8) {
                             Image(systemName: "checkmark.circle.fill")
                             Text("Apply Effects")
-                                .font(.headline)
+                                .font(DesignSystem.Typography.headline)
                         }
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
@@ -202,12 +202,12 @@ struct EffectSection<Content: View>: View {
             Toggle(isOn: $isEnabled) {
                 HStack(spacing: 12) {
                     Image(systemName: icon)
-                        .font(.title3)
+                        .font(DesignSystem.Typography.title3)
                         .foregroundStyle(color)
                         .frame(width: 32)
                     
                     Text(title)
-                        .font(.headline)
+                        .font(DesignSystem.Typography.headline)
                         .foregroundStyle(.white)
                 }
             }
@@ -244,11 +244,11 @@ struct SliderControl: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: icon)
-                    .font(.caption)
+                    .font(DesignSystem.Typography.caption)
                     .foregroundStyle(.secondary)
                 
                 Text(title)
-                    .font(.subheadline)
+                    .font(DesignSystem.Typography.subheadline)
                     .foregroundStyle(.white)
                 
                 Spacer()

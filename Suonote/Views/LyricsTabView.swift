@@ -103,7 +103,7 @@ struct LyricsSectionCard: View {
                 } else {
                     HStack {
                         Image(systemName: "text.cursor")
-                            .font(.title2)
+                            .font(DesignSystem.Typography.title2)
                             .foregroundStyle(.secondary)
                         
                         Text("No lyrics yet")
@@ -188,9 +188,9 @@ struct ImmersiveLyricsEditor: View {
                     if section.lyricsText.isEmpty {
                         VStack(spacing: DesignSystem.Spacing.md) {
                             Image(systemName: "text.quote")
-                                .font(.system(size: 60))
+                                .font(DesignSystem.Typography.jumbo)
                                 .foregroundStyle(.white.opacity(0.1))
-                            
+
                             Text("Start writing your lyrics...")
                                 .font(DesignSystem.Typography.title3)
                                 .foregroundStyle(.white.opacity(0.3))
@@ -199,7 +199,7 @@ struct ImmersiveLyricsEditor: View {
                     }
                     
                     TextEditor(text: $section.lyricsText)
-                        .font(.system(size: 20, weight: .regular))
+                        .font(DesignSystem.Typography.title3)
                         .foregroundStyle(.white)
                         .scrollContentBackground(.hidden)
                         .focused($isTextEditorFocused)

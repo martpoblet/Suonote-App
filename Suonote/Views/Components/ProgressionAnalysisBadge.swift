@@ -32,9 +32,9 @@ struct ProgressionAnalysisBadge: View {
         if analysis.totalChords > 0 {
             HStack(spacing: DesignSystem.Spacing.xxs) {
                 Image(systemName: statusIcon)
-                    .font(.system(size: 8))
+                    .font(DesignSystem.Typography.nano)
                 Text("\(Int(analysis.diatonicPercentage))%")
-                    .font(DesignSystem.Typography.caption2.weight(.semibold))
+                    .font(DesignSystem.Typography.caption2)
             }
             .foregroundStyle(.white)
             .padding(.horizontal, DesignSystem.Spacing.xs)
@@ -59,9 +59,9 @@ struct ChordCountBadge: View {
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.xxxs) {
             Image(systemName: "music.note")
-                .font(.system(size: 8))
+                .font(DesignSystem.Typography.nano)
             Text("\(count)")
-                .font(DesignSystem.Typography.caption2.weight(.semibold))
+                .font(DesignSystem.Typography.caption2)
         }
         .foregroundStyle(.white)
         .padding(.horizontal, DesignSystem.Spacing.xs)
@@ -85,9 +85,9 @@ struct RecordingCountBadge: View {
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.xxxs) {
             Image(systemName: "waveform.badge.mic")
-                .font(.system(size: 8))
+                .font(DesignSystem.Typography.nano)
             Text("\(count)")
-                .font(DesignSystem.Typography.caption2.weight(.semibold))
+                .font(DesignSystem.Typography.caption2)
         }
         .foregroundStyle(.white)
         .padding(.horizontal, DesignSystem.Spacing.xs)

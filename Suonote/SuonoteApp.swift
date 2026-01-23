@@ -3,6 +3,14 @@ import SwiftData
 
 @main
 struct SuonoteApp: App {
+
+    init() {
+        // Verificar fuentes al inicio
+        #if DEBUG
+        AppFonts.checkFonts()
+        #endif
+    }
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([Project.self])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)

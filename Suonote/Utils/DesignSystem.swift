@@ -56,22 +56,48 @@ struct DesignSystem {
     // MARK: - Typography
     
     struct Typography {
+        // Display (Extra Large Headings)
+        static let display = Font.delightDisplay
+        static let displayLarge = Font.delightDisplayLarge
+
         // Headings
-        static let largeTitle = Font.system(size: 34, weight: .bold)
-        static let title = Font.system(size: 28, weight: .bold)
-        static let title2 = Font.system(size: 22, weight: .bold)
-        static let title3 = Font.system(size: 20, weight: .semibold)
-        
+        static let largeTitle = Font.delightLargeTitle
+        static let title = Font.delightTitle
+        static let title2 = Font.delightTitle2
+        static let title3 = Font.delightTitle3
+
+        // Headlines
+        static let headline = Font.delightHeadline
+        static let subheadline = Font.delightSubheadline
+
         // Body
-        static let body = Font.system(size: 15, weight: .regular)
-        static let bodyBold = Font.system(size: 15, weight: .semibold)
-        static let callout = Font.system(size: 13, weight: .regular)
-        
+        static let body = Font.delightBody
+        static let bodyBold = Font.delightBodyBold
+        static let bodyMedium = Font.delightBodyMedium
+        static let callout = Font.delightCallout
+        static let calloutBold = Font.delightCalloutBold
+
         // Captions
-        static let caption = Font.system(size: 12, weight: .regular)
-        static let caption2 = Font.system(size: 11, weight: .regular)
-        static let footnote = Font.system(size: 13, weight: .regular)
-        
+        static let caption = Font.delightCaption
+        static let caption2 = Font.delightCaption2
+        static let footnote = Font.delightFootnote
+
+        // Extra Large - For special UI elements
+        static let hero = Font.appHero       // 120pt - Timer display
+        static let mega = Font.appMega       // 72pt - BPM, counters
+        static let jumbo = Font.appJumbo     // 60pt - Large icons
+        static let giant = Font.appGiant     // 56pt - Recording timer
+        static let huge = Font.appHuge       // 48pt - Large titles
+        static let xxl = Font.appXXL         // 44pt - Section headers
+        static let xl = Font.appXL           // 40pt - Featured
+        static let lg = Font.appLG           // 36pt - Emphasized
+        static let md = Font.appMD           // 32pt - Chord names
+        static let sm = Font.appSM           // 24pt - Subheadings
+
+        // Micro sizes
+        static let micro = Font.appMicro     // 10pt - Tiny badges
+        static let nano = Font.appNano       // 8pt - Annotations
+
         // Special
         static let monospaced = Font.system(.body, design: .monospaced)
     }
@@ -263,10 +289,10 @@ struct SecondaryButton: View {
             HStack(spacing: DesignSystem.Spacing.xs) {
                 if let icon = icon {
                     Image(systemName: icon)
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                 }
                 Text(title)
-                    .font(DesignSystem.Typography.callout.weight(.semibold))
+                    .font(DesignSystem.Typography.callout)
             }
             .foregroundStyle(.white)
             .padding(.horizontal, DesignSystem.Spacing.md)
@@ -293,7 +319,7 @@ struct Badge: View {
     
     var body: some View {
         Text(text)
-            .font(DesignSystem.Typography.caption2.weight(.semibold))
+            .font(DesignSystem.Typography.caption2)
             .foregroundStyle(.white)
             .padding(.horizontal, DesignSystem.Spacing.sm)
             .padding(.vertical, DesignSystem.Spacing.xxs)
@@ -351,7 +377,7 @@ struct EmptyStateView: View {
                     .frame(width: 120, height: 120)
                 
                 Image(systemName: icon)
-                    .font(.system(size: 50))
+                    .font(DesignSystem.Typography.huge)
                     .foregroundStyle(DesignSystem.Colors.primaryGradient)
             }
             

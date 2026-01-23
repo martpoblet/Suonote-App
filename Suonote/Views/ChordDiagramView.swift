@@ -60,7 +60,7 @@ private struct PianoChordDiagram: View {
     var body: some View {
         VStack(spacing: 12) {
             Text("Piano")
-                .font(.caption.weight(.semibold))
+                .font(DesignSystem.Typography.caption)
                 .foregroundStyle(.secondary)
             
             GeometryReader { geometry in
@@ -145,7 +145,7 @@ private struct GuitarChordDiagram: View {
     var body: some View {
         VStack(spacing: 12) {
             Text("Guitar")
-                .font(.caption.weight(.semibold))
+                .font(DesignSystem.Typography.caption)
                 .foregroundStyle(.secondary)
             
             VStack(spacing: 0) {
@@ -155,14 +155,14 @@ private struct GuitarChordDiagram: View {
                         if let pos = fingerPositions[string] {
                             if pos == 0 {
                                 Text("O")
-                                    .font(.caption.weight(.bold))
+                                    .font(.caption)
                                     .foregroundStyle(accentColor)
                             } else {
                                 Text("")
                             }
                         } else {
                             Text("X")
-                                .font(.caption.weight(.bold))
+                                .font(.caption)
                                 .foregroundStyle(.red)
                         }
                         if string < 5 {
@@ -309,7 +309,7 @@ private struct ChordNoteChips: View {
     var body: some View {
         HStack(spacing: 8) {
             Text(display)
-                .font(.headline.weight(.bold))
+                .font(.headline)
                 .foregroundStyle(.white)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
@@ -326,7 +326,7 @@ private struct ChordNoteChips: View {
             
             ForEach(notes, id: \.self) { note in
                 Text(note)
-                    .font(.caption.weight(.semibold))
+                    .font(DesignSystem.Typography.caption)
                     .foregroundStyle(.white)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)

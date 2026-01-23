@@ -26,7 +26,7 @@ struct ExportView: View {
                         // Header
                         VStack(spacing: 8) {
                             Image(systemName: "square.and.arrow.up.circle.fill")
-                                .font(.system(size: 60))
+                                .font(DesignSystem.Typography.jumbo)
                                 .foregroundStyle(
                                     LinearGradient(
                                         colors: [.purple, .blue],
@@ -36,11 +36,12 @@ struct ExportView: View {
                                 )
                             
                             Text("Export Project")
-                                .font(.title.bold())
+                                .font(DesignSystem.Typography.title)
+                                .fontWeight(.bold)
                                 .foregroundStyle(.white)
                             
                             Text(project.title)
-                                .font(.subheadline)
+                                .font(DesignSystem.Typography.subheadline)
                                 .foregroundStyle(.secondary)
                         }
                         .padding(.top, 20)
@@ -137,17 +138,17 @@ struct ExportOptionCard: View {
                         .frame(width: 60, height: 60)
                     
                     Image(systemName: icon)
-                        .font(.title2)
+                        .font(DesignSystem.Typography.title2)
                         .foregroundStyle(color)
                 }
                 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
-                        .font(.headline)
+                        .font(DesignSystem.Typography.headline)
                         .foregroundStyle(.white)
                     
                     Text(subtitle)
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.leading)
                 }
@@ -155,7 +156,7 @@ struct ExportOptionCard: View {
                 Spacer()
                 
                 Image(systemName: "arrow.right.circle.fill")
-                    .font(.title3)
+                    .font(DesignSystem.Typography.title3)
                     .foregroundStyle(.white.opacity(0.3))
             }
             .padding(20)

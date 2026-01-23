@@ -151,9 +151,9 @@ struct ComposeTabView: View {
             } label: {
                 HStack(spacing: DesignSystem.Spacing.xs) {
                     Image(systemName: DesignSystem.Icons.key)
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                     Text("\(project.keyRoot)\(project.keyMode == .minor ? "m" : "")")
-                        .font(DesignSystem.Typography.callout.weight(.semibold))
+                        .font(DesignSystem.Typography.callout)
                 }
                 .padding(.horizontal, DesignSystem.Spacing.sm)
                 .padding(.vertical, DesignSystem.Spacing.xs)
@@ -173,9 +173,9 @@ struct ComposeTabView: View {
             } label: {
                 HStack(spacing: DesignSystem.Spacing.xs) {
                     Image(systemName: DesignSystem.Icons.tempo)
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                     Text("\(project.timeTop)/\(project.timeBottom)")
-                        .font(DesignSystem.Typography.callout.weight(.semibold))
+                        .font(DesignSystem.Typography.callout)
                 }
                 .padding(.horizontal, DesignSystem.Spacing.sm)
                 .padding(.vertical, DesignSystem.Spacing.xs)
@@ -195,10 +195,10 @@ struct ComposeTabView: View {
             } label: {
                 HStack(spacing: DesignSystem.Spacing.xs) {
                     Image(systemName: DesignSystem.Icons.waveform)
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                     VStack(alignment: .leading, spacing: 0) {
                         Text("\(project.bpm)")
-                            .font(DesignSystem.Typography.callout.weight(.semibold))
+                            .font(DesignSystem.Typography.callout)
                         Text(TempoUtils.tempoDescription(for: project.bpm).split(separator: " ").first.map(String.init) ?? "")
                             .font(DesignSystem.Typography.caption2)
                             .opacity(0.7)
@@ -223,7 +223,7 @@ struct ComposeTabView: View {
                 showingExport = true
             } label: {
                 Image(systemName: DesignSystem.Icons.export)
-                    .font(.title3)
+                    .font(DesignSystem.Typography.title3)
                     .foregroundStyle(.white)
                     .padding(DesignSystem.Spacing.xs)
                     .background(
@@ -241,7 +241,7 @@ struct ComposeTabView: View {
                 }
             } label: {
                 Image(systemName: DesignSystem.Icons.add)
-                    .font(.title2)
+                    .font(DesignSystem.Typography.title2)
                     .padding(DesignSystem.Spacing.xs)
                     .foregroundStyle(DesignSystem.Colors.primaryGradient)
             }
@@ -272,13 +272,14 @@ struct ComposeTabView: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text("Arrangement")
-                    .font(.title3.bold())
+                    .font(DesignSystem.Typography.title3)
+                    .fontWeight(.bold)
                     .foregroundStyle(.white)
                 
                 Spacer()
                 
                 Text("\(project.arrangementItems.count) sections")
-                    .font(.caption)
+                    .font(DesignSystem.Typography.caption)
                     .foregroundStyle(.secondary)
             }
             
@@ -443,7 +444,7 @@ struct ComposeTabView: View {
                             .foregroundStyle(.secondary)
                         
                         Text("\(completionPercentage)% filled")
-                            .font(DesignSystem.Typography.caption.weight(.medium))
+                            .font(DesignSystem.Typography.caption)
                             .foregroundStyle(completionPercentage > 80 ? DesignSystem.Colors.success : 
                                            completionPercentage > 50 ? DesignSystem.Colors.warning : .secondary)
                     }
@@ -456,7 +457,7 @@ struct ComposeTabView: View {
                     editingSection = section
                 } label: {
                     Image(systemName: "pencil.circle.fill")
-                        .font(.title2)
+                        .font(DesignSystem.Typography.title2)
                         .foregroundStyle(sectionColor)
                 }
                 .buttonStyle(.haptic(.light))
@@ -516,17 +517,17 @@ struct ComposeTabView: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "waveform.badge.mic")
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                         .foregroundStyle(.purple)
                     
                     Text("Linked Recordings (\(recordings.count))")
-                        .font(.caption.weight(.semibold))
+                        .font(DesignSystem.Typography.caption)
                         .foregroundStyle(.white)
                     
                     Spacer()
                     
                     Image(systemName: isExpanded ? "chevron.up.circle.fill" : "chevron.down.circle.fill")
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -617,7 +618,7 @@ struct SectionTimelineCard: View {
                 HStack {
                     // Section number badge
                     Text("\(index + 1)")
-                        .font(DesignSystem.Typography.caption.weight(.bold))
+                        .font(DesignSystem.Typography.caption)
                         .foregroundStyle(.white)
                         .frame(width: 24, height: 24)
                         .background(Circle().fill(sectionColor))
@@ -627,7 +628,7 @@ struct SectionTimelineCard: View {
                     // Delete button
                     Button(action: { showingDeleteConfirmation = true }) {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.caption)
+                            .font(DesignSystem.Typography.caption)
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
@@ -635,7 +636,7 @@ struct SectionTimelineCard: View {
                 
                 // Section name
                 Text(section.name)
-                    .font(DesignSystem.Typography.callout.weight(.semibold))
+                    .font(DesignSystem.Typography.callout)
                     .foregroundStyle(.white)
                     .lineLimit(1)
                 
@@ -821,7 +822,7 @@ struct ChordGridView: View {
             } label: {
                 HStack(spacing: DesignSystem.Spacing.xxs) {
                     Image(systemName: "plus.circle.fill")
-                        .font(.title3)
+                        .font(DesignSystem.Typography.title3)
                     Text("Add Bar")
                         .font(DesignSystem.Typography.callout)
                 }
@@ -1005,7 +1006,8 @@ struct SwipeActionRow<Content: View>: View {
                     baseOffset = 0
                 } label: {
                     Image(systemName: item.systemImage)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(DesignSystem.Typography.callout)
+                        .fontWeight(.semibold)
                         .foregroundStyle(.white)
                         .frame(width: buttonSize, height: buttonSize)
                         .background(Circle().fill(item.tint))
@@ -1031,7 +1033,8 @@ struct SwipeActionRow<Content: View>: View {
                     baseOffset = 0
                 } label: {
                     Image(systemName: item.systemImage)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(DesignSystem.Typography.callout)
+                        .fontWeight(.semibold)
                         .foregroundStyle(.white)
                         .frame(width: buttonSize, height: buttonSize)
                         .background(Circle().fill(item.tint))
@@ -1306,14 +1309,14 @@ struct BarRow: View {
         let used = beatsUsedInBar(barIndex)
         return HStack {
             Text("Bar \(barIndex + 1)")
-                .font(.caption.weight(.semibold))
+                .font(DesignSystem.Typography.caption)
                 .foregroundStyle(.secondary)
             
             Spacer()
             
             if used > 0 {
                 Text("\(String(format: "%.1f", used))/\(beatsPerBar) beats")
-                    .font(.caption2)
+                    .font(DesignSystem.Typography.caption2)
                     .foregroundStyle(.secondary)
             }
         }
@@ -1340,7 +1343,7 @@ struct BarRow: View {
         .overlay(alignment: .trailing) {
             if isBarDropTargeted && !canDropInBar() && !hasEmptySlot {
                 Image(systemName: "xmark.octagon.fill")
-                    .font(.title3)
+                    .font(DesignSystem.Typography.title3)
                     .foregroundStyle(.red)
                     .padding(.trailing, 8)
             }
@@ -1391,9 +1394,9 @@ struct BarRow: View {
             } label: {
                 VStack(spacing: 4) {
                     Image(systemName: showBlocked ? "xmark.octagon.fill" : "plus.circle.fill")
-                        .font(.title3)
+                        .font(DesignSystem.Typography.title3)
                     Text("Add")
-                        .font(.caption2.weight(.medium))
+                        .font(DesignSystem.Typography.caption2)
                 }
                 .foregroundStyle(showBlocked ? .red : section.color)
                 .frame(maxWidth: .infinity)
@@ -1980,7 +1983,7 @@ struct ChordSlotButton: View {
                 )
             
             Text(text)
-                .font(.subheadline.weight(.semibold))
+                .font(.subheadline)
                 .foregroundStyle(isRest ? Color.white.opacity(0.8) : .white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
@@ -2009,7 +2012,7 @@ struct SectionCreatorView: View {
             VStack(spacing: 24) {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Quick Templates")
-                        .font(.headline)
+                        .font(DesignSystem.Typography.headline)
                         .foregroundStyle(.white)
                     
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
@@ -2032,7 +2035,7 @@ struct SectionCreatorView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Section Name")
-                            .font(.subheadline.weight(.semibold))
+                            .font(.subheadline)
                             .foregroundStyle(.white)
                         
                         TextField("e.g., Verse 1", text: $sectionName)
@@ -2051,7 +2054,7 @@ struct SectionCreatorView: View {
                     
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Color")
-                            .font(.subheadline.weight(.semibold))
+                            .font(.subheadline)
                             .foregroundStyle(.white)
                         
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 12) {
@@ -2066,7 +2069,7 @@ struct SectionCreatorView: View {
                                         
                                         if selectedColor == color {
                                             Image(systemName: "checkmark.circle.fill")
-                                                .font(.title3)
+                                                .font(DesignSystem.Typography.title3)
                                                 .foregroundStyle(.white)
                                         }
                                     }
@@ -2082,7 +2085,7 @@ struct SectionCreatorView: View {
                     createSection()
                 } label: {
                     Text("Create Section")
-                        .font(.headline)
+                        .font(DesignSystem.Typography.headline)
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
@@ -2190,11 +2193,11 @@ struct PresetCard: View {
         Button(action: onSelect) {
             VStack(spacing: 12) {
                 Image(systemName: preset.icon)
-                    .font(.title2)
+                    .font(DesignSystem.Typography.title2)
                     .foregroundStyle(preset.color)
                 
                 Text(preset.name)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.subheadline)
                     .foregroundStyle(.white)
             }
             .frame(maxWidth: .infinity)
@@ -2406,9 +2409,9 @@ struct ChordPaletteSheet: View {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "sparkles")
-                                .font(.caption)
+                                .font(DesignSystem.Typography.caption)
                             Text("Smart Suggestions")
-                                .font(.caption.weight(.medium))
+                                .font(DesignSystem.Typography.caption)
                         }
                         .foregroundStyle(DesignSystem.Colors.accent)
                         .padding(.horizontal, 12)
@@ -2430,7 +2433,7 @@ struct ChordPaletteSheet: View {
                         addChord()
                     } label: {
                         Text(existingChord == nil ? "Add" : "Save")
-                            .font(.subheadline.weight(.semibold))
+                            .font(.subheadline)
                             .foregroundStyle(.white)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
@@ -2476,11 +2479,12 @@ struct ChordPaletteSheet: View {
             HStack {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(chordDisplay)
-                        .font(.system(size: 56, weight: .bold))
+                        .font(DesignSystem.Typography.giant)
+                        .fontWeight(.bold)
                         .foregroundStyle(accentColor)
                     
                     Text("Bar \(slot.barIndex + 1) • Beat \(slot.beatOffset + 1)")
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                         .foregroundStyle(.secondary)
                 }
                 
@@ -2493,10 +2497,10 @@ struct ChordPaletteSheet: View {
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: showingDiagram ? "chevron.up.circle.fill" : "music.note.list")
-                            .font(.title3)
+                            .font(DesignSystem.Typography.title3)
                         if !showingDiagram {
                             Text("View Diagram")
-                                .font(.subheadline.weight(.semibold))
+                                .font(.subheadline)
                         }
                     }
                     .foregroundStyle(isRest ? .secondary : Color.white)
@@ -2525,7 +2529,7 @@ struct ChordPaletteSheet: View {
     private var noteTypeSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Note Type")
-                .font(.subheadline.weight(.semibold))
+                .font(.subheadline)
                 .foregroundStyle(.white)
 
             Picker("Note Type", selection: $isRest) {
@@ -2538,14 +2542,14 @@ struct ChordPaletteSheet: View {
             if isRest {
                 HStack(spacing: 12) {
                     Image(systemName: "pause.circle.fill")
-                        .font(.title2)
+                        .font(DesignSystem.Typography.title2)
                         .foregroundStyle(accentColor)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Silence")
-                            .font(.subheadline.weight(.semibold))
+                            .font(.subheadline)
                             .foregroundStyle(.white)
                         Text("No harmony will be generated during this beat range.")
-                            .font(.caption)
+                            .font(DesignSystem.Typography.caption)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -2580,7 +2584,7 @@ struct ChordPaletteSheet: View {
                     Image(systemName: "lightbulb.fill")
                         .foregroundStyle(accentColor)
                     Text("Suggestions")
-                        .font(.headline)
+                        .font(DesignSystem.Typography.headline)
                         .foregroundStyle(.white)
                     
                     Spacer()
@@ -2625,7 +2629,7 @@ struct ChordPaletteSheet: View {
     private var rootNoteSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Root Note")
-                .font(.subheadline.weight(.semibold))
+                .font(.subheadline)
                 .foregroundStyle(.white)
             
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 8) {
@@ -2634,7 +2638,7 @@ struct ChordPaletteSheet: View {
                         selectedRoot = root
                     } label: {
                         Text(root)
-                            .font(.headline)
+                            .font(DesignSystem.Typography.headline)
                             .foregroundStyle(selectedRoot == root ? .white : .secondary)
                             .frame(height: 44)
                             .frame(maxWidth: .infinity)
@@ -2651,7 +2655,7 @@ struct ChordPaletteSheet: View {
     private var qualitySection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Quality")
-                .font(.subheadline.weight(.semibold))
+                .font(.subheadline)
                 .foregroundStyle(.white)
             
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 8) {
@@ -2660,7 +2664,7 @@ struct ChordPaletteSheet: View {
                         selectedQuality = quality
                     } label: {
                         Text(quality.rawValue.isEmpty ? "Major" : quality.rawValue)
-                            .font(.subheadline.weight(.semibold))
+                            .font(.subheadline)
                             .foregroundStyle(selectedQuality == quality ? .white : .secondary)
                             .frame(height: 44)
                             .frame(maxWidth: .infinity)
@@ -2677,7 +2681,7 @@ struct ChordPaletteSheet: View {
     private var extensionsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Extensions (Max 2)")
-                .font(.subheadline.weight(.semibold))
+                .font(.subheadline)
                 .foregroundStyle(.white)
             
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 8) {
@@ -2690,7 +2694,7 @@ struct ChordPaletteSheet: View {
                         }
                     } label: {
                         Text(ext)
-                            .font(.caption.weight(.semibold))
+                            .font(DesignSystem.Typography.caption)
                             .foregroundStyle(selectedExtensions.contains(ext) ? .white : .secondary)
                             .frame(height: 40)
                             .frame(maxWidth: .infinity)
@@ -2706,7 +2710,7 @@ struct ChordPaletteSheet: View {
             
             if selectedExtensions.count >= 2 {
                 Text("Maximum 2 extensions selected")
-                    .font(.caption2)
+                    .font(DesignSystem.Typography.caption2)
                     .foregroundStyle(.orange)
             }
         }
@@ -2716,13 +2720,13 @@ struct ChordPaletteSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Duration")
-                    .font(.subheadline.weight(.semibold))
+                    .font(.subheadline)
                     .foregroundStyle(.white)
                 
                 Spacer()
                 
                 Text("Max: \(String(format: "%.1f", maxAvailableDuration)) beats")
-                    .font(.caption)
+                    .font(DesignSystem.Typography.caption)
                     .foregroundStyle(.secondary)
             }
             
@@ -2737,9 +2741,9 @@ struct ChordPaletteSheet: View {
                     } label: {
                         VStack(spacing: 4) {
                             Image(systemName: durationIcon(for: dur))
-                                .font(.title3)
+                                .font(DesignSystem.Typography.title3)
                             Text(durationLabel(for: dur))
-                                .font(.caption2.weight(.medium))
+                                .font(DesignSystem.Typography.caption2)
                         }
                         .foregroundStyle(duration == dur ? .white : (isAvailable ? .secondary : .secondary.opacity(0.3)))
                         .frame(maxWidth: .infinity)
@@ -2762,7 +2766,7 @@ struct ChordPaletteSheet: View {
                     }
                 } label: {
                     Image(systemName: "minus.circle.fill")
-                        .font(.title2)
+                        .font(DesignSystem.Typography.title2)
                         .foregroundStyle(accentColor)
                 }
                 .disabled(duration <= 0.5)
@@ -2771,12 +2775,13 @@ struct ChordPaletteSheet: View {
                 
                 VStack(spacing: 4) {
                     Text(String(format: "%.1f", duration))
-                        .font(.system(size: 36, weight: .bold))
+                        .font(DesignSystem.Typography.lg)
+                        .fontWeight(.bold)
                         .foregroundStyle(.white)
                         .monospacedDigit()
                     
                     Text("beats")
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                         .foregroundStyle(.secondary)
                 }
                 
@@ -2788,7 +2793,7 @@ struct ChordPaletteSheet: View {
                     }
                 } label: {
                     Image(systemName: "plus.circle.fill")
-                        .font(.title2)
+                        .font(DesignSystem.Typography.title2)
                         .foregroundStyle(accentColor)
                 }
                 .disabled(duration >= maxAvailableDuration)
@@ -2811,7 +2816,7 @@ struct ChordPaletteSheet: View {
             addChord()
         } label: {
             Text(isRest ? (existingChord == nil ? "Add Rest" : "Save Rest") : (existingChord == nil ? "Add Chord" : "Save Chord"))
-                .font(.headline)
+                .font(DesignSystem.Typography.headline)
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
@@ -2827,7 +2832,7 @@ struct ChordPaletteSheet: View {
             removeChord()
         } label: {
             Text("Remove Chord")
-                .font(.headline)
+                .font(DesignSystem.Typography.headline)
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
@@ -2851,11 +2856,11 @@ struct ChordPaletteSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             if let last = lastChord {
                 Text("After \(last.display)")
-                    .font(.caption)
+                    .font(DesignSystem.Typography.caption)
                     .foregroundStyle(.secondary)
             } else {
                 Text("Start your progression")
-                    .font(.caption)
+                    .font(DesignSystem.Typography.caption)
                     .foregroundStyle(.secondary)
             }
             
@@ -2889,14 +2894,14 @@ struct ChordPaletteSheet: View {
                 let progression = popularProgressions[index]
                 VStack(alignment: .leading, spacing: 8) {
                     Text(progression.name)
-                        .font(.caption.weight(.semibold))
+                        .font(DesignSystem.Typography.caption)
                         .foregroundStyle(.white)
                     
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 6) {
                             ForEach(progression.progression) { chord in
                                 Text(chord.display)
-                                    .font(.caption)
+                                    .font(DesignSystem.Typography.caption)
                                     .foregroundStyle(.white)
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 6)
@@ -3000,11 +3005,11 @@ struct SuggestionChip: View {
         Button(action: action) {
             VStack(spacing: 4) {
                 Text(suggestion.display)
-                    .font(.headline)
+                    .font(DesignSystem.Typography.headline)
                     .foregroundStyle(.white)
                 
                 Text(suggestion.reason)
-                    .font(.caption2)
+                    .font(DesignSystem.Typography.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -3046,11 +3051,11 @@ struct LinkedRecordingCard: View {
                     
                     if isPlaying {
                         Image(systemName: "pause.fill")
-                            .font(.caption)
+                            .font(DesignSystem.Typography.caption)
                             .foregroundStyle(.white)
                     } else {
                         Image(systemName: "play.fill")
-                            .font(.caption)
+                            .font(DesignSystem.Typography.caption)
                             .foregroundStyle(.white)
                             .offset(x: 1)
                     }
@@ -3060,19 +3065,19 @@ struct LinkedRecordingCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 3) {
                         Image(systemName: recording.recordingType.icon)
-                            .font(.caption2)
+                            .font(DesignSystem.Typography.caption2)
                         Text(recording.recordingType.rawValue)
-                            .font(.caption2)
+                            .font(DesignSystem.Typography.caption2)
                     }
                     .foregroundStyle(recording.recordingType.color)
                     
                     Text(recording.name)
-                        .font(.caption.weight(.medium))
+                        .font(DesignSystem.Typography.caption)
                         .foregroundStyle(.white)
                         .lineLimit(1)
                     
                     Text(formatDuration(recording.duration))
-                        .font(.caption2)
+                        .font(DesignSystem.Typography.caption2)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -3119,7 +3124,7 @@ struct SectionEditorSheet: View {
             VStack(spacing: 24) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Section Name")
-                        .font(.subheadline.weight(.semibold))
+                        .font(.subheadline)
                         .foregroundStyle(.white)
                     
                     TextField("e.g., Verse 1", text: $tempName)
@@ -3138,7 +3143,7 @@ struct SectionEditorSheet: View {
                 
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Color")
-                        .font(.subheadline.weight(.semibold))
+                        .font(.subheadline)
                         .foregroundStyle(.white)
                     
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 12) {
@@ -3153,7 +3158,7 @@ struct SectionEditorSheet: View {
                                     
                                     if selectedColor == color {
                                         Image(systemName: "checkmark.circle.fill")
-                                            .font(.title3)
+                                            .font(DesignSystem.Typography.title3)
                                             .foregroundStyle(.white)
                                     }
                                 }
@@ -3168,7 +3173,7 @@ struct SectionEditorSheet: View {
                     saveChanges()
                 } label: {
                     Text("Save Changes")
-                        .font(.headline)
+                        .font(DesignSystem.Typography.headline)
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
@@ -3238,7 +3243,7 @@ struct KeyPickerSheet: View {
             VStack(spacing: 24) {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Root Note")
-                        .font(.headline)
+                        .font(DesignSystem.Typography.headline)
                         .foregroundStyle(.white)
                     
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 8) {
@@ -3247,7 +3252,7 @@ struct KeyPickerSheet: View {
                                 project.keyRoot = root
                             } label: {
                                 Text(root)
-                                    .font(.headline)
+                                    .font(DesignSystem.Typography.headline)
                                     .foregroundStyle(project.keyRoot == root ? .white : .secondary)
                                     .frame(height: 50)
                                     .frame(maxWidth: .infinity)
@@ -3262,7 +3267,7 @@ struct KeyPickerSheet: View {
                 
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Mode")
-                        .font(.headline)
+                        .font(DesignSystem.Typography.headline)
                         .foregroundStyle(.white)
                     
                     HStack(spacing: 12) {
@@ -3270,7 +3275,7 @@ struct KeyPickerSheet: View {
                             project.keyMode = .major
                         } label: {
                             Text("Major")
-                                .font(.subheadline.weight(.semibold))
+                                .font(.subheadline)
                                 .foregroundStyle(project.keyMode == .major ? .white : .secondary)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 50)
@@ -3284,7 +3289,7 @@ struct KeyPickerSheet: View {
                             project.keyMode = .minor
                         } label: {
                             Text("Minor")
-                                .font(.subheadline.weight(.semibold))
+                                .font(.subheadline)
                                 .foregroundStyle(project.keyMode == .minor ? .white : .secondary)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 50)
@@ -3302,7 +3307,7 @@ struct KeyPickerSheet: View {
                     dismiss()
                 } label: {
                     Text("Done")
-                        .font(.headline)
+                        .font(DesignSystem.Typography.headline)
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
@@ -3336,19 +3341,19 @@ struct ViewAllSectionsCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Image(systemName: "square.grid.2x2.fill")
-                        .font(.title3)
+                        .font(DesignSystem.Typography.title3)
                         .foregroundStyle(isSelected ? .white : .secondary)
                     
                     Spacer()
                 }
                 
                 Text("View All")
-                    .font(.subheadline.weight(.semibold))
+                    .font(.subheadline)
                     .foregroundStyle(isSelected ? .white : .secondary)
                     .lineLimit(1)
                 
                 Text("Sections")
-                    .font(.caption2)
+                    .font(DesignSystem.Typography.caption2)
                     .foregroundStyle(.secondary)
             }
             .padding(12)
@@ -3466,7 +3471,7 @@ struct SmartSuggestionsModal: View {
             if !previousChords.isEmpty || !nextChords.isEmpty {
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                     Text("Context")
-                        .font(DesignSystem.Typography.callout.weight(.semibold))
+                        .font(DesignSystem.Typography.callout)
                         .foregroundStyle(.white)
 
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -3477,7 +3482,7 @@ struct SmartSuggestionsModal: View {
 
                             if let nextChord = nextChords.first {
                                 Image(systemName: "arrow.right")
-                                    .font(.caption.weight(.semibold))
+                                    .font(DesignSystem.Typography.caption)
                                     .foregroundStyle(.secondary)
                                 contextChip(text: nextChord.display, color: DesignSystem.Colors.primary)
                             }
@@ -3496,7 +3501,8 @@ struct SmartSuggestionsModal: View {
                         // Chord display
                         VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxs) {
                             Text("\(suggestion.root)\(suggestion.quality.symbol)")
-                                .font(.system(size: 32, weight: .bold))
+                                .font(DesignSystem.Typography.md)
+                                .fontWeight(.bold)
                                 .foregroundStyle(DesignSystem.Colors.accent)
                             
                             Text(suggestion.quality.displayName)
@@ -3510,7 +3516,7 @@ struct SmartSuggestionsModal: View {
                         VStack(alignment: .trailing, spacing: DesignSystem.Spacing.xxs) {
                             if let romanNumeral = suggestion.romanNumeral {
                                 Text(romanNumeral)
-                                    .font(DesignSystem.Typography.callout.weight(.semibold))
+                                    .font(DesignSystem.Typography.callout)
                                     .foregroundStyle(DesignSystem.Colors.primary)
                             }
                             
@@ -3543,7 +3549,7 @@ struct SmartSuggestionsModal: View {
 
     private func contextChip(text: String, color: Color) -> some View {
         Text(text)
-            .font(DesignSystem.Typography.caption.weight(.semibold))
+            .font(DesignSystem.Typography.caption)
             .foregroundStyle(.white)
             .padding(.horizontal, DesignSystem.Spacing.sm)
             .padding(.vertical, DesignSystem.Spacing.xxs)
@@ -3582,7 +3588,7 @@ struct SmartSuggestionsModal: View {
                     
                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                         Text("Roman Numeral Analysis")
-                            .font(DesignSystem.Typography.callout.weight(.semibold))
+                            .font(DesignSystem.Typography.callout)
                         
                         Text(progressionAnalysis.romanNumerals.joined(separator: " - "))
                             .font(DesignSystem.Typography.body.monospaced())
@@ -3612,7 +3618,7 @@ struct SmartSuggestionsModal: View {
                 
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
                     Text(progression.name)
-                        .font(DesignSystem.Typography.callout.weight(.semibold))
+                        .font(DesignSystem.Typography.callout)
                         .foregroundStyle(.white)
                     
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -3623,7 +3629,7 @@ struct SmartSuggestionsModal: View {
                                 } label: {
                                     VStack(spacing: DesignSystem.Spacing.xxs) {
                                         Text("\(suggestion.root)\(suggestion.quality.symbol)")
-                                            .font(DesignSystem.Typography.body.weight(.bold))
+                                            .font(DesignSystem.Typography.body)
                                         
                                         if let roman = suggestion.romanNumeral {
                                             Text(roman)
@@ -3674,7 +3680,7 @@ struct SmartSuggestionsModal: View {
         }
         
         return Text(text)
-            .font(DesignSystem.Typography.caption.weight(.medium))
+            .font(DesignSystem.Typography.caption)
             .foregroundStyle(color)
             .padding(.horizontal, DesignSystem.Spacing.xs)
             .padding(.vertical, DesignSystem.Spacing.xxxs)

@@ -98,7 +98,7 @@ struct ProjectDetailView: View {
                 VStack(spacing: 4) {
                     // Título del proyecto
                     Text(project.title)
-                        .font(.headline.bold())
+                        .font(DesignSystem.Typography.headline)
                         .foregroundStyle(.white)
                     
                     // Badge de estado (Idea, In Progress, etc.)
@@ -107,9 +107,10 @@ struct ProjectDetailView: View {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: statusIcon(for: project.status))
-                                .font(.system(size: 10, weight: .bold))
+                                .font(DesignSystem.Typography.micro)
+                                .fontWeight(.bold)
                             Text(project.status.rawValue)
-                                .font(.caption2.weight(.bold))
+                                .font(DesignSystem.Typography.caption2)
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
@@ -126,7 +127,7 @@ struct ProjectDetailView: View {
                     showingEditSheet = true
                 } label: {
                     Image(systemName: "slider.horizontal.3")
-                        .font(.headline)
+                        .font(DesignSystem.Typography.headline)
                         .foregroundStyle(.white)
                 }
             }
@@ -232,12 +233,12 @@ struct EditProjectSheet: View {
                     // Title
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Project Title")
-                            .font(.subheadline.weight(.semibold))
+                            .font(.subheadline)
                             .foregroundStyle(.white)
                         
                         TextField("Project name", text: $tempTitle)
                             .textFieldStyle(.plain)
-                            .font(.title3)
+                            .font(DesignSystem.Typography.title3)
                             .padding(16)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
@@ -253,7 +254,7 @@ struct EditProjectSheet: View {
                     // Status
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Status")
-                            .font(.subheadline.weight(.semibold))
+                            .font(.subheadline)
                             .foregroundStyle(.white)
                         
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 12) {
@@ -263,9 +264,9 @@ struct EditProjectSheet: View {
                                 } label: {
                                     HStack(spacing: 8) {
                                         Image(systemName: statusIconFor(status))
-                                            .font(.caption)
+                                            .font(DesignSystem.Typography.caption)
                                         Text(status.rawValue)
-                                            .font(.subheadline.weight(.semibold))
+                                            .font(.subheadline)
                                     }
                                     .foregroundStyle(tempStatus == status ? .white : .secondary)
                                     .frame(maxWidth: .infinity)
@@ -289,7 +290,7 @@ struct EditProjectSheet: View {
                     // Time Signature
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Time Signature")
-                            .font(.subheadline.weight(.semibold))
+                            .font(.subheadline)
                             .foregroundStyle(.white)
                         
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 12) {
@@ -299,7 +300,7 @@ struct EditProjectSheet: View {
                                     tempTimeBottom = signature.bottom
                                 } label: {
                                     Text(signature.rawValue)
-                                        .font(.headline.weight(.semibold))
+                                        .font(.headline)
                                         .foregroundStyle(isSelected(signature) ? .white : .secondary)
                                         .frame(maxWidth: .infinity)
                                         .frame(height: 44)
@@ -320,7 +321,7 @@ struct EditProjectSheet: View {
                     // Key
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Key")
-                            .font(.subheadline.weight(.semibold))
+                            .font(.subheadline)
                             .foregroundStyle(.white)
                         
                         // Root note
@@ -330,7 +331,7 @@ struct EditProjectSheet: View {
                                     tempKeyRoot = root
                                 } label: {
                                     Text(root)
-                                        .font(.headline)
+                                        .font(DesignSystem.Typography.headline)
                                         .foregroundStyle(tempKeyRoot == root ? .white : .secondary)
                                         .frame(height: 44)
                                         .frame(maxWidth: .infinity)
@@ -348,7 +349,7 @@ struct EditProjectSheet: View {
                                 tempKeyMode = .major
                             } label: {
                                 Text("Major")
-                                    .font(.subheadline.weight(.semibold))
+                                    .font(.subheadline)
                                     .foregroundStyle(tempKeyMode == .major ? .white : .secondary)
                                     .frame(maxWidth: .infinity)
                                     .frame(height: 44)
@@ -362,7 +363,7 @@ struct EditProjectSheet: View {
                                 tempKeyMode = .minor
                             } label: {
                                 Text("Minor")
-                                    .font(.subheadline.weight(.semibold))
+                                    .font(.subheadline)
                                     .foregroundStyle(tempKeyMode == .minor ? .white : .secondary)
                                     .frame(maxWidth: .infinity)
                                     .frame(height: 44)
@@ -377,7 +378,7 @@ struct EditProjectSheet: View {
                     // Tags
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Tags")
-                            .font(.subheadline.weight(.semibold))
+                            .font(.subheadline)
                             .foregroundStyle(.white)
                         
                         // Current tags
@@ -386,13 +387,13 @@ struct EditProjectSheet: View {
                                 ForEach(tempTags, id: \.self) { tag in
                                     HStack(spacing: 6) {
                                         Text(tag)
-                                            .font(.subheadline)
+                                            .font(DesignSystem.Typography.subheadline)
                                         
                                         Button {
                                             tempTags.removeAll { $0 == tag }
                                         } label: {
                                             Image(systemName: "xmark.circle.fill")
-                                                .font(.caption)
+                                                .font(DesignSystem.Typography.caption)
                                         }
                                     }
                                     .foregroundStyle(.white)
@@ -424,7 +425,7 @@ struct EditProjectSheet: View {
                                 addTag()
                             } label: {
                                 Image(systemName: "plus.circle.fill")
-                                    .font(.title2)
+                                    .font(DesignSystem.Typography.title2)
                                     .foregroundStyle(Color.purple)
                             }
                             .disabled(newTag.isEmpty)
@@ -563,7 +564,7 @@ struct StatusPickerSheet: View {
             ScrollView {
                 VStack(spacing: 16) {
                     Text("Update project status to track your progress")
-                        .font(.subheadline)
+                        .font(DesignSystem.Typography.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.top, 8)
@@ -575,17 +576,17 @@ struct StatusPickerSheet: View {
                         } label: {
                             HStack(spacing: 16) {
                                 Image(systemName: statusIcon(for: status))
-                                    .font(.title3)
+                                    .font(DesignSystem.Typography.title3)
                                     .foregroundStyle(statusColor(for: status))
                                     .frame(width: 32)
                                 
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(status.rawValue)
-                                        .font(.headline)
+                                        .font(DesignSystem.Typography.headline)
                                         .foregroundStyle(.white)
                                     
                                     Text(statusDescription(for: status))
-                                        .font(.caption)
+                                        .font(DesignSystem.Typography.caption)
                                         .foregroundStyle(.secondary)
                                 }
                                 
@@ -748,7 +749,7 @@ struct BPMSelector: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Tempo")
-                .font(.subheadline.weight(.semibold))
+                .font(.subheadline)
                 .foregroundStyle(.white)
             
             VStack(spacing: 16) {
@@ -775,7 +776,8 @@ struct BPMSelector: View {
             }
             
             Text("\(bpm)")
-                .font(.system(size: 72, weight: .bold))
+                .font(DesignSystem.Typography.mega)
+                .fontWeight(.bold)
                 .foregroundStyle(
                     LinearGradient(
                         colors: gradientColors,
@@ -784,13 +786,13 @@ struct BPMSelector: View {
                     )
                 )
                 .monospacedDigit()
-            
+
             bpmAdjustButton(systemImage: "plus", isEnabled: bpm < bpmRange.upperBound) {
                 adjustBpm(by: bpmStep)
             }
-            
+
             Text("BPM")
-                .font(.title3.weight(.medium))
+                .font(DesignSystem.Typography.title3)
                 .foregroundStyle(.secondary)
                 .padding(.top, 40)
         }
@@ -825,7 +827,7 @@ struct BPMSelector: View {
             }
         } label: {
             Text("\(preset)")
-                .font(.caption.weight(.semibold))
+                .font(DesignSystem.Typography.caption)
                 .foregroundStyle(bpm == preset ? .white : .secondary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
@@ -858,7 +860,7 @@ struct BPMSelector: View {
             action()
         } label: {
             Image(systemName: systemImage)
-                .font(.headline)
+                .font(DesignSystem.Typography.headline)
                 .foregroundStyle(isEnabled ? .white : .white.opacity(0.35))
                 .frame(width: 36, height: 36)
                 .background(

@@ -85,7 +85,7 @@ struct ChordPaletteView: View {
             dismiss()
         } label: {
             Text(root + quality.symbol)
-                .font(.headline)
+                .font(DesignSystem.Typography.headline)
                 .frame(maxWidth: .infinity)
                 .padding()
                 .background(Color.accentColor)

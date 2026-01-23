@@ -95,16 +95,17 @@ struct RecordingDetailView: View {
             
             HStack(spacing: 12) {
                 Image(systemName: recording.recordingType.icon)
-                    .font(.title2)
+                    .font(DesignSystem.Typography.title2)
                     .foregroundStyle(recording.recordingType.color)
                 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(recording.name)
-                        .font(.title3.bold())
+                        .font(DesignSystem.Typography.title3)
+                        .fontWeight(.bold)
                         .foregroundStyle(.white)
                     
                     Text(formatDuration(recording.duration))
-                        .font(.subheadline)
+                        .font(DesignSystem.Typography.subheadline)
                         .foregroundStyle(.secondary)
                 }
                 
@@ -114,7 +115,7 @@ struct RecordingDetailView: View {
                     playWithEffects()
                 } label: {
                     Image(systemName: isPlaying ? "stop.circle.fill" : "play.circle.fill")
-                        .font(.title2)
+                        .font(DesignSystem.Typography.title2)
                         .foregroundStyle(recording.recordingType.color)
                 }
             }
@@ -124,13 +125,13 @@ struct RecordingDetailView: View {
     private var basicInfoSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Basic Info")
-                .font(.headline)
+                .font(DesignSystem.Typography.headline)
                 .foregroundStyle(.white)
             
             // Name
             VStack(alignment: .leading, spacing: 8) {
                 Text("Name")
-                    .font(.subheadline.weight(.semibold))
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
                 
                 HStack {
@@ -145,7 +146,7 @@ struct RecordingDetailView: View {
                         Button("Reset") {
                             tempName = recording.name
                         }
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                         .foregroundStyle(.orange)
                     }
                 }
@@ -167,13 +168,13 @@ struct RecordingDetailView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Recording Type")
-                            .font(.subheadline.weight(.semibold))
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
                         
                         HStack(spacing: 8) {
                             Image(systemName: recording.recordingType.icon)
                             Text(recording.recordingType.rawValue)
-                                .font(.subheadline.weight(.medium))
+                                .font(DesignSystem.Typography.subheadline)
                         }
                         .foregroundStyle(recording.recordingType.color)
                     }
@@ -204,7 +205,7 @@ struct RecordingDetailView: View {
     private var audioEffectsSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Audio Effects")
-                .font(.headline)
+                .font(DesignSystem.Typography.headline)
                 .foregroundStyle(.white)
             
             // Reverb
@@ -332,12 +333,12 @@ struct RecordingDetailView: View {
     private var linkSectionView: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Link to Section")
-                .font(.headline)
+                .font(DesignSystem.Typography.headline)
                 .foregroundStyle(.white)
             
             if sections.isEmpty {
                 Text("No sections available")
-                    .font(.subheadline)
+                    .font(DesignSystem.Typography.subheadline)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 20)
@@ -351,11 +352,11 @@ struct RecordingDetailView: View {
                             } label: {
                                 VStack(spacing: 8) {
                                     Image(systemName: "xmark.circle.fill")
-                                        .font(.title2)
+                                        .font(DesignSystem.Typography.title2)
                                         .foregroundStyle(.red)
                                     
                                     Text("Unlink")
-                                        .font(.caption.weight(.semibold))
+                                        .font(DesignSystem.Typography.caption)
                                 }
                                 .frame(width: 80, height: 80)
                                 .background(
@@ -375,11 +376,11 @@ struct RecordingDetailView: View {
                             } label: {
                                 VStack(spacing: 8) {
                                     Text(section.name)
-                                        .font(.subheadline.weight(.semibold))
+                                        .font(.subheadline)
                                         .lineLimit(2)
                                     
                                     Text("\(section.bars) bars")
-                                        .font(.caption2)
+                                        .font(DesignSystem.Typography.caption2)
                                         .foregroundStyle(.secondary)
                                 }
                                 .foregroundStyle(.white)
@@ -471,7 +472,7 @@ struct EffectToggle<Content: View>: View {
                     Image(systemName: icon)
                         .foregroundStyle(color)
                     Text(title)
-                        .font(.subheadline.weight(.semibold))
+                        .font(.subheadline)
                         .foregroundStyle(.white)
                 }
             }
@@ -503,7 +504,7 @@ struct EffectSlider: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(title)
-                    .font(.caption)
+                    .font(DesignSystem.Typography.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Text(String(format: format, value))
