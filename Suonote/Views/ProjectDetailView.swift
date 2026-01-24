@@ -88,7 +88,7 @@ struct ProjectDetailView: View {
                 }
             }
             .tabViewStyle(.automatic)
-            .tint(selectedTab.tintColor)
+            .tint(DesignSystem.Colors.primaryDark)
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -104,19 +104,12 @@ struct ProjectDetailView: View {
                     Button {
                         showingStatusPicker = true
                     } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: statusIcon(for: project.status))
-                                .font(DesignSystem.Typography.micro)
-                                .fontWeight(.bold)
-                                .foregroundStyle(statusColor(for: project.status))
-                            Text(project.status.rawValue)
-                                .font(DesignSystem.Typography.caption2)
-                                .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(statusColor(for: project.status).opacity(0.35))
-                        .clipShape(Capsule())
+                        AppChip(
+                            text: project.status.rawValue,
+                            icon: statusIcon(for: project.status),
+                            tint: statusColor(for: project.status),
+                            font: DesignSystem.Typography.caption2
+                        )
                     }
                 }
             }

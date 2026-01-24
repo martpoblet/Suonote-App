@@ -126,28 +126,9 @@ struct AudioEffectsSheet: View {
                     }
                     
                     // Apply Button
-                    Button {
+                    AppButton(title: "Apply Effects", icon: "checkmark.circle.fill", kind: .primary(DesignSystem.Colors.primary)) {
                         onApply()
                         dismiss()
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "checkmark.circle.fill")
-                            Text("Apply Effects")
-                                .font(DesignSystem.Typography.headline)
-                        }
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(
-                            Capsule()
-                                .fill(
-                                LinearGradient(
-                                        colors: [DesignSystem.Colors.primary, DesignSystem.Colors.info],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                        )
                     }
                 }
                 .padding(24)

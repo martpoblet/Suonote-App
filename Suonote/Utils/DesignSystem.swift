@@ -384,6 +384,119 @@ struct Badge: View {
     }
 }
 
+// MARK: - Chip & Button Components
+
+struct AppChip: View {
+    let text: String
+    var icon: String? = nil
+    var tint: Color = DesignSystem.Colors.primary
+    var textColor: Color = DesignSystem.Colors.textPrimary
+    var fillOpacity: Double = 0.2
+    var strokeOpacity: Double = 0.45
+    var font: Font = DesignSystem.Typography.caption
+
+    var body: some View {
+        HStack(spacing: DesignSystem.Spacing.xxs) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(DesignSystem.Typography.caption2)
+                    .foregroundStyle(tint)
+            }
+            Text(text)
+                .font(font)
+                .foregroundStyle(textColor)
+        }
+        .padding(.horizontal, DesignSystem.Spacing.sm)
+        .padding(.vertical, DesignSystem.Spacing.xxs)
+        .background(
+            Capsule()
+                .fill(tint.opacity(fillOpacity))
+                .overlay(
+                    Capsule()
+                        .stroke(tint.opacity(strokeOpacity), lineWidth: 1)
+                )
+        )
+    }
+}
+
+enum AppButtonKind {
+    case primary(Color)
+    case secondary
+    case destructive
+}
+
+struct AppButton: View {
+    let title: String
+    var icon: String? = nil
+    var kind: AppButtonKind = .primary(DesignSystem.Colors.primary)
+    let action: () -> Void
+
+    private var tint: Color {
+        switch kind {
+        case .primary(let color):
+            return color
+        case .secondary:
+            return DesignSystem.Colors.textPrimary
+        case .destructive:
+            return DesignSystem.Colors.error
+        }
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: DesignSystem.Spacing.xxs) {
+                if let icon {
+                    Image(systemName: icon)
+                }
+                Text(title)
+            }
+            .font(DesignSystem.Typography.headline)
+            .foregroundStyle(foregroundColor)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, DesignSystem.Spacing.md)
+            .background(
+                Capsule()
+                    .fill(backgroundFill)
+                    .overlay(
+                        Capsule()
+                            .stroke(borderStroke, lineWidth: 1)
+                    )
+            )
+        }
+    }
+
+    private var backgroundFill: Color {
+        switch kind {
+        case .primary(let color):
+            return color.opacity(0.75)
+        case .secondary:
+            return DesignSystem.Colors.surfaceSecondary
+        case .destructive:
+            return DesignSystem.Colors.error.opacity(0.2)
+        }
+    }
+
+    private var foregroundColor: Color {
+        switch kind {
+        case .primary:
+            return DesignSystem.Colors.backgroundSecondary
+        case .secondary, .destructive:
+            return DesignSystem.Colors.textPrimary
+        }
+    }
+
+    private var borderStroke: Color {
+        switch kind {
+        case .primary(let color):
+            return color.opacity(0.6)
+        case .secondary:
+            return DesignSystem.Colors.border
+        case .destructive:
+            return DesignSystem.Colors.error.opacity(0.6)
+        }
+    }
+}
+
 struct LoadingView: View {
     let message: String
 

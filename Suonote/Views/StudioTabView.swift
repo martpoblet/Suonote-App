@@ -272,22 +272,11 @@ struct StudioTabView: View {
             Button {
                 showingStylePicker = true
             } label: {
-                HStack(spacing: DesignSystem.Spacing.xxs) {
-                    Image(systemName: project.studioStyle?.icon ?? "sparkles")
-                        .foregroundStyle(project.studioStyle?.accentColor ?? DesignSystem.Colors.primary)
-                    Text(project.studioStyle?.title ?? "Pick Style")
-                        .font(DesignSystem.Typography.callout)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                }
-                .padding(.horizontal, DesignSystem.Spacing.sm)
-                .padding(.vertical, DesignSystem.Spacing.xxs)
-                .background(
-                    Capsule()
-                        .fill((project.studioStyle?.accentColor ?? DesignSystem.Colors.primary).opacity(0.2))
-                        .overlay(
-                            Capsule()
-                                .stroke(project.studioStyle?.accentColor ?? DesignSystem.Colors.primary, lineWidth: 1)
-                        )
+                AppChip(
+                    text: project.studioStyle?.title ?? "Pick Style",
+                    icon: project.studioStyle?.icon ?? "sparkles",
+                    tint: project.studioStyle?.accentColor ?? DesignSystem.Colors.primary,
+                    font: DesignSystem.Typography.callout
                 )
             }
             .animatedPress()
@@ -298,22 +287,11 @@ struct StudioTabView: View {
             Button {
                 promptAddTrack()
             } label: {
-                HStack(spacing: DesignSystem.Spacing.xxs) {
-                    Image(systemName: DesignSystem.Icons.add)
-                        .foregroundStyle(DesignSystem.Colors.backgroundSecondary)
-                    Text("Add Track")
-                        .foregroundStyle(DesignSystem.Colors.backgroundSecondary)
-                }
-                .font(DesignSystem.Typography.callout)
-                .padding(.horizontal, DesignSystem.Spacing.sm)
-                .padding(.vertical, DesignSystem.Spacing.xxs)
-                .background(
-                    Capsule()
-                        .fill((project.studioStyle?.accentColor ?? DesignSystem.Colors.primary).opacity(0.7))
-                        .overlay(
-                            Capsule()
-                                .stroke((project.studioStyle?.accentColor ?? DesignSystem.Colors.primary).opacity(0.6), lineWidth: 1)
-                        )
+                AppChip(
+                    text: "Add Track",
+                    icon: DesignSystem.Icons.add,
+                    tint: project.studioStyle?.accentColor ?? DesignSystem.Colors.primary,
+                    font: DesignSystem.Typography.callout
                 )
             }
             .animatedPress()
@@ -1999,6 +1977,7 @@ struct StudioStylePickerView: View {
                                     if currentSelection == style {
                                         Image(systemName: "checkmark.circle.fill")
                                             .font(DesignSystem.Typography.title3)
+                                            .foregroundStyle(style.accentColor)
                                     }
                                 }
 
@@ -2027,21 +2006,14 @@ struct StudioStylePickerView: View {
 
                 Spacer()
 
-                Button {
+                AppButton(
+                    title: "Continue",
+                    kind: .primary((currentSelection ?? selectedStyle)?.accentColor ?? DesignSystem.Colors.primary)
+                ) {
                     if let style = currentSelection {
                         onConfirm(style)
                         dismiss()
                     }
-                } label: {
-                    Text("Continue")
-                        .font(DesignSystem.Typography.headline)
-                        .foregroundStyle(DesignSystem.Colors.backgroundSecondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(
-                            Capsule()
-                                .fill((currentSelection ?? selectedStyle)?.accentColor ?? DesignSystem.Colors.primary)
-                        )
                 }
                 .disabled(currentSelection == nil)
             }
@@ -2404,41 +2376,12 @@ struct RegenerateOptionsView: View {
                 
                 // Buttons
                 HStack(spacing: 12) {
-                    Button {
+                    AppButton(title: "Cancel", kind: .secondary) {
                         onCancel()
-                    } label: {
-                        Text("Cancel")
-                            .font(DesignSystem.Typography.headline)
-                            .foregroundStyle(DesignSystem.Colors.textPrimary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(DesignSystem.Colors.border)
-                            )
                     }
                     
-                    Button {
+                    AppButton(title: "Regenerate", icon: "sparkles", kind: .primary(DesignSystem.Colors.primary)) {
                         onRegenerate()
-                    } label: {
-                        HStack {
-                            Image(systemName: "sparkles")
-                            Text("Regenerate")
-                        }
-                        .font(DesignSystem.Typography.headline)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [DesignSystem.Colors.primary, DesignSystem.Colors.info],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                        )
                     }
                 }
             }

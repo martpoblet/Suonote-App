@@ -34,6 +34,7 @@ struct KeyPickerView: View {
                     Button("Done") {
                         dismiss()
                     }
+                    .foregroundStyle(DesignSystem.Colors.primaryDark)
                 }
             }
         }

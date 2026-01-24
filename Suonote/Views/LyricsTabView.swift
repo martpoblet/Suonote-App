@@ -69,6 +69,7 @@ struct LyricsSectionCard: View {
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
                 // Header
                 HStack {
+                    SectionColorDot(section.color, size: 10)
                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxs) {
                         Text(section.name)
                             .font(DesignSystem.Typography.title3)

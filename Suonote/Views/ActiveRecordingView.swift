@@ -364,30 +364,9 @@ struct ActiveRecordingView: View {
             }
             
             // Stop button
-            Button {
+            AppButton(title: "Stop & Save", icon: "stop.fill", kind: .destructive) {
                 audioManager.stopRecording()
                 dismiss()
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "stop.fill")
-                        .font(DesignSystem.Typography.title2)
-                    Text("Stop & Save")
-                        .font(DesignSystem.Typography.headline)
-                }
-                .foregroundStyle(DesignSystem.Colors.textPrimary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 18)
-                .background(
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [DesignSystem.Colors.error.opacity(0.8), DesignSystem.Colors.error],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .shadow(color: DesignSystem.Colors.error.opacity(0.35), radius: 15, x: 0, y: 8)
-                )
             }
             .padding(.horizontal, 24)
             .disabled(!audioManager.isRecording)

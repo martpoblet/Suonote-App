@@ -149,20 +149,11 @@ struct ComposeTabView: View {
                 haptic(.selection)
                 showingKeyPicker = true
             } label: {
-                HStack(spacing: DesignSystem.Spacing.xs) {
-                    Image(systemName: DesignSystem.Icons.key)
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(DesignSystem.Colors.primary)
-                    Text("\(project.keyRoot)\(project.keyMode == .minor ? "m" : "")")
-                        .font(DesignSystem.Typography.callout)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                }
-                .padding(.horizontal, DesignSystem.Spacing.sm)
-                .padding(.vertical, DesignSystem.Spacing.xs)
-                .background(
-                    Capsule()
-                        .fill(DesignSystem.Colors.primary.opacity(0.15))
-                        .overlay(Capsule().stroke(DesignSystem.Colors.primary, lineWidth: 1))
+                AppChip(
+                    text: "\(project.keyRoot)\(project.keyMode == .minor ? "m" : "")",
+                    icon: DesignSystem.Icons.key,
+                    tint: DesignSystem.Colors.primary,
+                    font: DesignSystem.Typography.callout
                 )
             }
             .buttonStyle(.haptic(.light))
@@ -172,20 +163,11 @@ struct ComposeTabView: View {
                 haptic(.selection)
                 showingEditSheet = true
             } label: {
-                HStack(spacing: DesignSystem.Spacing.xs) {
-                    Image(systemName: DesignSystem.Icons.tempo)
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(DesignSystem.Colors.warning)
-                    Text("\(project.timeTop)/\(project.timeBottom)")
-                        .font(DesignSystem.Typography.callout)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                }
-                .padding(.horizontal, DesignSystem.Spacing.sm)
-                .padding(.vertical, DesignSystem.Spacing.xs)
-                .background(
-                    Capsule()
-                        .fill(DesignSystem.Colors.warning.opacity(0.15))
-                        .overlay(Capsule().stroke(DesignSystem.Colors.warning, lineWidth: 1))
+                AppChip(
+                    text: "\(project.timeTop)/\(project.timeBottom)",
+                    icon: DesignSystem.Icons.tempo,
+                    tint: DesignSystem.Colors.warning,
+                    font: DesignSystem.Typography.callout
                 )
             }
             .buttonStyle(.haptic(.light))
@@ -195,27 +177,18 @@ struct ComposeTabView: View {
                 haptic(.selection)
                 showingEditSheet = true
             } label: {
-                HStack(spacing: DesignSystem.Spacing.xs) {
-                    Image(systemName: DesignSystem.Icons.waveform)
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(DesignSystem.Colors.accent)
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("\(project.bpm)")
-                            .font(DesignSystem.Typography.callout)
-                            .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        Text(TempoUtils.tempoDescription(for: project.bpm).split(separator: " ").first.map(String.init) ?? "")
-                            .font(DesignSystem.Typography.caption2)
-                            .foregroundStyle(DesignSystem.Colors.textSecondary)
-                            .opacity(0.7)
-                    }
+                VStack(alignment: .leading, spacing: 2) {
+                    AppChip(
+                        text: "\(project.bpm)",
+                        icon: DesignSystem.Icons.waveform,
+                        tint: DesignSystem.Colors.accent,
+                        font: DesignSystem.Typography.callout
+                    )
+                    Text(TempoUtils.tempoDescription(for: project.bpm).split(separator: " ").first.map(String.init) ?? "")
+                        .font(DesignSystem.Typography.caption2)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        .padding(.leading, 24)
                 }
-                .padding(.horizontal, DesignSystem.Spacing.sm)
-                .padding(.vertical, DesignSystem.Spacing.xs)
-                .background(
-                    Capsule()
-                        .fill(DesignSystem.Colors.accent.opacity(0.15))
-                        .overlay(Capsule().stroke(DesignSystem.Colors.accent, lineWidth: 1))
-                )
             }
             .buttonStyle(.haptic(.light))
             
@@ -2105,18 +2078,8 @@ struct SectionCreatorView: View {
                 
                 Spacer()
                 
-                Button {
+                AppButton(title: "Create Section", kind: .primary(DesignSystem.Colors.primary)) {
                     createSection()
-                } label: {
-                    Text("Create Section")
-                        .font(DesignSystem.Typography.headline)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(
-                            Capsule()
-                                .fill(DesignSystem.Colors.primaryGradient)
-                        )
                 }
                 .disabled(sectionName.isEmpty)
             }
@@ -2850,34 +2813,17 @@ struct ChordPaletteSheet: View {
     }
     
     private var addChordButton: some View {
-        Button {
+        AppButton(
+            title: isRest ? (existingChord == nil ? "Add Rest" : "Save Rest") : (existingChord == nil ? "Add Chord" : "Save Chord"),
+            kind: .primary(accentColor)
+        ) {
             addChord()
-        } label: {
-            Text(isRest ? (existingChord == nil ? "Add Rest" : "Save Rest") : (existingChord == nil ? "Add Chord" : "Save Chord"))
-                .font(DesignSystem.Typography.headline)
-                .foregroundStyle(DesignSystem.Colors.textPrimary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(
-                    Capsule()
-                        .fill(accentColor)
-                )
         }
     }
     
     private var removeChordButton: some View {
-        Button(role: .destructive) {
+        AppButton(title: "Remove Chord", kind: .destructive) {
             removeChord()
-        } label: {
-            Text("Remove Chord")
-                .font(DesignSystem.Typography.headline)
-                .foregroundStyle(DesignSystem.Colors.textPrimary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(
-                    Capsule()
-                        .fill(DesignSystem.Colors.error)
-                )
         }
     }
     
@@ -3206,24 +3152,8 @@ struct SectionEditorSheet: View {
                 
                 Spacer()
                 
-                Button {
+                AppButton(title: "Save Changes", kind: .primary(DesignSystem.Colors.primary)) {
                     saveChanges()
-                } label: {
-                    Text("Save Changes")
-                        .font(DesignSystem.Typography.headline)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(
-                            Capsule()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [DesignSystem.Colors.primary, DesignSystem.Colors.info],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                        )
                 }
                 .disabled(tempName.isEmpty)
             }
@@ -3330,24 +3260,8 @@ struct KeyPickerSheet: View {
                 
                 Spacer()
                 
-                Button {
+                AppButton(title: "Done", kind: .primary(DesignSystem.Colors.primary)) {
                     dismiss()
-                } label: {
-                    Text("Done")
-                        .font(DesignSystem.Typography.headline)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(
-                            Capsule()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [DesignSystem.Colors.primary, DesignSystem.Colors.info],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                        )
                 }
             }
             .padding(24)
