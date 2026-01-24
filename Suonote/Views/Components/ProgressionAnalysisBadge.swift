@@ -15,7 +15,7 @@ struct ProgressionAnalysisBadge: View {
     }
     
     private var statusColor: Color {
-        if analysis.totalChords == 0 { return .gray }
+        if analysis.totalChords == 0 { return DesignSystem.Colors.textTertiary }
         if analysis.diatonicPercentage > 80 { return DesignSystem.Colors.success }
         if analysis.diatonicPercentage > 50 { return DesignSystem.Colors.warning }
         return DesignSystem.Colors.error

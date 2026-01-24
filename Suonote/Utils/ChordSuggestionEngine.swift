@@ -437,7 +437,7 @@ class ChordSuggestionEngine {
                         root: diatonic[4].root,
                         quality: .major,
                         reason: "V major from harmonic minor",
-                        confidence: 0.7
+                        confidence: 0.8
                     )
                 )
                 addSuggestion(
@@ -445,7 +445,7 @@ class ChordSuggestionEngine {
                         root: diatonic[4].root,
                         quality: .dominant7,
                         reason: "V7 for strong resolution",
-                        confidence: 0.75
+                        confidence: 0.85
                     )
                 )
             }
@@ -501,7 +501,10 @@ class ChordSuggestionEngine {
             )
         }
 
-        suggestions = suggestionMap.values.sorted { $0.confidence > $1.confidence }
+        let refined = suggestionMap.values.map { suggestion in
+            adjustConfidence(suggestion, lastChord: lastChord, nextChord: nextChord)
+        }
+        suggestions = refined.sorted { $0.confidence > $1.confidence }
         return Array(suggestions.prefix(12))
     }
     
@@ -541,9 +544,15 @@ class ChordSuggestionEngine {
         
         for chord in chords {
             if let match = diatonic.first(where: { $0.root == chord.root }) {
-                analysis.diatonicChords += 1
+                let isDiatonicQuality = baseQuality(for: chord.quality) == match.quality
+                if isDiatonicQuality {
+                    analysis.diatonicChords += 1
+                } else {
+                    analysis.nonDiatonicChords += 1
+                }
+
                 if let romanNumeral = match.romanNumeral {
-                    analysis.romanNumerals.append(romanNumeral)
+                    analysis.romanNumerals.append(isDiatonicQuality ? romanNumeral : "\(romanNumeral)*")
                 }
             } else {
                 analysis.nonDiatonicChords += 1
@@ -557,6 +566,63 @@ class ChordSuggestionEngine {
 }
 
 private extension ChordSuggestionEngine {
+    static func baseQuality(for quality: ChordQuality) -> ChordQuality {
+        switch quality {
+        case .major, .major7, .major9, .dominant7, .dominant9, .sus2, .sus4, .augmented, .augmented7:
+            return .major
+        case .minor, .minor7, .minor9, .minorMajor7:
+            return .minor
+        case .diminished, .diminished7, .halfDiminished7:
+            return .diminished
+        }
+    }
+
+    static func adjustConfidence(_ suggestion: ChordSuggestion, lastChord: ChordEvent?, nextChord: ChordEvent?) -> ChordSuggestion {
+        var adjusted = suggestion.confidence
+
+        if let lastChord {
+            let interval = intervalBetween(from: lastChord.root, to: suggestion.root)
+            switch interval {
+            case 2, 10:
+                adjusted += 0.05 // stepwise
+            case 5, 7:
+                adjusted += 0.08 // fourth/fifth
+            case 1, 11:
+                adjusted += 0.03 // semitone color
+            case 6:
+                if !suggestion.reason.lowercased().contains("tritone") {
+                    adjusted -= 0.05
+                }
+            default:
+                break
+            }
+        }
+
+        if let nextChord {
+            let interval = intervalBetween(from: suggestion.root, to: nextChord.root)
+            switch interval {
+            case 2, 10:
+                adjusted += 0.04
+            case 5, 7:
+                adjusted += 0.06
+            case 1, 11:
+                adjusted += 0.02
+            default:
+                break
+            }
+        }
+
+        let clamped = min(max(adjusted, 0.4), 1.0)
+        return ChordSuggestion(
+            root: suggestion.root,
+            quality: suggestion.quality,
+            extensions: suggestion.extensions,
+            reason: suggestion.reason,
+            confidence: clamped,
+            romanNumeral: suggestion.romanNumeral
+        )
+    }
+
     static func diatonicIndex(for chord: ChordEvent, in diatonic: [ChordSuggestion]) -> Int? {
         if let exactIndex = diatonic.firstIndex(where: { $0.root == chord.root && $0.quality == chord.quality }) {
             return exactIndex

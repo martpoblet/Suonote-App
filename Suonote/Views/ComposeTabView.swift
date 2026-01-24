@@ -2398,15 +2398,15 @@ struct ChordPaletteSheet: View {
                             Text("Smart Suggestions")
                                 .font(DesignSystem.Typography.caption)
                         }
-                        .foregroundStyle(DesignSystem.Colors.accent)
+                        .foregroundStyle(DesignSystem.Colors.primaryDark)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .background(
                             Capsule()
-                                .fill(DesignSystem.Colors.accent.opacity(0.15))
+                                .fill(DesignSystem.Colors.primaryLight.opacity(0.35))
                                 .overlay(
                                     Capsule()
-                                        .stroke(DesignSystem.Colors.accent.opacity(0.3), lineWidth: 1)
+                                        .stroke(DesignSystem.Colors.primary.opacity(0.5), lineWidth: 1)
                                 )
                         )
                     }

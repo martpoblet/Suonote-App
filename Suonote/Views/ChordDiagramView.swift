@@ -75,10 +75,10 @@ private struct PianoChordDiagram: View {
                             let isActive = isNoteInChord(note)
                             
                             RoundedRectangle(cornerRadius: 4)
-                                .fill(isActive ? accentColor.opacity(0.3) : Color.white)
+                                .fill(isActive ? accentColor.opacity(0.3) : DesignSystem.Colors.backgroundSecondary)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 4)
-                                        .stroke(Color.black, lineWidth: 1)
+                                        .stroke(DesignSystem.Colors.textPrimary.opacity(0.65), lineWidth: 1)
                                 )
                                 .overlay(
                                     VStack {
@@ -103,14 +103,14 @@ private struct PianoChordDiagram: View {
                                 let isActive = isNoteInChord(blackNote)
                                 
                                 RoundedRectangle(cornerRadius: 3)
-                                    .fill(isActive ? accentColor : Color.black)
+                                    .fill(isActive ? accentColor : DesignSystem.Colors.textPrimary)
                                     .frame(width: keyWidth * 0.6, height: keyHeight * 0.6)
                                     .overlay(
                                         VStack {
                                             Spacer()
                                             if isActive {
                                                 Circle()
-                                                    .fill(Color.white)
+                                                    .fill(DesignSystem.Colors.backgroundSecondary)
                                                     .frame(width: 8, height: 8)
                                                     .padding(.bottom, 6)
                                             }

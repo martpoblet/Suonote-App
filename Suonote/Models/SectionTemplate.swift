@@ -80,19 +80,28 @@ enum SectionColor: String, CaseIterable, Identifiable {
 
     var hex: String {
         switch self {
-        case .sage: return "#8FB096"      // Sage
-        case .ocean: return "#7A9ED3"     // Soft blue
-        case .sky: return "#7FC7CF"       // Teal
-        case .moss: return "#92C39A"      // Soft green
-        case .sand: return "#D8BD8B"      // Warm sand
-        case .coral: return "#E09484"     // Coral
-        case .berry: return "#C18ACB"     // Berry
-        case .lavender: return "#A694D6"  // Lavender
+        case .sage: return "#\(DesignSystem.Colors.sectionSageHex)"
+        case .ocean: return "#\(DesignSystem.Colors.sectionOceanHex)"
+        case .sky: return "#\(DesignSystem.Colors.sectionSkyHex)"
+        case .moss: return "#\(DesignSystem.Colors.sectionMossHex)"
+        case .sand: return "#\(DesignSystem.Colors.sectionSandHex)"
+        case .coral: return "#\(DesignSystem.Colors.sectionCoralHex)"
+        case .berry: return "#\(DesignSystem.Colors.sectionBerryHex)"
+        case .lavender: return "#\(DesignSystem.Colors.sectionLavenderHex)"
         }
     }
 
     var color: Color {
-        Color(hex: hex) ?? .gray
+        switch self {
+        case .sage: return DesignSystem.Colors.sectionSage
+        case .ocean: return DesignSystem.Colors.sectionOcean
+        case .sky: return DesignSystem.Colors.sectionSky
+        case .moss: return DesignSystem.Colors.sectionMoss
+        case .sand: return DesignSystem.Colors.sectionSand
+        case .coral: return DesignSystem.Colors.sectionCoral
+        case .berry: return DesignSystem.Colors.sectionBerry
+        case .lavender: return DesignSystem.Colors.sectionLavender
+        }
     }
 
     // Legacy mapping

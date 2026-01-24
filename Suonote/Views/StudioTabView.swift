@@ -1274,7 +1274,7 @@ struct StudioTrackRow: View {
                 } label: {
                     Text("M")
                         .font(.caption)
-                        .foregroundStyle(track.isMuted ? .white : DesignSystem.Colors.textSecondary)
+                        .foregroundStyle(track.isMuted ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
                         .frame(width: 26, height: 26)
                         .background(
                             Circle()
@@ -1293,7 +1293,7 @@ struct StudioTrackRow: View {
                 } label: {
                     Text("S")
                         .font(.caption)
-                        .foregroundStyle(track.isSolo ? .white : DesignSystem.Colors.textSecondary)
+                        .foregroundStyle(track.isSolo ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
                         .frame(width: 26, height: 26)
                         .background(
                             Circle()

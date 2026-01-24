@@ -43,6 +43,25 @@ struct DesignSystem {
         static let info = Color(hexNonOptional: "7AA9DE")
         static let secondary = Color(hexNonOptional: "8F97A9")  // Gray color for secondary elements
 
+        // Section Palette (used across chips, tabs, and tags)
+        static let sectionSageHex = "8FB096"
+        static let sectionOceanHex = "7A9ED3"
+        static let sectionSkyHex = "7FC7CF"
+        static let sectionMossHex = "92C39A"
+        static let sectionSandHex = "D8BD8B"
+        static let sectionCoralHex = "E09484"
+        static let sectionBerryHex = "C18ACB"
+        static let sectionLavenderHex = "A694D6"
+
+        static let sectionSage = Color(hexNonOptional: sectionSageHex)
+        static let sectionOcean = Color(hexNonOptional: sectionOceanHex)
+        static let sectionSky = Color(hexNonOptional: sectionSkyHex)
+        static let sectionMoss = Color(hexNonOptional: sectionMossHex)
+        static let sectionSand = Color(hexNonOptional: sectionSandHex)
+        static let sectionCoral = Color(hexNonOptional: sectionCoralHex)
+        static let sectionBerry = Color(hexNonOptional: sectionBerryHex)
+        static let sectionLavender = Color(hexNonOptional: sectionLavenderHex)
+
         // Tab Bar
         static let tabBarBackground = Color(hexNonOptional: "FBFAFD")
         static let tabBarActive = primaryDark
@@ -71,43 +90,43 @@ struct DesignSystem {
     // MARK: - Typography
 
     struct Typography {
-        // Display (Piazzolla) - Increased weights for prominence
-        static let display = Font.piazzolla(42).weight(.semibold)
-        static let displayLarge = Font.piazzolla(50).weight(.semibold)
+        // Display (Erode) - Increased weights for prominence
+        static let display = Font.erode(42).weight(.semibold)
+        static let displayLarge = Font.erode(50).weight(.semibold)
 
-        // Headings (Piazzolla) - Enhanced weights
-        static let largeTitle = Font.piazzolla(36).weight(.semibold)
-        static let title = Font.piazzolla(30).weight(.semibold)
-        static let title2 = Font.piazzolla(24).weight(.semibold)
-        static let title3 = Font.piazzolla(22).weight(.medium)
+        // Headings (Erode) - Enhanced weights
+        static let largeTitle = Font.erode(36).weight(.semibold)
+        static let title = Font.erode(30).weight(.semibold)
+        static let title2 = Font.erode(24).weight(.semibold)
+        static let title3 = Font.erode(22).weight(.medium)
 
-        // Headlines (Piazzolla for emphasis) - Using Piazzolla more
-        static let headline = Font.piazzolla(18).weight(.semibold)
-        static let subheadline = Font.piazzolla(16).weight(.medium)
+        // Headlines (Erode for emphasis) - Using Erode more
+        static let headline = Font.erode(18).weight(.semibold)
+        static let subheadline = Font.erode(16).weight(.medium)
 
-        // Body (Mix of Piazzolla and Manrope)
+        // Body (Mix of Erode and Manrope)
         static let body = Font.manrope(15)
-        static let bodyBold = Font.piazzolla(15).weight(.semibold)
-        static let bodyMedium = Font.piazzolla(15).weight(.medium)
+        static let bodyBold = Font.erode(15).weight(.semibold)
+        static let bodyMedium = Font.erode(15).weight(.medium)
         static let callout = Font.manrope(13)
-        static let calloutBold = Font.piazzolla(13).weight(.semibold)
+        static let calloutBold = Font.erode(13).weight(.semibold)
 
         // Captions (Manrope)
         static let caption = Font.manrope(12)
         static let caption2 = Font.manrope(11)
         static let footnote = Font.manrope(13)
 
-        // Extra Large (Piazzolla) - Enhanced weights
-        static let hero = Font.piazzolla(120).weight(.bold)
-        static let mega = Font.piazzolla(72).weight(.bold)
-        static let jumbo = Font.piazzolla(60).weight(.semibold)
-        static let giant = Font.piazzolla(56).weight(.semibold)
-        static let huge = Font.piazzolla(48).weight(.semibold)
-        static let xxl = Font.piazzolla(44).weight(.medium)
-        static let xl = Font.piazzolla(40).weight(.medium)
-        static let lg = Font.piazzolla(36).weight(.medium)
-        static let md = Font.piazzolla(32).weight(.medium)
-        static let sm = Font.piazzolla(24).weight(.medium)
+        // Extra Large (Erode) - Enhanced weights
+        static let hero = Font.erode(120).weight(.bold)
+        static let mega = Font.erode(72).weight(.bold)
+        static let jumbo = Font.erode(60).weight(.semibold)
+        static let giant = Font.erode(56).weight(.semibold)
+        static let huge = Font.erode(48).weight(.semibold)
+        static let xxl = Font.erode(44).weight(.medium)
+        static let xl = Font.erode(40).weight(.medium)
+        static let lg = Font.erode(36).weight(.medium)
+        static let md = Font.erode(32).weight(.medium)
+        static let sm = Font.erode(24).weight(.medium)
 
         // Micro (Manrope)
         static let micro = Font.manrope(10)

@@ -13,7 +13,7 @@ struct ProjectDetailView: View {
     @State private var showingEditSheet = false
     @State private var showingStatusPicker = false
     
-    private enum ProjectTab: Int, CaseIterable {
+    fileprivate enum ProjectTab: Int, CaseIterable {
         case compose
         case studio
         case lyrics
@@ -54,41 +54,12 @@ struct ProjectDetailView: View {
             
             // MARK: Tab Content
             /// Contenido dinámico según la tab seleccionada
-            TabView(selection: $selectedTab) {
-                ProjectTabContainer {
-                    ComposeTabView(project: project)
-                }
-                .tag(ProjectTab.compose)
-                .tabItem {
-                    Label(ProjectTab.compose.title, systemImage: ProjectTab.compose.icon)
-                }
-                
-                ProjectTabContainer {
-                    StudioTabView(project: project)
-                }
-                .tag(ProjectTab.studio)
-                .tabItem {
-                    Label(ProjectTab.studio.title, systemImage: ProjectTab.studio.icon)
-                }
-                
-                ProjectTabContainer {
-                    LyricsTabView(project: project)
-                }
-                .tag(ProjectTab.lyrics)
-                .tabItem {
-                    Label(ProjectTab.lyrics.title, systemImage: ProjectTab.lyrics.icon)
-                }
-                
-                ProjectTabContainer {
-                    RecordingsTabView(project: project)
-                }
-                .tag(ProjectTab.record)
-                .tabItem {
-                    Label(ProjectTab.record.title, systemImage: ProjectTab.record.icon)
-                }
+            ProjectTabContainer {
+                selectedTabContent
             }
-            .tabViewStyle(.automatic)
-            .tint(DesignSystem.Colors.primaryDark)
+            .overlay(alignment: .bottom) {
+                ProjectTabBar(selectedTab: $selectedTab)
+            }
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -121,7 +92,7 @@ struct ProjectDetailView: View {
                 } label: {
                     Image(systemName: "slider.horizontal.3")
                         .font(DesignSystem.Typography.headline)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
+                        .foregroundStyle(DesignSystem.Colors.primaryDark)
                 }
             }
         }
@@ -137,6 +108,20 @@ struct ProjectDetailView: View {
         .toolbarColorScheme(.light, for: .navigationBar)
         .preferredColorScheme(.light)
         
+    }
+
+    @ViewBuilder
+    private var selectedTabContent: some View {
+        switch selectedTab {
+        case .compose:
+            ComposeTabView(project: project)
+        case .studio:
+            StudioTabView(project: project)
+        case .lyrics:
+            LyricsTabView(project: project)
+        case .record:
+            RecordingsTabView(project: project)
+        }
     }
 
     // MARK: - Helper Methods
@@ -163,6 +148,52 @@ struct ProjectDetailView: View {
         }
     }
     
+}
+
+private struct ProjectTabBar: View {
+    @Binding var selectedTab: ProjectDetailView.ProjectTab
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(ProjectDetailView.ProjectTab.allCases, id: \.self) { tab in
+                Button {
+                    withAnimation(DesignSystem.Animations.quickSpring) {
+                        selectedTab = tab
+                    }
+                } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: tab.icon)
+                            .font(DesignSystem.Typography.callout)
+                            .foregroundStyle(tab.tintColor)
+                        Text(tab.title)
+                            .font(DesignSystem.Typography.caption2)
+                            .foregroundStyle(selectedTab == tab ? tab.tintColor : DesignSystem.Colors.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(selectedTab == tab ? tab.tintColor.opacity(0.12) : Color.clear)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 24)
+                .fill(DesignSystem.Colors.backgroundSecondary.opacity(0.95))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 24)
+                .stroke(DesignSystem.Colors.border.opacity(0.7), lineWidth: 1)
+        )
+        .shadow(color: DesignSystem.Colors.textPrimary.opacity(0.08), radius: 16, x: 0, y: 8)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 16)
+        .ignoresSafeArea(.keyboard, edges: .bottom)
+    }
 }
 
 struct ProjectBackgroundView: View {
@@ -791,7 +822,7 @@ struct BPMSelector: View {
         } label: {
             Text("\(preset)")
                 .font(DesignSystem.Typography.caption)
-                .foregroundStyle(bpm == preset ? .white : .secondary)
+                .foregroundStyle(bpm == preset ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textSecondary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
                 .background(

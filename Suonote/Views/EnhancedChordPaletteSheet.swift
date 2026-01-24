@@ -101,7 +101,7 @@ struct EnhancedChordPaletteSheet: View {
         } label: {
             Text(tab.rawValue)
                 .font(DesignSystem.Typography.callout)
-                .foregroundStyle(selectedTab == tab ? .white : .secondary)
+                .foregroundStyle(selectedTab == tab ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, DesignSystem.Spacing.sm)
                 .background(
@@ -319,7 +319,7 @@ struct EnhancedChordPaletteSheet: View {
                     } label: {
                         Text(category.rawValue)
                             .font(DesignSystem.Typography.callout)
-                            .foregroundStyle(selectedCategory == category ? .white : .secondary)
+                            .foregroundStyle(selectedCategory == category ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
                             .padding(.horizontal, DesignSystem.Spacing.md)
                             .padding(.vertical, DesignSystem.Spacing.sm)
                             .background(

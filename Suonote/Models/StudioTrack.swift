@@ -126,7 +126,7 @@ enum StudioInstrument: String, Codable, CaseIterable, Identifiable {
         case .organ: return SectionColor.cyan.color
         case .mallets: return SectionColor.purple.color
         case .drums: return SectionColor.red.color
-        case .audio: return .gray
+        case .audio: return DesignSystem.Colors.secondary
         }
     }
 
