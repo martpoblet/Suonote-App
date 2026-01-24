@@ -12,9 +12,8 @@ struct ExportView: View {
                 // Background
                 LinearGradient(
                     colors: [
-                        Color(red: 0.05, green: 0.05, blue: 0.15),
-                        Color(red: 0.1, green: 0.05, blue: 0.2),
-                        Color.black
+                        DesignSystem.Colors.backgroundSecondary,
+                        DesignSystem.Colors.backgroundTertiary
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
@@ -29,7 +28,7 @@ struct ExportView: View {
                                 .font(DesignSystem.Typography.jumbo)
                                 .foregroundStyle(
                                     LinearGradient(
-                                        colors: [.purple, .blue],
+                                        colors: [DesignSystem.Colors.primary, DesignSystem.Colors.info],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
@@ -52,7 +51,7 @@ struct ExportView: View {
                                 title: "MIDI File",
                                 subtitle: "For DAWs like Logic, Ableton, FL Studio",
                                 icon: "pianokeys",
-                                color: .purple
+                                color: DesignSystem.Colors.primary
                             ) {
                                 exportMIDI()
                             }
@@ -61,7 +60,7 @@ struct ExportView: View {
                                 title: "Chord Chart (Text)",
                                 subtitle: "Lyrics and chords in plain text",
                                 icon: "doc.text",
-                                color: .blue
+                                color: DesignSystem.Colors.info
                             ) {
                                 exportText()
                             }
@@ -70,7 +69,7 @@ struct ExportView: View {
                                 title: "Full Project (Text)",
                                 subtitle: "Complete project information",
                                 icon: "doc.plaintext",
-                                color: .cyan
+                                color: DesignSystem.Colors.accent
                             ) {
                                 exportFullText()
                             }
@@ -89,6 +88,11 @@ struct ExportView: View {
                 }
             }
         }
+        .toolbarBackground(DesignSystem.Colors.backgroundSecondary, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.light, for: .navigationBar)
+        .presentationBackground(DesignSystem.Colors.backgroundSecondary)
+        .preferredColorScheme(.light)
         
         .sheet(isPresented: $showingShareSheet) {
             if let item = shareItem {
@@ -157,12 +161,12 @@ struct ExportOptionCard: View {
                 
                 Image(systemName: "arrow.right.circle.fill")
                     .font(DesignSystem.Typography.title3)
-                    .foregroundStyle(.white.opacity(0.3))
+                    .foregroundStyle(DesignSystem.Colors.textTertiary)
             }
             .padding(20)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.white.opacity(0.05))
+                    .fill(DesignSystem.Colors.surfaceSecondary)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
                             .stroke(color.opacity(0.3), lineWidth: 1)

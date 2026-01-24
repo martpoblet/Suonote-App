@@ -98,13 +98,13 @@ enum RecordingType: String, Codable, CaseIterable {
     
     var color: Color {
         switch self {
-        case .voice: return .blue
-        case .guitar: return .orange
-        case .piano: return .purple
-        case .melody: return .pink
-        case .sketch: return .yellow
-        case .beat: return .cyan
-        case .other: return .gray
+        case .voice: return SectionColor.ocean.color
+        case .guitar: return SectionColor.coral.color
+        case .piano: return SectionColor.lavender.color
+        case .melody: return SectionColor.sky.color
+        case .sketch: return SectionColor.sand.color
+        case .beat: return SectionColor.moss.color
+        case .other: return SectionColor.sage.color
         }
     }
 }

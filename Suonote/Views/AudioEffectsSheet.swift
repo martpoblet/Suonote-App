@@ -13,7 +13,7 @@ struct AudioEffectsSheet: View {
                     EffectSection(
                         title: "Reverb",
                         icon: "waveform.path.ecg",
-                        color: .purple,
+                        color: DesignSystem.Colors.primary,
                         isEnabled: $settings.reverbEnabled
                     ) {
                         VStack(spacing: 16) {
@@ -37,7 +37,7 @@ struct AudioEffectsSheet: View {
                     EffectSection(
                         title: "Delay",
                         icon: "arrow.triangle.2.circlepath",
-                        color: .blue,
+                        color: DesignSystem.Colors.info,
                         isEnabled: $settings.delayEnabled
                     ) {
                         VStack(spacing: 16) {
@@ -69,7 +69,7 @@ struct AudioEffectsSheet: View {
                     EffectSection(
                         title: "Equalizer",
                         icon: "slider.horizontal.3",
-                        color: .green,
+                        color: DesignSystem.Colors.success,
                         isEnabled: $settings.eqEnabled
                     ) {
                         VStack(spacing: 16) {
@@ -103,7 +103,7 @@ struct AudioEffectsSheet: View {
                     EffectSection(
                         title: "Compression",
                         icon: "waveform.badge.minus",
-                        color: .orange,
+                        color: DesignSystem.Colors.warning,
                         isEnabled: $settings.compressionEnabled
                     ) {
                         VStack(spacing: 16) {
@@ -141,8 +141,8 @@ struct AudioEffectsSheet: View {
                         .background(
                             Capsule()
                                 .fill(
-                                    LinearGradient(
-                                        colors: [.purple, .blue],
+                                LinearGradient(
+                                        colors: [DesignSystem.Colors.primary, DesignSystem.Colors.info],
                                         startPoint: .leading,
                                         endPoint: .trailing
                                     )
@@ -165,11 +165,16 @@ struct AudioEffectsSheet: View {
                         resetAll()
                     } label: {
                         Text("Reset")
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(DesignSystem.Colors.warning)
                     }
                 }
             }
         }
+        .toolbarBackground(DesignSystem.Colors.backgroundSecondary, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.light, for: .navigationBar)
+        .presentationBackground(DesignSystem.Colors.backgroundSecondary)
+        .preferredColorScheme(.light)
         
     }
     
@@ -249,7 +254,7 @@ struct SliderControl: View {
             }
             
             Slider(value: $value, in: range)
-                .tint(.purple)
+                .tint(DesignSystem.Colors.primary)
         }
         .padding(12)
         .background(

@@ -184,7 +184,7 @@ struct EnhancedChordPaletteSheet: View {
                     ForEach(notes.prefix(4), id: \.self) { note in
                         Text(note)
                             .font(DesignSystem.Typography.caption2)
-                            .foregroundStyle(.white.opacity(0.7))
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
                             .padding(.horizontal, DesignSystem.Spacing.xs)
                             .padding(.vertical, DesignSystem.Spacing.xxxs)
                             .background(

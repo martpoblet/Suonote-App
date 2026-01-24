@@ -163,7 +163,7 @@ private struct GuitarChordDiagram: View {
                         } else {
                             Text("X")
                                 .font(.caption)
-                                .foregroundStyle(.red)
+                                .foregroundStyle(DesignSystem.Colors.error)
                         }
                         if string < 5 {
                             Spacer()
@@ -180,7 +180,7 @@ private struct GuitarChordDiagram: View {
                     VStack(spacing: 0) {
                         ForEach(0..<5) { fret in
                             Rectangle()
-                                .fill(Color.white.opacity(0.3))
+                                .fill(DesignSystem.Colors.border)
                                 .frame(height: 2)
                             if fret < 4 {
                                 Spacer()
@@ -193,7 +193,7 @@ private struct GuitarChordDiagram: View {
                     HStack(spacing: 0) {
                         ForEach(0..<6) { string in
                             Rectangle()
-                                .fill(Color.white.opacity(0.5))
+                                .fill(DesignSystem.Colors.borderActive)
                                 .frame(width: 1.5)
                             if string < 5 {
                                 Spacer()
@@ -214,7 +214,7 @@ private struct GuitarChordDiagram: View {
                                         .frame(width: 20, height: 20)
                                         .overlay(
                                             Circle()
-                                                .stroke(Color.white, lineWidth: 2)
+                                                .stroke(DesignSystem.Colors.backgroundSecondary, lineWidth: 2)
                                         )
                                     
                                     Spacer()
@@ -234,10 +234,10 @@ private struct GuitarChordDiagram: View {
             .padding(20)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.white.opacity(0.05))
+                    .fill(DesignSystem.Colors.surfaceSecondary)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                            .stroke(DesignSystem.Colors.border, lineWidth: 1)
                     )
             )
             .padding(.horizontal, 24)
@@ -315,12 +315,10 @@ private struct ChordNoteChips: View {
                 .padding(.vertical, 8)
                 .background(
                     Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [accentColor.opacity(0.8), accentColor],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
+                        .fill(accentColor.opacity(0.25))
+                        .overlay(
+                            Capsule()
+                                .stroke(accentColor.opacity(0.5), lineWidth: 1)
                         )
                 )
             
@@ -388,7 +386,7 @@ private enum ChordNoteCalculator {
 }
 
 #Preview {
-    ChordDiagramView(root: "C", quality: .major, extensions: [], accentColor: .purple)
+    ChordDiagramView(root: "C", quality: .major, extensions: [], accentColor: DesignSystem.Colors.primary)
         
-        .background(Color.black)
+    .background(DesignSystem.Colors.background)
 }

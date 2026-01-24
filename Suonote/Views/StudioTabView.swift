@@ -147,8 +147,8 @@ struct StudioTabView: View {
                 .background(
                     LinearGradient(
                         colors: [
-                            Color.black.opacity(0.95),
-                            Color.black
+                            DesignSystem.Colors.backgroundTertiary,
+                            DesignSystem.Colors.backgroundSecondary
                         ],
                         startPoint: .top,
                         endPoint: .bottom
@@ -624,7 +624,14 @@ struct StudioTimelineView: View {
                             .font(DesignSystem.Typography.title3)
                             .foregroundStyle(DesignSystem.Colors.textPrimary)
                             .padding(8)
-                            .background(Circle().fill(Color.white.opacity(0.15)))
+                            .background(
+                                Circle()
+                                    .fill(DesignSystem.Colors.surfaceSecondary)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(DesignSystem.Colors.border, lineWidth: 1)
+                                    )
+                            )
                     }
                     .disabled(!isPlaying)
 
@@ -635,7 +642,14 @@ struct StudioTimelineView: View {
                             .font(DesignSystem.Typography.title3)
                             .foregroundStyle(DesignSystem.Colors.textPrimary)
                             .padding(8)
-                            .background(Circle().fill(Color.white.opacity(0.15)))
+                            .background(
+                                Circle()
+                                    .fill(DesignSystem.Colors.surfaceSecondary)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(DesignSystem.Colors.border, lineWidth: 1)
+                                    )
+                            )
                     }
                 }
             }
@@ -690,7 +704,7 @@ struct StudioTimelineView: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white.opacity(0.04))
+                .fill(DesignSystem.Colors.surfaceSecondary)
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
                         .stroke(accentColor.opacity(0.4), lineWidth: 1)
@@ -798,7 +812,14 @@ struct StudioTrackEditorView: View {
                         .font(DesignSystem.Typography.headline)
                         .foregroundStyle(DesignSystem.Colors.textPrimary)
                         .frame(width: 36, height: 36)
-                        .background(Circle().fill(Color.white.opacity(0.12)))
+                        .background(
+                            Circle()
+                                .fill(DesignSystem.Colors.surfaceSecondary)
+                                .overlay(
+                                    Circle()
+                                        .stroke(DesignSystem.Colors.border, lineWidth: 1)
+                                )
+                        )
                 }
                 .buttonStyle(.plain)
 
@@ -845,7 +866,7 @@ struct StudioTrackEditorView: View {
             LinearGradient(
                 colors: [
                     accentColor.opacity(0.35),
-                    Color.black.opacity(0.2)
+                    DesignSystem.Colors.backgroundTertiary
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -916,7 +937,7 @@ struct StudioTrackEditorView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 18)
-                .fill(Color.white.opacity(0.04))
+                .fill(DesignSystem.Colors.surfaceSecondary)
                 .overlay(
                     RoundedRectangle(cornerRadius: 18)
                         .stroke(accentColor.opacity(0.4), lineWidth: 1)
@@ -1087,8 +1108,8 @@ struct StudioTrackEditorView: View {
         .background(
             LinearGradient(
                 colors: [
-                    accentColor.opacity(0.2),
-                    Color.black
+                    accentColor.opacity(0.12),
+                    DesignSystem.Colors.backgroundTertiary
                 ],
                 startPoint: .top,
                 endPoint: .bottom
@@ -1126,7 +1147,7 @@ struct StudioTrackEditorHint: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white.opacity(0.04))
+                .fill(DesignSystem.Colors.surfaceSecondary)
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
                         .stroke(accentColor.opacity(0.4), lineWidth: 1)
@@ -1159,10 +1180,10 @@ private struct StudioInfoChip: View {
         .padding(.vertical, DesignSystem.Spacing.xxs)
         .background(
             Capsule()
-                .fill(color.opacity(0.25))
+                .fill(color.opacity(0.2))
                 .overlay(
                     Capsule()
-                        .stroke(color.opacity(0.6), lineWidth: 1)
+                        .stroke(color.opacity(0.5), lineWidth: 1)
                 )
         )
     }
@@ -1184,7 +1205,7 @@ struct StudioTrackList: View {
             VStack(spacing: 8) {
                 ForEach(tracks, id: \.id) { track in
                     SwipeActionRow(actions: [
-                        SwipeActionItem(systemImage: "trash.fill", tint: .red, role: .destructive) {
+                        SwipeActionItem(systemImage: "trash.fill", tint: DesignSystem.Colors.error, role: .destructive) {
                             onDelete(track)
                         }
                     ]) {
@@ -1269,11 +1290,15 @@ struct StudioTrackRow: View {
                 } label: {
                     Text("M")
                         .font(.caption)
-                        .foregroundStyle(track.isMuted ? .black : .white)
+                        .foregroundStyle(track.isMuted ? .white : DesignSystem.Colors.textSecondary)
                         .frame(width: 26, height: 26)
                         .background(
                             Circle()
-                                .fill(track.isMuted ? track.instrument.color : Color.white.opacity(0.12))
+                                .fill(track.isMuted ? track.instrument.color : DesignSystem.Colors.surfaceSecondary)
+                                .overlay(
+                                    Circle()
+                                        .stroke(DesignSystem.Colors.border, lineWidth: 1)
+                                )
                         )
                 }
                 .buttonStyle(.plain)
@@ -1284,11 +1309,15 @@ struct StudioTrackRow: View {
                 } label: {
                     Text("S")
                         .font(.caption)
-                        .foregroundStyle(track.isSolo ? .black : .white)
+                        .foregroundStyle(track.isSolo ? .white : DesignSystem.Colors.textSecondary)
                         .frame(width: 26, height: 26)
                         .background(
                             Circle()
-                                .fill(track.isSolo ? track.instrument.color : Color.white.opacity(0.12))
+                                .fill(track.isSolo ? track.instrument.color : DesignSystem.Colors.surfaceSecondary)
+                                .overlay(
+                                    Circle()
+                                        .stroke(DesignSystem.Colors.border, lineWidth: 1)
+                                )
                         )
                 }
                 .buttonStyle(.plain)
@@ -1358,7 +1387,7 @@ struct StudioAudioTrackView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white.opacity(0.04))
+                .fill(DesignSystem.Colors.surfaceSecondary)
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
                         .stroke(track.instrument.color.opacity(0.4), lineWidth: 1)
@@ -1515,7 +1544,7 @@ struct StudioNoteEditor: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 18)
-                .fill(Color.white.opacity(0.04))
+                .fill(DesignSystem.Colors.surfaceSecondary)
                 .overlay(
                     RoundedRectangle(cornerRadius: 18)
                         .stroke(track.instrument.color.opacity(0.4), lineWidth: 1)
@@ -1789,11 +1818,11 @@ struct StudioNoteBlock: View {
                 .fill(color.opacity(0.8))
                 .overlay(
                     RoundedRectangle(cornerRadius: 6)
-                        .stroke(isSelected ? Color.white : Color.clear, lineWidth: 2)
+                        .stroke(isSelected ? DesignSystem.Colors.backgroundSecondary : Color.clear, lineWidth: 2)
                 )
 
             Rectangle()
-                .fill(Color.white.opacity(0.7))
+                .fill(DesignSystem.Colors.textPrimary.opacity(0.45))
                 .frame(width: 5)
                 .padding(.trailing, 3)
                 .gesture(
@@ -1852,7 +1881,7 @@ struct GridBackground: View {
                 gridPath.move(to: CGPoint(x: 0, y: y))
                 gridPath.addLine(to: CGPoint(x: size.width, y: y))
             }
-            context.stroke(gridPath, with: .color(Color.white.opacity(0.08)), lineWidth: 0.5)
+            context.stroke(gridPath, with: .color(DesignSystem.Colors.border.opacity(0.6)), lineWidth: 0.5)
 
             var barPath = Path()
             let stepsPerBar = beatsPerBar * stepsPerBeat
@@ -1861,7 +1890,7 @@ struct GridBackground: View {
                 barPath.move(to: CGPoint(x: x, y: 0))
                 barPath.addLine(to: CGPoint(x: x, y: size.height))
             }
-            context.stroke(barPath, with: .color(Color.white.opacity(0.25)), lineWidth: 1)
+            context.stroke(barPath, with: .color(DesignSystem.Colors.borderActive), lineWidth: 1)
         }
         .frame(
             width: CGFloat(columns) * cellWidth,
@@ -1917,7 +1946,7 @@ struct NoteInspector: View {
                     Image(systemName: "trash.fill")
                         .foregroundStyle(DesignSystem.Colors.textPrimary)
                         .padding(10)
-                        .background(Circle().fill(Color.red))
+                        .background(Circle().fill(DesignSystem.Colors.error))
                 }
             }
         }
@@ -2010,6 +2039,7 @@ struct StudioStylePickerView: View {
                 .disabled(currentSelection == nil)
             }
             .padding(24)
+            .background(DesignSystem.Colors.background)
             .navigationTitle("Studio Style")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -2018,7 +2048,11 @@ struct StudioStylePickerView: View {
                 }
             }
         }
-                .onAppear {
+        .toolbarBackground(DesignSystem.Colors.backgroundSecondary, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.light, for: .navigationBar)
+        .presentationBackground(DesignSystem.Colors.backgroundSecondary)
+        .onAppear {
             currentSelection = selectedStyle
         }
     }
@@ -2136,7 +2170,7 @@ struct StudioRecordingPicker: View {
                                     .foregroundStyle(DesignSystem.Colors.textSecondary)
                             }
                         }
-                        .listRowBackground(Color.black.opacity(0.2))
+                        .listRowBackground(DesignSystem.Colors.surfaceSecondary)
                     }
                 }
             }
@@ -2289,7 +2323,7 @@ struct RegenerateOptionsView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Image(systemName: "waveform")
-                                .foregroundStyle(.purple)
+                                .foregroundStyle(DesignSystem.Colors.primary)
                             Text("Intensity")
                                 .font(.subheadline)
                                 .foregroundStyle(DesignSystem.Colors.textPrimary)
@@ -2321,7 +2355,7 @@ struct RegenerateOptionsView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Image(systemName: "music.note.list")
-                                .foregroundStyle(.cyan)
+                                .foregroundStyle(DesignSystem.Colors.info)
                             Text("Complexity")
                                 .font(.subheadline)
                                 .foregroundStyle(DesignSystem.Colors.textPrimary)
@@ -2388,7 +2422,7 @@ struct RegenerateOptionsView: View {
                             RoundedRectangle(cornerRadius: 12)
                                 .fill(
                                     LinearGradient(
-                                        colors: [.purple, .cyan],
+                                        colors: [DesignSystem.Colors.primary, DesignSystem.Colors.info],
                                         startPoint: .leading,
                                         endPoint: .trailing
                                     )

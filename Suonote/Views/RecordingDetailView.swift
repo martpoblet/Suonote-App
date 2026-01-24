@@ -35,9 +35,8 @@ struct RecordingDetailView: View {
             .background(
                 LinearGradient(
                     colors: [
-                        Color(red: 0.05, green: 0.05, blue: 0.15),
-                        Color(red: 0.1, green: 0.05, blue: 0.2),
-                        Color.black
+                        DesignSystem.Colors.backgroundSecondary,
+                        DesignSystem.Colors.backgroundTertiary
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
@@ -54,7 +53,11 @@ struct RecordingDetailView: View {
                 }
             }
         }
-        
+        .toolbarBackground(DesignSystem.Colors.backgroundSecondary, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.light, for: .navigationBar)
+        .presentationBackground(DesignSystem.Colors.backgroundSecondary)
+        .preferredColorScheme(.light)
         .presentationDetents([.large])
         .sheet(isPresented: $showingTypePicker) {
             RecordingTypePickerSheet(selectedType: Binding(
@@ -147,16 +150,16 @@ struct RecordingDetailView: View {
                             tempName = recording.name
                         }
                         .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(DesignSystem.Colors.warning)
                     }
                 }
                 .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.white.opacity(0.05))
+                        .fill(DesignSystem.Colors.surfaceSecondary)
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                .stroke(DesignSystem.Colors.border, lineWidth: 1)
                         )
                 )
             }
@@ -187,10 +190,10 @@ struct RecordingDetailView: View {
                 .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.white.opacity(0.05))
+                        .fill(DesignSystem.Colors.surfaceSecondary)
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                .stroke(DesignSystem.Colors.border, lineWidth: 1)
                         )
                 )
             }
@@ -198,7 +201,7 @@ struct RecordingDetailView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white.opacity(0.03))
+                .fill(DesignSystem.Colors.surfaceSecondary)
         )
     }
     
@@ -212,7 +215,7 @@ struct RecordingDetailView: View {
             EffectToggle(
                 title: "Reverb",
                 icon: "waveform.path.ecg",
-                color: .purple,
+                color: DesignSystem.Colors.primary,
                 isEnabled: Binding(
                     get: { recording.reverbEnabled },
                     set: { recording.reverbEnabled = $0 }
@@ -243,7 +246,7 @@ struct RecordingDetailView: View {
             EffectToggle(
                 title: "Delay",
                 icon: "arrow.triangle.2.circlepath",
-                color: .blue,
+                color: DesignSystem.Colors.info,
                 isEnabled: Binding(
                     get: { recording.delayEnabled },
                     set: { recording.delayEnabled = $0 }
@@ -284,7 +287,7 @@ struct RecordingDetailView: View {
             EffectToggle(
                 title: "Equalizer",
                 icon: "slider.horizontal.3",
-                color: .green,
+                color: DesignSystem.Colors.success,
                 isEnabled: Binding(
                     get: { recording.eqEnabled },
                     set: { recording.eqEnabled = $0 }
@@ -326,7 +329,7 @@ struct RecordingDetailView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white.opacity(0.03))
+                .fill(DesignSystem.Colors.surfaceSecondary)
         )
     }
     
@@ -353,7 +356,7 @@ struct RecordingDetailView: View {
                                 VStack(spacing: 8) {
                                     Image(systemName: "xmark.circle.fill")
                                         .font(DesignSystem.Typography.title2)
-                                        .foregroundStyle(.red)
+                                        .foregroundStyle(DesignSystem.Colors.error)
                                     
                                     Text("Unlink")
                                         .font(DesignSystem.Typography.caption)
@@ -361,10 +364,10 @@ struct RecordingDetailView: View {
                                 .frame(width: 80, height: 80)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.red.opacity(0.15))
+                                        .fill(DesignSystem.Colors.error.opacity(0.2))
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 12)
-                                                .stroke(Color.red, lineWidth: 1.5)
+                                                .stroke(DesignSystem.Colors.error, lineWidth: 1.5)
                                         )
                                 )
                             }
@@ -387,10 +390,10 @@ struct RecordingDetailView: View {
                                 .frame(width: 100, height: 80)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(recording.linkedSectionId == section.id ? Color.purple.opacity(0.3) : Color.white.opacity(0.05))
+                                        .fill(recording.linkedSectionId == section.id ? DesignSystem.Colors.primary.opacity(0.2) : DesignSystem.Colors.surfaceSecondary)
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 12)
-                                                .stroke(recording.linkedSectionId == section.id ? Color.purple : Color.white.opacity(0.1), lineWidth: recording.linkedSectionId == section.id ? 2 : 1)
+                                                .stroke(recording.linkedSectionId == section.id ? DesignSystem.Colors.primary : DesignSystem.Colors.border, lineWidth: recording.linkedSectionId == section.id ? 2 : 1)
                                         )
                                 )
                             }
@@ -402,7 +405,7 @@ struct RecordingDetailView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white.opacity(0.03))
+                .fill(DesignSystem.Colors.surfaceSecondary)
         )
     }
     
@@ -485,10 +488,10 @@ struct EffectToggle<Content: View>: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white.opacity(0.05))
+                .fill(DesignSystem.Colors.surfaceSecondary)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(isEnabled ? color.opacity(0.5) : Color.white.opacity(0.1), lineWidth: 1)
+                        .stroke(isEnabled ? color.opacity(0.5) : DesignSystem.Colors.border, lineWidth: 1)
                 )
         )
     }
@@ -513,7 +516,7 @@ struct EffectSlider: View {
             }
             
             Slider(value: $value, in: range)
-                .tint(.purple)
+                .tint(DesignSystem.Colors.primary)
         }
     }
 }

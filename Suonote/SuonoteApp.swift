@@ -5,6 +5,7 @@ import SwiftData
 struct SuonoteApp: App {
 
     init() {
+        UIView.appearance().overrideUserInterfaceStyle = .light
         // Verificar fuentes al inicio
         #if DEBUG
         AppFonts.checkFonts()
@@ -20,14 +21,45 @@ struct SuonoteApp: App {
         UINavigationBar.appearance().standardAppearance = appearance
         UINavigationBar.appearance().compactAppearance = appearance
         UINavigationBar.appearance().scrollEdgeAppearance = appearance
+        UINavigationBar.appearance().tintColor = UIColor(DesignSystem.Colors.textPrimary)
+        UIBarButtonItem.appearance().tintColor = UIColor(DesignSystem.Colors.textPrimary)
         
         // Configure tab bar appearance
         let tabAppearance = UITabBarAppearance()
         tabAppearance.configureWithOpaqueBackground()
         tabAppearance.backgroundColor = UIColor(DesignSystem.Colors.tabBarBackground)
+        let selectedTabColor = UIColor(DesignSystem.Colors.tabBarActive)
+        let normalTabColor = UIColor(DesignSystem.Colors.tabBarInactive)
+        tabAppearance.stackedLayoutAppearance.selected.iconColor = selectedTabColor
+        tabAppearance.stackedLayoutAppearance.selected.titleTextAttributes = [
+            .foregroundColor: selectedTabColor
+        ]
+        tabAppearance.stackedLayoutAppearance.normal.iconColor = normalTabColor
+        tabAppearance.stackedLayoutAppearance.normal.titleTextAttributes = [
+            .foregroundColor: normalTabColor
+        ]
+        tabAppearance.inlineLayoutAppearance.selected.iconColor = selectedTabColor
+        tabAppearance.inlineLayoutAppearance.selected.titleTextAttributes = [
+            .foregroundColor: selectedTabColor
+        ]
+        tabAppearance.inlineLayoutAppearance.normal.iconColor = normalTabColor
+        tabAppearance.inlineLayoutAppearance.normal.titleTextAttributes = [
+            .foregroundColor: normalTabColor
+        ]
+        tabAppearance.compactInlineLayoutAppearance.selected.iconColor = selectedTabColor
+        tabAppearance.compactInlineLayoutAppearance.selected.titleTextAttributes = [
+            .foregroundColor: selectedTabColor
+        ]
+        tabAppearance.compactInlineLayoutAppearance.normal.iconColor = normalTabColor
+        tabAppearance.compactInlineLayoutAppearance.normal.titleTextAttributes = [
+            .foregroundColor: normalTabColor
+        ]
         
         UITabBar.appearance().standardAppearance = tabAppearance
         UITabBar.appearance().scrollEdgeAppearance = tabAppearance
+        UITabBar.appearance().tintColor = UIColor(DesignSystem.Colors.tabBarActive)
+        UITabBar.appearance().unselectedItemTintColor = UIColor(DesignSystem.Colors.tabBarInactive)
+        UITabBar.appearance().backgroundColor = UIColor(DesignSystem.Colors.tabBarBackground)
     }
 
     var sharedModelContainer: ModelContainer = {
@@ -60,6 +92,7 @@ struct SuonoteApp: App {
             NavigationStack {
                 ProjectsListView()
             }
+            .preferredColorScheme(.light)
         }
         .modelContainer(sharedModelContainer)
     }

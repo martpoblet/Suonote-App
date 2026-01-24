@@ -384,7 +384,7 @@ struct RecordingsTabView: View {
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
                                 }
-                                .tint(.orange)
+                                .tint(DesignSystem.Colors.warning)
                             }
                             
                             Button {
@@ -392,7 +392,7 @@ struct RecordingsTabView: View {
                             } label: {
                                 Image(systemName: recording.linkedSectionId == nil ? "link.circle.fill" : "link.circle")
                             }
-                            .tint(.purple)
+                            .tint(DesignSystem.Colors.primary)
                         }
                     }
                 }
@@ -485,7 +485,7 @@ struct WaveformView: View {
                     RoundedRectangle(cornerRadius: 2)
                         .fill(
                             LinearGradient(
-                                colors: [Color.red, Color.red.opacity(0.6)],
+                                colors: [DesignSystem.Colors.error, DesignSystem.Colors.error.opacity(0.6)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
@@ -497,7 +497,7 @@ struct WaveformView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white.opacity(0.03))
+                .fill(DesignSystem.Colors.surfaceSecondary)
         )
     }
 }
@@ -518,7 +518,7 @@ struct ModernTakeCard: View {
                 Circle()
                     .fill(
                         isPlaying ? 
-                            LinearGradient(colors: [.green, .cyan], startPoint: .topLeading, endPoint: .bottomTrailing) :
+                            LinearGradient(colors: [DesignSystem.Colors.success, DesignSystem.Colors.info], startPoint: .topLeading, endPoint: .bottomTrailing) :
                             LinearGradient(colors: [recording.recordingType.color.opacity(0.3), recording.recordingType.color.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing)
                     )
                     .frame(width: 56, height: 56)
@@ -558,13 +558,13 @@ struct ModernTakeCard: View {
                             Text(section.name)
                                 .font(DesignSystem.Typography.caption)
                         }
-                        .foregroundStyle(.purple)
+                        .foregroundStyle(DesignSystem.Colors.primary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(
                             Capsule()
-                                .fill(Color.purple.opacity(0.2))
-                                .overlay(Capsule().stroke(Color.purple.opacity(0.5), lineWidth: 1))
+                                .fill(DesignSystem.Colors.primary.opacity(0.2))
+                                .overlay(Capsule().stroke(DesignSystem.Colors.primary.opacity(0.5), lineWidth: 1))
                         )
                     } else {
                         Button(action: onLinkSection) {
@@ -627,7 +627,7 @@ struct ModernTakeCard: View {
                 .fill(
                     linkedSection != nil ?
                         recording.recordingType.color.opacity(0.05) :
-                        (isPlaying ? Color.green.opacity(0.05) : Color.white.opacity(0.03))
+                        (isPlaying ? DesignSystem.Colors.success.opacity(0.08) : DesignSystem.Colors.surfaceSecondary)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
@@ -640,7 +640,7 @@ struct ModernTakeCard: View {
         if linkedSection != nil {
             return recording.recordingType.color.opacity(0.6)
         } else if isPlaying {
-            return .green.opacity(0.5)
+            return DesignSystem.Colors.success.opacity(0.6)
         } else {
             return DesignSystem.Colors.border
         }
@@ -660,13 +660,13 @@ struct ModernTakeCard: View {
         var effects: [EffectBadge] = []
         
         if recording.reverbEnabled {
-            effects.append(EffectBadge(id: "reverb", icon: "waveform.path.ecg", color: .purple))
+            effects.append(EffectBadge(id: "reverb", icon: "waveform.path.ecg", color: DesignSystem.Colors.primary))
         }
         if recording.delayEnabled {
-            effects.append(EffectBadge(id: "delay", icon: "arrow.triangle.2.circlepath", color: .blue))
+            effects.append(EffectBadge(id: "delay", icon: "arrow.triangle.2.circlepath", color: DesignSystem.Colors.info))
         }
         if recording.eqEnabled {
-            effects.append(EffectBadge(id: "eq", icon: "slider.horizontal.3", color: .green))
+            effects.append(EffectBadge(id: "eq", icon: "slider.horizontal.3", color: DesignSystem.Colors.success))
         }
         
         return effects
@@ -756,15 +756,15 @@ struct SectionLinkSheet: View {
                                             .foregroundStyle(DesignSystem.Colors.textSecondary)
                                     }
                                     .frame(maxWidth: .infinity)
-                                    .frame(height: 80)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 16)
-                                            .fill(recording.linkedSectionId == section.id ? Color.purple.opacity(0.2) : DesignSystem.Colors.surfaceSecondary)
-                                            .overlay(
+                                            .frame(height: 80)
+                                            .background(
                                                 RoundedRectangle(cornerRadius: 16)
-                                                    .stroke(recording.linkedSectionId == section.id ? Color.purple : DesignSystem.Colors.border, lineWidth: recording.linkedSectionId == section.id ? 2 : 1)
+                                                    .fill(recording.linkedSectionId == section.id ? DesignSystem.Colors.primary.opacity(0.2) : DesignSystem.Colors.surfaceSecondary)
+                                                    .overlay(
+                                                        RoundedRectangle(cornerRadius: 16)
+                                                            .stroke(recording.linkedSectionId == section.id ? DesignSystem.Colors.primary : DesignSystem.Colors.border, lineWidth: recording.linkedSectionId == section.id ? 2 : 1)
+                                                    )
                                             )
-                                    )
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -780,7 +780,7 @@ struct SectionLinkSheet: View {
                                 HStack(spacing: 12) {
                                     Image(systemName: "xmark.circle.fill")
                                         .font(DesignSystem.Typography.title3)
-                                        .foregroundStyle(.red)
+                                        .foregroundStyle(DesignSystem.Colors.error)
                                     
                                     Text("Remove Link")
                                         .font(.subheadline)
@@ -790,10 +790,10 @@ struct SectionLinkSheet: View {
                                 .frame(height: 50)
                                 .background(
                                     RoundedRectangle(cornerRadius: 16)
-                                        .fill(Color.red.opacity(0.15))
+                                        .fill(DesignSystem.Colors.error.opacity(0.2))
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 16)
-                                                .stroke(Color.red.opacity(0.4), lineWidth: 1)
+                                                .stroke(DesignSystem.Colors.error.opacity(0.5), lineWidth: 1)
                                         )
                                 )
                             }
@@ -841,13 +841,13 @@ struct FilterChipView: View {
                     .font(DesignSystem.Typography.caption)
             }
         }
-        .foregroundStyle(color)
+        .foregroundStyle(DesignSystem.Colors.textPrimary)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(
             Capsule()
-                .fill(color.opacity(0.15))
-                .overlay(Capsule().stroke(color, lineWidth: 1))
+                .fill(color.opacity(0.2))
+                .overlay(Capsule().stroke(color.opacity(0.5), lineWidth: 1))
         )
     }
 }

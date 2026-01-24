@@ -214,7 +214,7 @@ struct ImmersiveLyricsEditor: View {
                     } label: {
                         Text("Done")
                             .font(DesignSystem.Typography.bodyBold)
-                            .foregroundStyle(DesignSystem.Colors.primaryGradient)
+                            .foregroundStyle(DesignSystem.Colors.primaryDark)
                     }
                     .animatedPress()
                 }
@@ -222,7 +222,7 @@ struct ImmersiveLyricsEditor: View {
                 .padding(.vertical, DesignSystem.Spacing.md)
                 .background(
                     Rectangle()
-                        .fill(Color.black.opacity(0.5))
+                        .fill(DesignSystem.Colors.backgroundSecondary.opacity(0.92))
                         .blur(radius: 20)
                 )
             }

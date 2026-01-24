@@ -18,7 +18,7 @@ final class SectionTemplate {
     
     // Computed property: Color from hex string
     var color: Color {
-        Color(hex: colorHex ?? "#6B7B6B") ?? SectionColor.sage.color
+        Color(hex: colorHex ?? SectionColor.sage.hex) ?? SectionColor.sage.color
     }
     
     // Computed property: total beats in the section
@@ -80,14 +80,14 @@ enum SectionColor: String, CaseIterable, Identifiable {
 
     var hex: String {
         switch self {
-        case .sage: return "#6B7B6B"      // Sage green (primary)
-        case .ocean: return "#4A6FA5"     // Muted blue
-        case .sky: return "#5B9EA6"       // Teal
-        case .moss: return "#7A9A7A"      // Soft green
-        case .sand: return "#B8A07A"      // Warm beige
-        case .coral: return "#C47D6D"     // Muted coral
-        case .berry: return "#8B6B8B"     // Muted purple
-        case .lavender: return "#9B8BB5"  // Soft lavender
+        case .sage: return "#8FB096"      // Sage
+        case .ocean: return "#7A9ED3"     // Soft blue
+        case .sky: return "#7FC7CF"       // Teal
+        case .moss: return "#92C39A"      // Soft green
+        case .sand: return "#D8BD8B"      // Warm sand
+        case .coral: return "#E09484"     // Coral
+        case .berry: return "#C18ACB"     // Berry
+        case .lavender: return "#A694D6"  // Lavender
         }
     }
 

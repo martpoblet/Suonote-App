@@ -47,9 +47,7 @@ struct CreateProjectView: View {
                     } label: {
                         Text("Create")
                             .font(DesignSystem.Typography.headline)
-                            .foregroundStyle(
-                                DesignSystem.Colors.primaryGradient
-                            )
+                            .foregroundStyle(DesignSystem.Colors.primaryDark)
                     }
                     .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
                     .opacity(title.trimmingCharacters(in: .whitespaces).isEmpty ? 0.5 : 1.0)
@@ -126,13 +124,7 @@ struct CreateProjectView: View {
                                     Text("\(bpm)")
                                         .font(DesignSystem.Typography.mega)
                                         .fontWeight(.bold)
-                                        .foregroundStyle(
-                                            LinearGradient(
-                                                colors: [.white, .white.opacity(0.7)],
-                                                startPoint: .top,
-                                                endPoint: .bottom
-                                            )
-                                        )
+                                        .foregroundStyle(DesignSystem.Colors.primaryDark)
                                         .monospacedDigit()
                                     
                                     bpmAdjustButton(systemImage: "plus", isEnabled: bpm < bpmRange.upperBound) {
@@ -151,7 +143,7 @@ struct CreateProjectView: View {
                                 ), in: Double(bpmRange.lowerBound)...Double(bpmRange.upperBound), step: Double(bpmStep))
                                 .tint(
                                     LinearGradient(
-                                        colors: [.purple, .blue, .cyan],
+                                        colors: [DesignSystem.Colors.primary, DesignSystem.Colors.info, DesignSystem.Colors.accent],
                                         startPoint: .leading,
                                         endPoint: .trailing
                                     )
@@ -166,7 +158,7 @@ struct CreateProjectView: View {
                                         } label: {
                                             Text("\(preset)")
                                                 .font(DesignSystem.Typography.caption)
-                                                .foregroundStyle(bpm == preset ? .white : .white.opacity(0.5))
+                                                .foregroundStyle(bpm == preset ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textTertiary)
                                                 .padding(.horizontal, 12)
                                                 .padding(.vertical, 8)
                                                 .background(
@@ -182,7 +174,7 @@ struct CreateProjectView: View {
                                     bpm: bpm,
                                     timeTop: 4,
                                     timeBottom: 4,
-                                    tint: .cyan
+                                    tint: DesignSystem.Colors.info
                                 )
                             }
                             .padding(24)
@@ -220,7 +212,7 @@ struct CreateProjectView: View {
                                                 .font(DesignSystem.Typography.title3)
                                                 .foregroundStyle(
                                                     LinearGradient(
-                                                        colors: [.cyan, .blue],
+                                                        colors: [DesignSystem.Colors.info, DesignSystem.Colors.primary],
                                                         startPoint: .topLeading,
                                                         endPoint: .bottomTrailing
                                                     )
@@ -261,6 +253,8 @@ struct CreateProjectView: View {
         .onAppear {
             isTitleFocused = true
         }
+        .presentationBackground(DesignSystem.Colors.backgroundSecondary)
+        .preferredColorScheme(.light)
             }
     
     private func addTag() {
@@ -283,14 +277,14 @@ struct CreateProjectView: View {
         } label: {
             Image(systemName: systemImage)
                 .font(DesignSystem.Typography.headline)
-                .foregroundStyle(isEnabled ? .white : .white.opacity(0.3))
+                .foregroundStyle(isEnabled ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textTertiary)
                 .frame(width: 36, height: 36)
                 .background(
                     Circle()
-                        .fill(Color.white.opacity(isEnabled ? 0.12 : 0.05))
+                        .fill(DesignSystem.Colors.surfaceSecondary)
                         .overlay(
                             Circle()
-                                .stroke(Color.white.opacity(isEnabled ? 0.2 : 0.05), lineWidth: 1)
+                                .stroke(DesignSystem.Colors.border, lineWidth: 1)
                         )
                 )
         }
@@ -340,11 +334,11 @@ struct StatusSelectionCard: View {
             VStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(DesignSystem.Typography.title2)
-                    .foregroundStyle(isSelected ? color : .white.opacity(0.4))
+                    .foregroundStyle(isSelected ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
                 
                 Text(status.rawValue)
                     .font(DesignSystem.Typography.caption)
-                    .foregroundStyle(isSelected ? .white : .white.opacity(0.6))
+                    .foregroundStyle(isSelected ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
             }
             .frame(width: 100, height: 100)
             .background(
@@ -371,11 +365,11 @@ struct StatusSelectionCard: View {
     
     private var color: Color {
         switch status {
-        case .idea: return .yellow
-        case .inProgress: return .orange
-        case .polished: return .purple
-        case .finished: return .green
-        case .archived: return .gray
+        case .idea: return DesignSystem.Colors.info
+        case .inProgress: return DesignSystem.Colors.warning
+        case .polished: return DesignSystem.Colors.primary
+        case .finished: return DesignSystem.Colors.success
+        case .archived: return DesignSystem.Colors.secondary
         }
     }
 }
@@ -397,13 +391,13 @@ struct TagChip: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .foregroundStyle(.cyan)
+        .foregroundStyle(DesignSystem.Colors.textPrimary)
         .background(
             Capsule()
-                .fill(Color.cyan.opacity(0.15))
+                .fill(DesignSystem.Colors.info.opacity(0.2))
                 .overlay(
                     Capsule()
-                        .stroke(Color.cyan.opacity(0.3), lineWidth: 1)
+                        .stroke(DesignSystem.Colors.info.opacity(0.4), lineWidth: 1)
                 )
         )
     }

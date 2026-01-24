@@ -58,38 +58,37 @@ struct ProjectDetailView: View {
                 ProjectTabContainer {
                     ComposeTabView(project: project)
                 }
-                    .tag(ProjectTab.compose)
-                    .tabItem {
-                        Label(ProjectTab.compose.title, systemImage: ProjectTab.compose.icon)
-                    }
+                .tag(ProjectTab.compose)
+                .tabItem {
+                    Label(ProjectTab.compose.title, systemImage: ProjectTab.compose.icon)
+                }
                 
                 ProjectTabContainer {
                     StudioTabView(project: project)
                 }
-                    .tag(ProjectTab.studio)
-                    .tabItem {
-                        Label(ProjectTab.studio.title, systemImage: ProjectTab.studio.icon)
-                    }
+                .tag(ProjectTab.studio)
+                .tabItem {
+                    Label(ProjectTab.studio.title, systemImage: ProjectTab.studio.icon)
+                }
                 
                 ProjectTabContainer {
                     LyricsTabView(project: project)
                 }
-                    .tag(ProjectTab.lyrics)
-                    .tabItem {
-                        Label(ProjectTab.lyrics.title, systemImage: ProjectTab.lyrics.icon)
-                    }
+                .tag(ProjectTab.lyrics)
+                .tabItem {
+                    Label(ProjectTab.lyrics.title, systemImage: ProjectTab.lyrics.icon)
+                }
                 
                 ProjectTabContainer {
                     RecordingsTabView(project: project)
                 }
-                    .tag(ProjectTab.record)
-                    .tabItem {
-                        Label(ProjectTab.record.title, systemImage: ProjectTab.record.icon)
-                    }
+                .tag(ProjectTab.record)
+                .tabItem {
+                    Label(ProjectTab.record.title, systemImage: ProjectTab.record.icon)
+                }
             }
             .tabViewStyle(.automatic)
             .tint(selectedTab.tintColor)
-            .padding(.top, 1)  // Small padding to prevent overlap
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -114,8 +113,8 @@ struct ProjectDetailView: View {
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
-                        .background(statusColor(for: project.status).opacity(0.25))
-                        .foregroundStyle(statusColor(for: project.status))
+                        .background(statusColor(for: project.status).opacity(0.35))
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                         .clipShape(Capsule())
                     }
                 }
@@ -139,10 +138,13 @@ struct ProjectDetailView: View {
         .sheet(isPresented: $showingStatusPicker) {
             StatusPickerSheet(project: project)
         }
-        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbarBackground(Color.clear, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.light, for: .navigationBar)
+        .preferredColorScheme(.light)
         
     }
-    
+
     // MARK: - Helper Methods
     
     /// Retorna el ícono SF Symbol para cada estado
@@ -159,11 +161,11 @@ struct ProjectDetailView: View {
     /// Retorna el color asociado a cada estado del proyecto
     private func statusColor(for status: ProjectStatus) -> Color {
         switch status {
-        case .idea: return .yellow
-        case .inProgress: return .orange
-        case .polished: return .purple
-        case .finished: return .green
-        case .archived: return .gray
+        case .idea: return DesignSystem.Colors.info
+        case .inProgress: return DesignSystem.Colors.warning
+        case .polished: return DesignSystem.Colors.primary
+        case .finished: return DesignSystem.Colors.success
+        case .archived: return DesignSystem.Colors.secondary
         }
     }
     
@@ -260,7 +262,7 @@ struct EditProjectSheet: View {
                                         Text(status.rawValue)
                                             .font(.subheadline)
                                     }
-                                    .foregroundStyle(tempStatus == status ? .white : .secondary)
+                                    .foregroundStyle(tempStatus == status ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
                                     .frame(maxWidth: .infinity)
                                     .frame(height: 44)
                                     .background(
@@ -293,15 +295,15 @@ struct EditProjectSheet: View {
                                 } label: {
                                     Text(signature.rawValue)
                                         .font(.headline)
-                                        .foregroundStyle(isSelected(signature) ? .white : .secondary)
+                                        .foregroundStyle(isSelected(signature) ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
                                         .frame(maxWidth: .infinity)
                                         .frame(height: 44)
                                         .background(
                                             RoundedRectangle(cornerRadius: 12)
-                                                .fill(isSelected(signature) ? Color.orange.opacity(0.3) : DesignSystem.Colors.surfaceSecondary)
+                                                .fill(isSelected(signature) ? DesignSystem.Colors.warning.opacity(0.3) : DesignSystem.Colors.surfaceSecondary)
                                                 .overlay(
                                                     RoundedRectangle(cornerRadius: 12)
-                                                        .stroke(isSelected(signature) ? Color.orange : DesignSystem.Colors.border, lineWidth: isSelected(signature) ? 2 : 1)
+                                                        .stroke(isSelected(signature) ? DesignSystem.Colors.warning : DesignSystem.Colors.border, lineWidth: isSelected(signature) ? 2 : 1)
                                                 )
                                         )
                                 }
@@ -324,12 +326,12 @@ struct EditProjectSheet: View {
                                 } label: {
                                     Text(root)
                                         .font(DesignSystem.Typography.headline)
-                                        .foregroundStyle(tempKeyRoot == root ? .white : .secondary)
+                                        .foregroundStyle(tempKeyRoot == root ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
                                         .frame(height: 44)
                                         .frame(maxWidth: .infinity)
                                         .background(
                                             RoundedRectangle(cornerRadius: 12)
-                                                .fill(tempKeyRoot == root ? Color.purple : DesignSystem.Colors.surfaceSecondary)
+                                                .fill(tempKeyRoot == root ? DesignSystem.Colors.primary : DesignSystem.Colors.surfaceSecondary)
                                         )
                                 }
                             }
@@ -342,12 +344,12 @@ struct EditProjectSheet: View {
                             } label: {
                                 Text("Major")
                                     .font(.subheadline)
-                                    .foregroundStyle(tempKeyMode == .major ? .white : .secondary)
+                                    .foregroundStyle(tempKeyMode == .major ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
                                     .frame(maxWidth: .infinity)
                                     .frame(height: 44)
                                     .background(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .fill(tempKeyMode == .major ? Color.purple : DesignSystem.Colors.surfaceSecondary)
+                                            .fill(tempKeyMode == .major ? DesignSystem.Colors.primary : DesignSystem.Colors.surfaceSecondary)
                                     )
                             }
                             
@@ -356,12 +358,12 @@ struct EditProjectSheet: View {
                             } label: {
                                 Text("Minor")
                                     .font(.subheadline)
-                                    .foregroundStyle(tempKeyMode == .minor ? .white : .secondary)
+                                    .foregroundStyle(tempKeyMode == .minor ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
                                     .frame(maxWidth: .infinity)
                                     .frame(height: 44)
                                     .background(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .fill(tempKeyMode == .minor ? Color.purple : DesignSystem.Colors.surfaceSecondary)
+                                            .fill(tempKeyMode == .minor ? DesignSystem.Colors.primary : DesignSystem.Colors.surfaceSecondary)
                                     )
                             }
                         }
@@ -393,7 +395,7 @@ struct EditProjectSheet: View {
                                     .padding(.vertical, 8)
                                     .background(
                                         Capsule()
-                                            .fill(Color.purple.opacity(0.3))
+                                            .fill(DesignSystem.Colors.primary.opacity(0.25))
                                     )
                                 }
                             }
@@ -418,7 +420,7 @@ struct EditProjectSheet: View {
                             } label: {
                                 Image(systemName: "plus.circle.fill")
                                     .font(DesignSystem.Typography.title2)
-                                    .foregroundStyle(Color.purple)
+                                    .foregroundStyle(DesignSystem.Colors.primary)
                             }
                             .disabled(newTag.isEmpty)
                         }
@@ -525,11 +527,11 @@ struct EditProjectSheet: View {
     
     private func statusColorFor(_ status: ProjectStatus) -> Color {
         switch status {
-        case .idea: return .yellow
-        case .inProgress: return .orange
-        case .polished: return .purple
-        case .finished: return .green
-        case .archived: return .gray
+        case .idea: return DesignSystem.Colors.info
+        case .inProgress: return DesignSystem.Colors.warning
+        case .polished: return DesignSystem.Colors.primary
+        case .finished: return DesignSystem.Colors.success
+        case .archived: return DesignSystem.Colors.secondary
         }
     }
 }
@@ -634,11 +636,11 @@ struct StatusPickerSheet: View {
     
     private func statusColor(for status: ProjectStatus) -> Color {
         switch status {
-        case .idea: return .yellow
-        case .inProgress: return .orange
-        case .polished: return .purple
-        case .finished: return .green
-        case .archived: return .gray
+        case .idea: return DesignSystem.Colors.info
+        case .inProgress: return DesignSystem.Colors.warning
+        case .polished: return DesignSystem.Colors.primary
+        case .finished: return DesignSystem.Colors.success
+        case .archived: return DesignSystem.Colors.secondary
         }
     }
     
@@ -711,8 +713,7 @@ struct BPMSelector: View {
     let timeBottom: Int
     @StateObject private var tempoPreviewer = TempoPreviewer()
     
-    private let gradientColors: [Color] = [.white, .white.opacity(0.7)]
-    private let sliderGradient: [Color] = [.purple, .blue, .cyan]
+    private let sliderGradient: [Color] = [DesignSystem.Colors.primary, DesignSystem.Colors.info, DesignSystem.Colors.accent]
     private let presets = [60, 90, 120, 140, 180]
     private let bpmRange = 40...240
     private let bpmStep = 1
@@ -726,13 +727,13 @@ struct BPMSelector: View {
             VStack(spacing: 16) {
                 bpmDisplay
                 bpmSlider
-                TempoPreviewButton(
-                    previewer: tempoPreviewer,
-                    bpm: bpm,
-                    timeTop: timeTop,
-                    timeBottom: timeBottom,
-                    tint: .cyan
-                )
+                    TempoPreviewButton(
+                        previewer: tempoPreviewer,
+                        bpm: bpm,
+                        timeTop: timeTop,
+                        timeBottom: timeBottom,
+                        tint: DesignSystem.Colors.info
+                    )
                 bpmPresets
             }
             .padding(20)
@@ -749,13 +750,7 @@ struct BPMSelector: View {
             Text("\(bpm)")
                 .font(DesignSystem.Typography.mega)
                 .fontWeight(.bold)
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: gradientColors,
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
+                .foregroundStyle(DesignSystem.Colors.primaryDark)
                 .monospacedDigit()
 
             bpmAdjustButton(systemImage: "plus", isEnabled: bpm < bpmRange.upperBound) {
@@ -804,10 +799,10 @@ struct BPMSelector: View {
                 .padding(.vertical, 8)
                 .background(
                     Capsule()
-                        .fill(bpm == preset ? Color.cyan.opacity(0.2) : DesignSystem.Colors.surfaceSecondary)
+                        .fill(bpm == preset ? DesignSystem.Colors.info.opacity(0.2) : DesignSystem.Colors.surfaceSecondary)
                         .overlay(
                             Capsule()
-                                .stroke(bpm == preset ? Color.cyan : Color.clear, lineWidth: 1)
+                                .stroke(bpm == preset ? DesignSystem.Colors.info : Color.clear, lineWidth: 1)
                         )
                 )
         }
@@ -818,7 +813,7 @@ struct BPMSelector: View {
             .fill(DesignSystem.Colors.surfaceSecondary)
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.cyan.opacity(0.3), lineWidth: 1)
+                    .stroke(DesignSystem.Colors.info.opacity(0.3), lineWidth: 1)
             )
     }
 
@@ -832,14 +827,14 @@ struct BPMSelector: View {
         } label: {
             Image(systemName: systemImage)
                 .font(DesignSystem.Typography.headline)
-                .foregroundStyle(isEnabled ? .white : .white.opacity(0.35))
+                .foregroundStyle(isEnabled ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textTertiary)
                 .frame(width: 36, height: 36)
                 .background(
                     Circle()
-                        .fill(Color.white.opacity(isEnabled ? 0.12 : 0.05))
+                        .fill(DesignSystem.Colors.surfaceSecondary)
                         .overlay(
                             Circle()
-                                .stroke(Color.white.opacity(isEnabled ? 0.2 : 0.05), lineWidth: 1)
+                                .stroke(DesignSystem.Colors.border, lineWidth: 1)
                         )
                 )
         }

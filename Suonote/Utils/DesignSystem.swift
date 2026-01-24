@@ -8,45 +8,45 @@ struct DesignSystem {
     // MARK: - Colors
 
     struct Colors {
-        // Primary Palette - Deep Amethyst
-        static let primary = Color(hexNonOptional: "7C3AED")        // Vibrant purple
-        static let primaryLight = Color(hexNonOptional: "A78BFA")   // Lighter purple
-        static let primaryDark = Color(hexNonOptional: "5B21B6")    // Deep violet
-        static let accent = Color(hexNonOptional: "8B5CF6")         // Mid purple
+        // Primary Palette - Pastel Harmony
+        static let primary = Color(hexNonOptional: "6F8FDD")        // Periwinkle with more contrast
+        static let primaryLight = Color(hexNonOptional: "B8C7F0")   // Light lavender blue
+        static let primaryDark = Color(hexNonOptional: "4E73C8")    // Muted periwinkle
+        static let accent = Color(hexNonOptional: "E3A894")         // Warm peach
 
         // Backgrounds - Light mode
-        static let background = Color(hexNonOptional: "FAF9FB")     // Subtle purple tint
+        static let background = Color(hexNonOptional: "FBFAFD")     // Soft warm white
         static let backgroundSecondary = Color(hexNonOptional: "FFFFFF") // Pure white
-        static let backgroundTertiary = Color(hexNonOptional: "F5F3F7")  // Light purple gray
+        static let backgroundTertiary = Color(hexNonOptional: "F3F5FA")  // Misty blue gray
 
         // Surface Colors
         static let surface = Color.white
-        static let surfaceSecondary = Color(hexNonOptional: "F9F7FB") // Slight purple tint
-        static let surfaceHover = Color(hexNonOptional: "F3F0F8")
-        static let surfaceActive = Color(hexNonOptional: "EDE9F5")
+        static let surfaceSecondary = Color(hexNonOptional: "F6F7FB") // Airy lavender
+        static let surfaceHover = Color(hexNonOptional: "EEF1F8")
+        static let surfaceActive = Color(hexNonOptional: "E6EBF6")
 
         // Text Colors
-        static let textPrimary = Color(hexNonOptional: "2D2838")    // Deep purple-black (unique, not #000)
-        static let textSecondary = Color(hexNonOptional: "6B7280")  // Gray
-        static let textTertiary = Color(hexNonOptional: "9CA3AF")   // Light gray
-        static let textMuted = Color(hexNonOptional: "C4B5FD")      // Muted purple
+        static let textPrimary = Color(hexNonOptional: "2F2E35")    // Soft charcoal (unified ink)
+        static let textSecondary = Color(hexNonOptional: "6E7480")  // Neutral gray
+        static let textTertiary = Color(hexNonOptional: "9EA5B1")   // Light gray
+        static let textMuted = Color(hexNonOptional: "B7B0D8")      // Muted lavender
 
         // Border Colors
-        static let border = Color(hexNonOptional: "E9E5F0")         // Light purple border
-        static let borderActive = Color(hexNonOptional: "DDD6FE")   // Active purple border
-        static let borderSubtle = Color(hexNonOptional: "F5F3F7")   // Very subtle
+        static let border = Color(hexNonOptional: "E3E6F0")         // Light pastel border
+        static let borderActive = Color(hexNonOptional: "CBD7F2")   // Active pastel border
+        static let borderSubtle = Color(hexNonOptional: "F1F3F8")   // Very subtle
 
         // Status Colors
-        static let success = Color(hexNonOptional: "10B981")
-        static let warning = Color(hexNonOptional: "F59E0B")
-        static let error = Color(hexNonOptional: "EF4444")
-        static let info = Color(hexNonOptional: "3B82F6")
-        static let secondary = Color(hexNonOptional: "6B7280")  // Gray color for secondary elements
+        static let success = Color(hexNonOptional: "7FC6A8")
+        static let warning = Color(hexNonOptional: "E1B56E")
+        static let error = Color(hexNonOptional: "D99292")
+        static let info = Color(hexNonOptional: "7AA9DE")
+        static let secondary = Color(hexNonOptional: "8F97A9")  // Gray color for secondary elements
 
         // Tab Bar
-        static let tabBarBackground = Color(hexNonOptional: "1F1B24") // Deep purple-black
-        static let tabBarActive = Color.white
-        static let tabBarInactive = Color(hexNonOptional: "9CA3AF")
+        static let tabBarBackground = Color(hexNonOptional: "FFFFFF")
+        static let tabBarActive = primary
+        static let tabBarInactive = textSecondary
 
         // Gradients
         static let primaryGradient = LinearGradient(
@@ -310,7 +310,7 @@ struct PrimaryButton: View {
                     .font(DesignSystem.Typography.headline)
                     .fontWeight(.semibold)
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(DesignSystem.Colors.textPrimary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, DesignSystem.Spacing.md)
             .background(
@@ -371,14 +371,14 @@ struct Badge: View {
         Text(text)
             .font(DesignSystem.Typography.caption2)
             .fontWeight(.medium)
-            .foregroundStyle(color)
+            .foregroundStyle(DesignSystem.Colors.textPrimary)
             .padding(.horizontal, DesignSystem.Spacing.sm)
             .padding(.vertical, DesignSystem.Spacing.xxs)
             .background(
                 Capsule()
-                    .fill(color.opacity(0.1))
+                    .fill(color.opacity(0.2))
                     .overlay(
-                        Capsule().stroke(color.opacity(0.3), lineWidth: 1)
+                        Capsule().stroke(color.opacity(0.4), lineWidth: 1)
                     )
             )
     }

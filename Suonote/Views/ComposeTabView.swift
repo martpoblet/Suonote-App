@@ -244,7 +244,7 @@ struct ComposeTabView: View {
                 Image(systemName: DesignSystem.Icons.add)
                     .font(DesignSystem.Typography.title2)
                     .padding(DesignSystem.Spacing.xs)
-                    .foregroundStyle(DesignSystem.Colors.primaryGradient)
+                    .foregroundStyle(DesignSystem.Colors.primaryDark)
             }
             .buttonStyle(.haptic(.medium))
         }
@@ -524,7 +524,7 @@ struct ComposeTabView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "waveform.badge.mic")
                         .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(.purple)
+                        .foregroundStyle(DesignSystem.Colors.primary)
                     
                     Text("Linked Recordings (\(recordings.count))")
                         .font(DesignSystem.Typography.caption)
@@ -562,10 +562,10 @@ struct ComposeTabView: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.purple.opacity(0.05))
+                .fill(DesignSystem.Colors.primary.opacity(0.08))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.purple.opacity(0.2), lineWidth: 1)
+                        .stroke(DesignSystem.Colors.primary.opacity(0.25), lineWidth: 1)
                 )
         )
     }
@@ -1189,14 +1189,14 @@ struct BarRow: View {
         var items: [SwipeActionItem] = []
         
         items.append(
-            SwipeActionItem(systemImage: "doc.on.doc.fill", tint: .blue, role: nil) {
+            SwipeActionItem(systemImage: "doc.on.doc.fill", tint: DesignSystem.Colors.info, role: nil) {
                 cloneBar()
             }
         )
         
         if section.bars > 1 {
             items.append(
-                SwipeActionItem(systemImage: "trash.fill", tint: .red, role: .destructive) {
+                SwipeActionItem(systemImage: "trash.fill", tint: DesignSystem.Colors.error, role: .destructive) {
                     deleteBar()
                 }
             )
@@ -1210,7 +1210,7 @@ struct BarRow: View {
 
         if barIndex > 0 {
             items.append(
-                SwipeActionItem(systemImage: "arrow.up.circle.fill", tint: .teal, role: nil) {
+                SwipeActionItem(systemImage: "arrow.up.circle.fill", tint: DesignSystem.Colors.info, role: nil) {
                     moveBarUp()
                 }
             )
@@ -1218,7 +1218,7 @@ struct BarRow: View {
 
         if barIndex < section.bars - 1 {
             items.append(
-                SwipeActionItem(systemImage: "arrow.down.circle.fill", tint: .teal, role: nil) {
+                SwipeActionItem(systemImage: "arrow.down.circle.fill", tint: DesignSystem.Colors.info, role: nil) {
                     moveBarDown()
                 }
             )
@@ -1360,11 +1360,11 @@ struct BarRow: View {
         }
         .frame(height: 50)
         .contentShape(Rectangle())
-        .overlay(alignment: .trailing) {
+            .overlay(alignment: .trailing) {
             if isBarDropTargeted && !canDropInBar() && !hasEmptySlot {
                 Image(systemName: "xmark.octagon.fill")
                     .font(DesignSystem.Typography.title3)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(DesignSystem.Colors.error)
                     .padding(.trailing, 8)
             }
         }
@@ -1418,13 +1418,13 @@ struct BarRow: View {
                     Text("Add")
                         .font(DesignSystem.Typography.caption2)
                 }
-                .foregroundStyle(showBlocked ? .red : section.color)
+                .foregroundStyle(showBlocked ? DesignSystem.Colors.error : section.color)
                 .frame(maxWidth: .infinity)
                 .frame(height: 50)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
                         .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
-                        .foregroundStyle(showBlocked ? Color.red.opacity(0.6) : section.color.opacity(0.4))
+                        .foregroundStyle(showBlocked ? DesignSystem.Colors.error.opacity(0.6) : section.color.opacity(0.4))
                 )
             }
             .buttonStyle(.plain)
@@ -1999,12 +1999,12 @@ struct ChordSlotButton: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.white.opacity(isRest ? 0.25 : 0.1), style: StrokeStyle(lineWidth: 1, dash: isRest ? [6, 4] : []))
+                        .stroke(isRest ? DesignSystem.Colors.textSecondary.opacity(0.6) : DesignSystem.Colors.border, style: StrokeStyle(lineWidth: 1, dash: isRest ? [6, 4] : []))
                 )
             
             Text(text)
                 .font(.subheadline)
-                .foregroundStyle(isRest ? Color.white.opacity(0.8) : .white)
+                .foregroundStyle(isRest ? DesignSystem.Colors.textSecondary : DesignSystem.Colors.textPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .padding(.horizontal, 8)
@@ -2177,12 +2177,12 @@ enum SectionPreset: String, CaseIterable, Identifiable {
     
     var color: Color {
         switch self {
-        case .intro: return .green
-        case .verse: return .cyan
-        case .chorus: return .purple
-        case .bridge: return .orange
-        case .solo: return .pink
-        case .outro: return .blue
+        case .intro: return SectionColor.moss.color
+        case .verse: return SectionColor.sky.color
+        case .chorus: return SectionColor.berry.color
+        case .bridge: return SectionColor.coral.color
+        case .solo: return SectionColor.lavender.color
+        case .outro: return SectionColor.ocean.color
         }
     }
     
@@ -2409,6 +2409,8 @@ struct ChordPaletteSheet: View {
                 }
                 .padding(24)
             }
+            .scrollContentBackground(.hidden)
+            .background(DesignSystem.Colors.background)
             .navigationTitle(existingChord == nil ? "Add Chord" : "Edit Chord")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -2474,6 +2476,10 @@ struct ChordPaletteSheet: View {
                 )
             }
         }
+        .toolbarBackground(DesignSystem.Colors.backgroundSecondary, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.light, for: .navigationBar)
+        .presentationBackground(DesignSystem.Colors.backgroundSecondary)
     }
     
     private var backgroundGradient: some View {
@@ -2509,12 +2515,16 @@ struct ChordPaletteSheet: View {
                                 .font(.subheadline)
                         }
                     }
-                    .foregroundStyle(isRest ? .secondary : Color.white)
+                    .foregroundStyle(isRest ? DesignSystem.Colors.textSecondary : DesignSystem.Colors.textPrimary)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(
                         Capsule()
-                            .fill(isRest ? DesignSystem.Colors.border : (showingDiagram ? accentColor.opacity(0.3) : accentColor))
+                            .fill(isRest ? DesignSystem.Colors.border : accentColor.opacity(showingDiagram ? 0.35 : 0.6))
+                            .overlay(
+                                Capsule()
+                                    .stroke(accentColor.opacity(0.5), lineWidth: isRest ? 0 : 1)
+                            )
                     )
                 }
                 .disabled(isRest)
@@ -2570,7 +2580,7 @@ struct ChordPaletteSheet: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white.opacity(0.03))
+                .fill(DesignSystem.Colors.surfaceSecondary)
         )
         .onChange(of: isRest) { _, newValue in
             if newValue {
@@ -2645,12 +2655,16 @@ struct ChordPaletteSheet: View {
                     } label: {
                         Text(root)
                             .font(DesignSystem.Typography.headline)
-                            .foregroundStyle(selectedRoot == root ? .white : .secondary)
+                            .foregroundStyle(selectedRoot == root ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textSecondary)
                             .frame(height: 44)
                             .frame(maxWidth: .infinity)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(selectedRoot == root ? accentColor : DesignSystem.Colors.surfaceSecondary)
+                                    .fill(selectedRoot == root ? accentColor.opacity(0.5) : DesignSystem.Colors.surfaceSecondary)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(selectedRoot == root ? accentColor.opacity(0.6) : DesignSystem.Colors.border, lineWidth: 1)
+                                    )
                             )
                     }
                 }
@@ -2671,12 +2685,16 @@ struct ChordPaletteSheet: View {
                     } label: {
                         Text(quality.rawValue.isEmpty ? "Major" : quality.rawValue)
                             .font(.subheadline)
-                            .foregroundStyle(selectedQuality == quality ? .white : .secondary)
+                            .foregroundStyle(selectedQuality == quality ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textSecondary)
                             .frame(height: 44)
                             .frame(maxWidth: .infinity)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(selectedQuality == quality ? accentColor : DesignSystem.Colors.surfaceSecondary)
+                                    .fill(selectedQuality == quality ? accentColor.opacity(0.5) : DesignSystem.Colors.surfaceSecondary)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(selectedQuality == quality ? accentColor.opacity(0.6) : DesignSystem.Colors.border, lineWidth: 1)
+                                    )
                             )
                     }
                 }
@@ -2701,12 +2719,16 @@ struct ChordPaletteSheet: View {
                     } label: {
                         Text(ext)
                             .font(DesignSystem.Typography.caption)
-                            .foregroundStyle(selectedExtensions.contains(ext) ? .white : .secondary)
+                            .foregroundStyle(selectedExtensions.contains(ext) ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textSecondary)
                             .frame(height: 40)
                             .frame(maxWidth: .infinity)
                             .background(
                                 RoundedRectangle(cornerRadius: 10)
-                                    .fill(selectedExtensions.contains(ext) ? accentColor : DesignSystem.Colors.surfaceSecondary)
+                                    .fill(selectedExtensions.contains(ext) ? accentColor.opacity(0.5) : DesignSystem.Colors.surfaceSecondary)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(selectedExtensions.contains(ext) ? accentColor.opacity(0.6) : DesignSystem.Colors.border, lineWidth: 1)
+                                    )
                             )
                             .opacity((selectedExtensions.count >= 2 && !selectedExtensions.contains(ext)) ? 0.5 : 1.0)
                     }
@@ -2717,7 +2739,7 @@ struct ChordPaletteSheet: View {
             if selectedExtensions.count >= 2 {
                 Text("Maximum 2 extensions selected")
                     .font(DesignSystem.Typography.caption2)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(DesignSystem.Colors.warning)
             }
         }
     }
@@ -2751,12 +2773,16 @@ struct ChordPaletteSheet: View {
                             Text(durationLabel(for: dur))
                                 .font(DesignSystem.Typography.caption2)
                         }
-                        .foregroundStyle(duration == dur ? .white : (isAvailable ? .secondary : .secondary.opacity(0.3)))
+                        .foregroundStyle(duration == dur ? DesignSystem.Colors.textPrimary : (isAvailable ? DesignSystem.Colors.textSecondary : DesignSystem.Colors.textTertiary))
                         .frame(maxWidth: .infinity)
                         .frame(height: 65)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(duration == dur ? accentColor : DesignSystem.Colors.surfaceSecondary)
+                                .fill(duration == dur ? accentColor.opacity(0.5) : DesignSystem.Colors.surfaceSecondary)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(duration == dur ? accentColor.opacity(0.6) : DesignSystem.Colors.border, lineWidth: 1)
+                                )
                         )
                     }
                     .disabled(!isAvailable)
@@ -2813,7 +2839,7 @@ struct ChordPaletteSheet: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white.opacity(0.03))
+                .fill(DesignSystem.Colors.surfaceSecondary)
         )
     }
     
@@ -2844,7 +2870,7 @@ struct ChordPaletteSheet: View {
                 .padding(.vertical, 16)
                 .background(
                     Capsule()
-                        .fill(Color.red)
+                        .fill(DesignSystem.Colors.error)
                 )
         }
     }
@@ -3049,7 +3075,7 @@ struct LinkedRecordingCard: View {
                     Circle()
                         .fill(
                             isPlaying ?
-                                LinearGradient(colors: [.green, .cyan], startPoint: .topLeading, endPoint: .bottomTrailing) :
+                                LinearGradient(colors: [DesignSystem.Colors.success, DesignSystem.Colors.info], startPoint: .topLeading, endPoint: .bottomTrailing) :
                                 LinearGradient(colors: [recording.recordingType.color.opacity(0.3), recording.recordingType.color.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing)
                         )
                         .frame(width: 26, height: 26)
@@ -3091,14 +3117,14 @@ struct LinkedRecordingCard: View {
                 RoundedRectangle(cornerRadius: 10)
                     .fill(
                         isPlaying ?
-                            Color.green.opacity(0.1) :
+                            DesignSystem.Colors.success.opacity(0.12) :
                             DesignSystem.Colors.surfaceSecondary
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
                             .stroke(
                                 isPlaying ?
-                                    Color.green.opacity(0.5) :
+                                    DesignSystem.Colors.success.opacity(0.5) :
                                     DesignSystem.Colors.border,
                                 lineWidth: isPlaying ? 1.5 : 1
                             )
@@ -3186,7 +3212,7 @@ struct SectionEditorSheet: View {
                             Capsule()
                                 .fill(
                                     LinearGradient(
-                                        colors: [.purple, .blue],
+                                        colors: [DesignSystem.Colors.primary, DesignSystem.Colors.info],
                                         startPoint: .leading,
                                         endPoint: .trailing
                                     )
@@ -3245,19 +3271,19 @@ struct KeyPickerSheet: View {
                             Button {
                                 project.keyRoot = root
                             } label: {
-                                Text(root)
-                                    .font(DesignSystem.Typography.headline)
-                                    .foregroundStyle(project.keyRoot == root ? .white : .secondary)
-                                    .frame(height: 50)
-                                    .frame(maxWidth: .infinity)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .fill(project.keyRoot == root ? Color.purple : DesignSystem.Colors.surfaceSecondary)
-                                    )
+                                    Text(root)
+                                        .font(DesignSystem.Typography.headline)
+                                        .foregroundStyle(project.keyRoot == root ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
+                                        .frame(height: 50)
+                                        .frame(maxWidth: .infinity)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .fill(project.keyRoot == root ? DesignSystem.Colors.primary : DesignSystem.Colors.surfaceSecondary)
+                                        )
+                                }
                             }
                         }
                     }
-                }
                 
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Mode")
@@ -3270,12 +3296,12 @@ struct KeyPickerSheet: View {
                         } label: {
                             Text("Major")
                                 .font(.subheadline)
-                                .foregroundStyle(project.keyMode == .major ? .white : .secondary)
+                                .foregroundStyle(project.keyMode == .major ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 50)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(project.keyMode == .major ? Color.blue : DesignSystem.Colors.surfaceSecondary)
+                                        .fill(project.keyMode == .major ? DesignSystem.Colors.info : DesignSystem.Colors.surfaceSecondary)
                                 )
                         }
                         
@@ -3284,12 +3310,12 @@ struct KeyPickerSheet: View {
                         } label: {
                             Text("Minor")
                                 .font(.subheadline)
-                                .foregroundStyle(project.keyMode == .minor ? .white : .secondary)
+                                .foregroundStyle(project.keyMode == .minor ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 50)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(project.keyMode == .minor ? Color.blue : DesignSystem.Colors.surfaceSecondary)
+                                        .fill(project.keyMode == .minor ? DesignSystem.Colors.info : DesignSystem.Colors.surfaceSecondary)
                                 )
                         }
                     }
@@ -3309,7 +3335,7 @@ struct KeyPickerSheet: View {
                             Capsule()
                                 .fill(
                                     LinearGradient(
-                                        colors: [.purple, .blue],
+                                        colors: [DesignSystem.Colors.primary, DesignSystem.Colors.info],
                                         startPoint: .leading,
                                         endPoint: .trailing
                                     )
@@ -3441,7 +3467,11 @@ struct SmartSuggestionsModal: View {
                 }
             }
         }
+        .toolbarBackground(DesignSystem.Colors.backgroundSecondary, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.light, for: .navigationBar)
         .presentationDetents([.large])
+        .presentationBackground(DesignSystem.Colors.backgroundSecondary)
     }
     
     private var smartSuggestionsView: some View {

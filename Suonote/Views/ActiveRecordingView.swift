@@ -38,8 +38,8 @@ struct ActiveRecordingView: View {
                     .strokeBorder(
                         LinearGradient(
                             colors: [
-                                currentBeat == 0 ? Color.red : Color.orange,
-                                (currentBeat == 0 ? Color.red : Color.orange).opacity(0.3)
+                                currentBeat == 0 ? DesignSystem.Colors.error : DesignSystem.Colors.warning,
+                                (currentBeat == 0 ? DesignSystem.Colors.error : DesignSystem.Colors.warning).opacity(0.35)
                             ],
                             startPoint: .top,
                             endPoint: .bottom
@@ -147,9 +147,9 @@ struct ActiveRecordingView: View {
             HStack(spacing: 20) {
                 ForEach(0..<tempoBeatsPerBar, id: \.self) { beat in
                     Circle()
-                        .fill(beat < countInBeats % tempoBeatsPerBar ? Color.orange : DesignSystem.Colors.border.opacity(0.5))
+                        .fill(beat < countInBeats % tempoBeatsPerBar ? DesignSystem.Colors.warning : DesignSystem.Colors.border.opacity(0.5))
                         .frame(width: 16, height: 16)
-                        .shadow(color: beat < countInBeats % tempoBeatsPerBar ? Color.orange.opacity(0.6) : .clear, radius: 8)
+                        .shadow(color: beat < countInBeats % tempoBeatsPerBar ? DesignSystem.Colors.warning.opacity(0.6) : .clear, radius: 8)
                 }
             }
         }
@@ -233,13 +233,13 @@ struct ActiveRecordingView: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [Color.red.opacity(0.8), Color.red],
+                                colors: [DesignSystem.Colors.error.opacity(0.8), DesignSystem.Colors.error],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
                         .frame(width: 120, height: 120)
-                        .shadow(color: Color.red.opacity(0.4), radius: 20, x: 0, y: 10)
+                        .shadow(color: DesignSystem.Colors.error.opacity(0.35), radius: 20, x: 0, y: 10)
                     
                     Circle()
                         .stroke(DesignSystem.Colors.textMuted, lineWidth: 3)
@@ -264,22 +264,22 @@ struct ActiveRecordingView: View {
             // Recording indicator
             HStack(spacing: 12) {
                 Circle()
-                    .fill(Color.red)
+                    .fill(DesignSystem.Colors.error)
                     .frame(width: 16, height: 16)
                     .opacity(audioManager.isRecording ? 1 : 0.3)
                     .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: audioManager.isRecording)
                 
                 Text("RECORDING")
                     .font(.subheadline)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(DesignSystem.Colors.error)
                     .tracking(2)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 10)
             .background(
                 Capsule()
-                    .fill(Color.red.opacity(0.15))
-                    .overlay(Capsule().stroke(Color.red.opacity(0.3), lineWidth: 1))
+                    .fill(DesignSystem.Colors.error.opacity(0.2))
+                    .overlay(Capsule().stroke(DesignSystem.Colors.error.opacity(0.4), lineWidth: 1))
             )
             
             // Time display
@@ -317,9 +317,9 @@ struct ActiveRecordingView: View {
                         HStack(spacing: 10) {
                             ForEach(0..<tempoBeatsPerBar, id: \.self) { beat in
                                 Circle()
-                                    .fill(beat == currentBeat ? Color.red : DesignSystem.Colors.textMuted)
+                                    .fill(beat == currentBeat ? DesignSystem.Colors.error : DesignSystem.Colors.textMuted)
                                     .frame(width: beat == currentBeat ? 18 : 14, height: beat == currentBeat ? 18 : 14)
-                                    .shadow(color: beat == currentBeat ? Color.red.opacity(0.6) : .clear, radius: 10)
+                                    .shadow(color: beat == currentBeat ? DesignSystem.Colors.error.opacity(0.6) : .clear, radius: 10)
                                     .animation(.spring(response: 0.2), value: currentBeat)
                             }
                         }
@@ -328,7 +328,7 @@ struct ActiveRecordingView: View {
                 .padding(24)
                 .background(
                     RoundedRectangle(cornerRadius: 20)
-                        .fill(Color.white.opacity(0.03))
+                        .fill(DesignSystem.Colors.surfaceSecondary)
                         .overlay(
                             RoundedRectangle(cornerRadius: 20)
                                 .stroke(DesignSystem.Colors.border, lineWidth: 1)
@@ -381,12 +381,12 @@ struct ActiveRecordingView: View {
                     Capsule()
                         .fill(
                             LinearGradient(
-                                colors: [Color.red.opacity(0.8), Color.red],
+                                colors: [DesignSystem.Colors.error.opacity(0.8), DesignSystem.Colors.error],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
                         )
-                        .shadow(color: Color.red.opacity(0.4), radius: 15, x: 0, y: 8)
+                        .shadow(color: DesignSystem.Colors.error.opacity(0.35), radius: 15, x: 0, y: 8)
                 )
             }
             .padding(.horizontal, 24)
@@ -554,9 +554,9 @@ struct RealTimeWaveformView: View {
                     RoundedRectangle(cornerRadius: barWidth / 2)
                         .fill(
                             LinearGradient(
-                                colors: isRecent ? 
-                                    [Color.red, Color.orange] : 
-                                    [Color.red.opacity(0.6), Color.orange.opacity(0.6)],
+                                colors: isRecent ?
+                                    [DesignSystem.Colors.error, DesignSystem.Colors.warning] :
+                                    [DesignSystem.Colors.error.opacity(0.6), DesignSystem.Colors.warning.opacity(0.6)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
@@ -571,7 +571,7 @@ struct RealTimeWaveformView: View {
                 .fill(DesignSystem.Colors.surfaceSecondary.opacity(0.3))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.red.opacity(0.2), lineWidth: 1)
+                        .stroke(DesignSystem.Colors.error.opacity(0.3), lineWidth: 1)
                 )
         )
     }

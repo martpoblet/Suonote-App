@@ -103,7 +103,7 @@ struct ProjectsListView: View {
                                 } label: {
                                     Label("Clone", systemImage: "doc.on.doc.fill")
                                 }
-                                .tint(.blue)
+                                .tint(DesignSystem.Colors.info)
                             }
                         }
                     }
@@ -143,7 +143,7 @@ struct ProjectsListView: View {
             Text("Your Ideas")
                 .font(DesignSystem.Typography.xxl)
                 .fontWeight(.bold)
-                .foregroundStyle(DesignSystem.Colors.primaryGradient)
+                .foregroundStyle(DesignSystem.Colors.primaryDark)
             
             if !allProjects.isEmpty {
                 Text("\(allProjects.count) project\(allProjects.count == 1 ? "" : "s")")
@@ -203,7 +203,7 @@ struct ProjectsListView: View {
                             title: tag,
                             icon: "tag.fill",
                             isSelected: selectedTag == tag,
-                            color: .cyan
+                            color: DesignSystem.Colors.info
                         ) {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                 selectedTag = selectedTag == tag ? nil : tag
@@ -242,11 +242,11 @@ struct ProjectsListView: View {
     
     private func statusColor(for status: ProjectStatus) -> Color {
         switch status {
-        case .idea: return DesignSystem.Colors.warning
-        case .inProgress: return .orange
+        case .idea: return DesignSystem.Colors.info
+        case .inProgress: return DesignSystem.Colors.warning
         case .polished: return DesignSystem.Colors.primary
         case .finished: return DesignSystem.Colors.success
-        case .archived: return .gray
+        case .archived: return DesignSystem.Colors.secondary
         }
     }
     
@@ -364,7 +364,7 @@ struct ModernFilterChip: View {
                             .fill(color.opacity(0.2))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 20)
-                                    .stroke(color, lineWidth: 2)
+                                    .stroke(color.opacity(0.6), lineWidth: 2)
                             )
                     } else {
                         RoundedRectangle(cornerRadius: 20)
@@ -376,7 +376,7 @@ struct ModernFilterChip: View {
                     }
                 }
             )
-            .foregroundStyle(isSelected ? color : .white.opacity(0.7))
+            .foregroundStyle(DesignSystem.Colors.textPrimary)
         }
         .scaleEffect(isSelected ? 1.0 : 0.95)
         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isSelected)
@@ -423,8 +423,8 @@ struct ModernProjectCard: View {
                                 .font(DesignSystem.Typography.caption2)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 3)
-                                .background(Color.cyan.opacity(0.15))
-                                .foregroundStyle(.cyan)
+                                .background(DesignSystem.Colors.info.opacity(0.15))
+                                .foregroundStyle(DesignSystem.Colors.info)
                                 .clipShape(Capsule())
                         }
                         if project.tags.count > 2 {
@@ -451,11 +451,11 @@ struct ModernProjectCard: View {
     
     private var statusColor: Color {
         switch project.status {
-        case .idea: return .yellow
-        case .inProgress: return .orange
-        case .polished: return .purple
-        case .finished: return .green
-        case .archived: return .gray
+        case .idea: return DesignSystem.Colors.info
+        case .inProgress: return DesignSystem.Colors.warning
+        case .polished: return DesignSystem.Colors.primary
+        case .finished: return DesignSystem.Colors.success
+        case .archived: return DesignSystem.Colors.secondary
         }
     }
 }
@@ -473,7 +473,8 @@ struct StatusBadge: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(Color.white.opacity(0.25))
+        .background(DesignSystem.Colors.surfaceSecondary)
+        .foregroundStyle(DesignSystem.Colors.textPrimary)
         .clipShape(Capsule())
     }
     
@@ -497,7 +498,7 @@ struct FloatingActionButton: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [Color.purple, Color.blue],
+                            colors: [DesignSystem.Colors.primary, DesignSystem.Colors.info],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -542,12 +543,12 @@ struct FilterChip: View {
                 .font(DesignSystem.Typography.subheadline)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.surface)
-                .foregroundStyle(isSelected ? .white : DesignSystem.Colors.textPrimary)
+                .background(isSelected ? DesignSystem.Colors.primary.opacity(0.3) : DesignSystem.Colors.surface)
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
                 .clipShape(Capsule())
                 .overlay(
                     Capsule()
-                        .stroke(isSelected ? Color.clear : DesignSystem.Colors.border, lineWidth: 1)
+                        .stroke(isSelected ? DesignSystem.Colors.primary.opacity(0.6) : DesignSystem.Colors.border, lineWidth: 1)
                 )
         }
     }
@@ -593,7 +594,8 @@ struct ProjectCardView: View {
                             .font(DesignSystem.Typography.caption2)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .background(Color.accentColor.opacity(0.2))
+                            .background(DesignSystem.Colors.info.opacity(0.2))
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
                             .clipShape(Capsule())
                     }
                     if project.tags.count > 3 {
@@ -624,17 +626,17 @@ struct StatusPill: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
             .background(statusColor)
-            .foregroundStyle(.white)
+            .foregroundStyle(DesignSystem.Colors.textPrimary)
             .clipShape(Capsule())
     }
     
     private var statusColor: Color {
         switch status {
-        case .idea: return .blue
-        case .inProgress: return .orange
-        case .polished: return .purple
-        case .finished: return .green
-        case .archived: return .gray
+        case .idea: return DesignSystem.Colors.info
+        case .inProgress: return DesignSystem.Colors.warning
+        case .polished: return DesignSystem.Colors.primary
+        case .finished: return DesignSystem.Colors.success
+        case .archived: return DesignSystem.Colors.secondary
         }
     }
 }

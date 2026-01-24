@@ -36,7 +36,7 @@ struct ProgressionAnalysisBadge: View {
                 Text("\(Int(analysis.diatonicPercentage))%")
                     .font(DesignSystem.Typography.caption2)
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(DesignSystem.Colors.textPrimary)
             .padding(.horizontal, DesignSystem.Spacing.xs)
             .padding(.vertical, DesignSystem.Spacing.xxxs)
             .background(
@@ -63,7 +63,7 @@ struct ChordCountBadge: View {
             Text("\(count)")
                 .font(DesignSystem.Typography.caption2)
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(DesignSystem.Colors.textPrimary)
         .padding(.horizontal, DesignSystem.Spacing.xs)
         .padding(.vertical, DesignSystem.Spacing.xxxs)
         .background(
@@ -89,7 +89,7 @@ struct RecordingCountBadge: View {
             Text("\(count)")
                 .font(DesignSystem.Typography.caption2)
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(DesignSystem.Colors.textPrimary)
         .padding(.horizontal, DesignSystem.Spacing.xs)
         .padding(.vertical, DesignSystem.Spacing.xxxs)
         .background(
@@ -110,7 +110,7 @@ struct RecordingCountBadge: View {
             project: Project(title: "Test", keyRoot: "C", keyMode: .major, bpm: 120)
         )
         
-        ChordCountBadge(count: 8, color: .purple)
+        ChordCountBadge(count: 8, color: DesignSystem.Colors.primary)
     }
     .padding()
     .preferredColorScheme(.dark)

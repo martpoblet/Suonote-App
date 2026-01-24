@@ -186,7 +186,7 @@ struct StudioDrumEditor: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 18)
-                .fill(Color.white.opacity(0.04))
+                .fill(DesignSystem.Colors.surfaceSecondary)
                 .overlay(
                     RoundedRectangle(cornerRadius: 18)
                         .stroke(track.instrument.color.opacity(0.4), lineWidth: 1)
@@ -250,7 +250,11 @@ struct StudioDrumEditor: View {
                         .padding(.vertical, 6)
                         .background(
                             Capsule()
-                                .fill(Color.white.opacity(0.12))
+                                .fill(DesignSystem.Colors.surfaceSecondary)
+                                .overlay(
+                                    Capsule()
+                                        .stroke(DesignSystem.Colors.border, lineWidth: 1)
+                                )
                         )
                     }
 
@@ -267,7 +271,11 @@ struct StudioDrumEditor: View {
                         .padding(.vertical, 6)
                         .background(
                             Capsule()
-                                .fill(Color.white.opacity(0.12))
+                                .fill(DesignSystem.Colors.surfaceSecondary)
+                                .overlay(
+                                    Capsule()
+                                        .stroke(DesignSystem.Colors.border, lineWidth: 1)
+                                )
                         )
                     }
                     .buttonStyle(.plain)
@@ -526,16 +534,16 @@ struct DrumPresetPicker: View {
                     } label: {
                         Text(preset.title)
                             .font(DesignSystem.Typography.caption)
-                            .foregroundStyle(selectedPreset == preset ? .white : .secondary)
+                            .foregroundStyle(selectedPreset == preset ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
                             .background(
                                 Capsule()
-                                    .fill(selectedPreset == preset ? accentColor.opacity(0.85) : Color.white.opacity(0.08))
+                                    .fill(selectedPreset == preset ? accentColor.opacity(0.85) : DesignSystem.Colors.surfaceSecondary)
                                     .overlay(
                                         Capsule()
                                             .stroke(
-                                                selectedPreset == preset ? accentColor : Color.white.opacity(0.15),
+                                                selectedPreset == preset ? accentColor : DesignSystem.Colors.border,
                                                 lineWidth: 1
                                             )
                                     )
@@ -596,7 +604,7 @@ struct DrumGridBackground: View {
                 rowPath.move(to: CGPoint(x: 0, y: y))
                 rowPath.addLine(to: CGPoint(x: size.width, y: y))
             }
-            context.stroke(rowPath, with: .color(Color.white.opacity(0.08)), lineWidth: 0.6)
+            context.stroke(rowPath, with: .color(DesignSystem.Colors.border.opacity(0.6)), lineWidth: 0.6)
 
             var beatPath = Path()
             let totalBeats = max(1, totalSteps / max(1, stepsPerBeat))
@@ -605,7 +613,7 @@ struct DrumGridBackground: View {
                 beatPath.move(to: CGPoint(x: x, y: 0))
                 beatPath.addLine(to: CGPoint(x: x, y: size.height))
             }
-            context.stroke(beatPath, with: .color(Color.white.opacity(0.12)), lineWidth: 1)
+            context.stroke(beatPath, with: .color(DesignSystem.Colors.border.opacity(0.8)), lineWidth: 1)
 
             var barPath = Path()
             let totalBars = max(1, totalSteps / max(1, stepsPerBar))
@@ -617,7 +625,7 @@ struct DrumGridBackground: View {
                 barPath.move(to: CGPoint(x: x, y: 0))
                 barPath.addLine(to: CGPoint(x: x, y: size.height))
             }
-            context.stroke(barPath, with: .color(Color.white.opacity(0.24)), lineWidth: 1.4)
+            context.stroke(barPath, with: .color(DesignSystem.Colors.borderActive), lineWidth: 1.4)
         }
         .frame(width: width, height: height)
     }
@@ -672,26 +680,20 @@ struct DrumStepCell: View {
         return 0.7
     }
 
-    private var idleOpacity: Double {
-        if isBarStart { return 0.12 }
-        if isBeatStart { return 0.08 }
-        return 0.04
-    }
-
     var body: some View {
         RoundedRectangle(cornerRadius: 6)
-            .fill(isActive ? color.opacity(intensity) : Color.white.opacity(idleOpacity))
+            .fill(isActive ? color.opacity(intensity) : DesignSystem.Colors.surfaceSecondary)
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
                     .stroke(
-                        isActive ? color.opacity(0.85) : Color.white.opacity(isBarStart ? 0.25 : 0.12),
+                        isActive ? color.opacity(0.85) : DesignSystem.Colors.border.opacity(isBarStart ? 1 : (isBeatStart ? 0.8 : 0.5)),
                         lineWidth: isBarStart ? 1.2 : 0.6
                     )
             )
             .overlay(alignment: .center) {
                 if isActive && velocity <= 64 {
                     Circle()
-                        .fill(Color.white.opacity(0.7))
+                        .fill(DesignSystem.Colors.backgroundSecondary)
                         .frame(width: 4, height: 4)
                 }
             }
