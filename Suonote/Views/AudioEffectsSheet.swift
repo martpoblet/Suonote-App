@@ -158,6 +158,7 @@ struct AudioEffectsSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
                 
                 ToolbarItem(placement: .topBarTrailing) {

@@ -21,13 +21,14 @@ struct SuonoteApp: App {
         UINavigationBar.appearance().standardAppearance = appearance
         UINavigationBar.appearance().compactAppearance = appearance
         UINavigationBar.appearance().scrollEdgeAppearance = appearance
-        UINavigationBar.appearance().tintColor = UIColor(DesignSystem.Colors.textPrimary)
-        UIBarButtonItem.appearance().tintColor = UIColor(DesignSystem.Colors.textPrimary)
+        UINavigationBar.appearance().tintColor = UIColor(DesignSystem.Colors.primaryDark)
+        UIBarButtonItem.appearance().tintColor = UIColor(DesignSystem.Colors.primaryDark)
         
         // Configure tab bar appearance
         let tabAppearance = UITabBarAppearance()
-        tabAppearance.configureWithOpaqueBackground()
-        tabAppearance.backgroundColor = UIColor(DesignSystem.Colors.tabBarBackground)
+        tabAppearance.configureWithTransparentBackground()
+        tabAppearance.backgroundColor = UIColor.clear
+        tabAppearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterialLight)
         let selectedTabColor = UIColor(DesignSystem.Colors.tabBarActive)
         let normalTabColor = UIColor(DesignSystem.Colors.tabBarInactive)
         tabAppearance.stackedLayoutAppearance.selected.iconColor = selectedTabColor
@@ -59,7 +60,8 @@ struct SuonoteApp: App {
         UITabBar.appearance().scrollEdgeAppearance = tabAppearance
         UITabBar.appearance().tintColor = UIColor(DesignSystem.Colors.tabBarActive)
         UITabBar.appearance().unselectedItemTintColor = UIColor(DesignSystem.Colors.tabBarInactive)
-        UITabBar.appearance().backgroundColor = UIColor(DesignSystem.Colors.tabBarBackground)
+        UITabBar.appearance().backgroundColor = UIColor.clear
+        UITabBar.appearance().isTranslucent = true
     }
 
     var sharedModelContainer: ModelContainer = {

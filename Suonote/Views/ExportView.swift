@@ -85,6 +85,7 @@ struct ExportView: View {
                     Button("Close") {
                         dismiss()
                     }
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
             }
         }

@@ -50,6 +50,7 @@ struct RecordingDetailView: View {
                         onUpdate()
                         dismiss()
                     }
+                    .foregroundStyle(DesignSystem.Colors.primaryDark)
                 }
             }
         }

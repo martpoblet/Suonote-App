@@ -532,6 +532,7 @@ struct RecordingTypePickerSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
             }
         }

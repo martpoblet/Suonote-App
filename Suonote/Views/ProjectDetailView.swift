@@ -108,13 +108,14 @@ struct ProjectDetailView: View {
                             Image(systemName: statusIcon(for: project.status))
                                 .font(DesignSystem.Typography.micro)
                                 .fontWeight(.bold)
+                                .foregroundStyle(statusColor(for: project.status))
                             Text(project.status.rawValue)
                                 .font(DesignSystem.Typography.caption2)
+                                .foregroundStyle(DesignSystem.Colors.textPrimary)
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
                         .background(statusColor(for: project.status).opacity(0.35))
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                         .clipShape(Capsule())
                     }
                 }
@@ -436,6 +437,7 @@ struct EditProjectSheet: View {
                     Button("Cancel") {
                         dismiss()
                     }
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
                 
                 ToolbarItem(placement: .confirmationAction) {
@@ -447,6 +449,7 @@ struct EditProjectSheet: View {
                         }
                     }
                     .fontWeight(.semibold)
+                    .foregroundStyle(DesignSystem.Colors.primaryDark)
                 }
             }
         }
@@ -606,6 +609,7 @@ struct StatusPickerSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
+                        .foregroundStyle(DesignSystem.Colors.primaryDark)
                 }
             }
         }

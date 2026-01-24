@@ -67,6 +67,7 @@ struct ChordPaletteView: View {
                     Button("Cancel") {
                         dismiss()
                     }
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
                 
                 ToolbarItem(placement: .destructiveAction) {
@@ -74,6 +75,7 @@ struct ChordPaletteView: View {
                         removeChord()
                         dismiss()
                     }
+                    .foregroundStyle(DesignSystem.Colors.error)
                 }
             }
         }

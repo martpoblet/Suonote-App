@@ -152,8 +152,10 @@ struct ComposeTabView: View {
                 HStack(spacing: DesignSystem.Spacing.xs) {
                     Image(systemName: DesignSystem.Icons.key)
                         .font(DesignSystem.Typography.caption)
+                        .foregroundStyle(DesignSystem.Colors.primary)
                     Text("\(project.keyRoot)\(project.keyMode == .minor ? "m" : "")")
                         .font(DesignSystem.Typography.callout)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                 }
                 .padding(.horizontal, DesignSystem.Spacing.sm)
                 .padding(.vertical, DesignSystem.Spacing.xs)
@@ -162,7 +164,6 @@ struct ComposeTabView: View {
                         .fill(DesignSystem.Colors.primary.opacity(0.15))
                         .overlay(Capsule().stroke(DesignSystem.Colors.primary, lineWidth: 1))
                 )
-                .foregroundStyle(DesignSystem.Colors.primary)
             }
             .buttonStyle(.haptic(.light))
             
@@ -174,8 +175,10 @@ struct ComposeTabView: View {
                 HStack(spacing: DesignSystem.Spacing.xs) {
                     Image(systemName: DesignSystem.Icons.tempo)
                         .font(DesignSystem.Typography.caption)
+                        .foregroundStyle(DesignSystem.Colors.warning)
                     Text("\(project.timeTop)/\(project.timeBottom)")
                         .font(DesignSystem.Typography.callout)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
                 }
                 .padding(.horizontal, DesignSystem.Spacing.sm)
                 .padding(.vertical, DesignSystem.Spacing.xs)
@@ -184,7 +187,6 @@ struct ComposeTabView: View {
                         .fill(DesignSystem.Colors.warning.opacity(0.15))
                         .overlay(Capsule().stroke(DesignSystem.Colors.warning, lineWidth: 1))
                 )
-                .foregroundStyle(DesignSystem.Colors.warning)
             }
             .buttonStyle(.haptic(.light))
             
@@ -196,11 +198,14 @@ struct ComposeTabView: View {
                 HStack(spacing: DesignSystem.Spacing.xs) {
                     Image(systemName: DesignSystem.Icons.waveform)
                         .font(DesignSystem.Typography.caption)
+                        .foregroundStyle(DesignSystem.Colors.accent)
                     VStack(alignment: .leading, spacing: 0) {
                         Text("\(project.bpm)")
                             .font(DesignSystem.Typography.callout)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
                         Text(TempoUtils.tempoDescription(for: project.bpm).split(separator: " ").first.map(String.init) ?? "")
                             .font(DesignSystem.Typography.caption2)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
                             .opacity(0.7)
                     }
                 }
@@ -211,7 +216,6 @@ struct ComposeTabView: View {
                         .fill(DesignSystem.Colors.accent.opacity(0.15))
                         .overlay(Capsule().stroke(DesignSystem.Colors.accent, lineWidth: 1))
                 )
-                .foregroundStyle(DesignSystem.Colors.accent)
             }
             .buttonStyle(.haptic(.light))
             
@@ -2123,6 +2127,7 @@ struct SectionCreatorView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
             }
         }
@@ -2416,6 +2421,7 @@ struct ChordPaletteSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
                 
                 // NEW: Smart Suggestions button
@@ -3228,6 +3234,7 @@ struct SectionEditorSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
             }
         }
@@ -3464,6 +3471,7 @@ struct SmartSuggestionsModal: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
             }
         }

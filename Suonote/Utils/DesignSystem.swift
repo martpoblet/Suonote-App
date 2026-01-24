@@ -44,8 +44,8 @@ struct DesignSystem {
         static let secondary = Color(hexNonOptional: "8F97A9")  // Gray color for secondary elements
 
         // Tab Bar
-        static let tabBarBackground = Color(hexNonOptional: "FFFFFF")
-        static let tabBarActive = primary
+        static let tabBarBackground = Color(hexNonOptional: "FBFAFD")
+        static let tabBarActive = primaryDark
         static let tabBarInactive = textSecondary
 
         // Gradients
