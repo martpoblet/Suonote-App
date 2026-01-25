@@ -91,10 +91,7 @@ struct SuonoteApp: App {
     
     var body: some Scene {
         WindowGroup {
-            NavigationStack {
-                ProjectsListView()
-            }
-            .preferredColorScheme(.light)
+            SplashContainerView()
         }
         .modelContainer(sharedModelContainer)
     }

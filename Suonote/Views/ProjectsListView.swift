@@ -140,10 +140,13 @@ struct ProjectsListView: View {
     
     private var customHeader: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+            AppLogoView(height: 15)
+                .padding(.bottom, 2)
+
             Text("Your Ideas")
                 .font(DesignSystem.Typography.xxl)
                 .fontWeight(.bold)
-                .foregroundStyle(DesignSystem.Colors.primaryDark)
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
             
             if !allProjects.isEmpty {
                 Text("\(allProjects.count) project\(allProjects.count == 1 ? "" : "s")")
