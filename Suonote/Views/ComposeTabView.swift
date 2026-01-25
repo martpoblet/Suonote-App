@@ -2223,7 +2223,6 @@ struct ChordPaletteSheet: View {
     private let cachedNextChords: [ChordEvent]
     private let cachedSmartSuggestions: [ChordSuggestion]
     private let cachedDiatonicChords: [ChordSuggestion]
-    private let cachedPopularProgressions: [(name: String, progression: [ChordSuggestion])]
     
     // Calculate maximum available duration for this slot
     private var maxAvailableDuration: Double {
@@ -2252,7 +2251,6 @@ struct ChordPaletteSheet: View {
     enum SuggestionTab: String, CaseIterable {
         case smart = "Smart"
         case diatonic = "In Key"
-        case progressions = "Popular"
     }
     
     private let roots = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
@@ -2266,7 +2264,6 @@ struct ChordPaletteSheet: View {
     private var nextChords: [ChordEvent] { cachedNextChords }
     private var smartSuggestions: [ChordSuggestion] { cachedSmartSuggestions }
     private var diatonicChords: [ChordSuggestion] { cachedDiatonicChords }
-    private var popularProgressions: [(name: String, progression: [ChordSuggestion])] { cachedPopularProgressions }
     
     init(section: SectionTemplate, slot: ChordSlot, project: Project, onChordSelected: ((String, ChordQuality) -> Void)? = nil) {
         self.section = section
@@ -2335,10 +2332,6 @@ struct ChordPaletteSheet: View {
             mode: project.keyMode
         )
         
-        self.cachedPopularProgressions = ChordSuggestionEngine.popularProgressions(
-            forKey: project.keyRoot,
-            mode: project.keyMode
-        )
         
         // Calculate initial duration - will be constrained by maxAvailableDuration
         let currentBarEndBeat = Double((slot.barIndex + 1) * project.timeTop)
@@ -2594,8 +2587,6 @@ struct ChordPaletteSheet: View {
                         smartSuggestionsView
                     case .diatonic:
                         diatonicChordsView
-                    case .progressions:
-                        progressionsView
                     }
                 }
             }
@@ -2868,51 +2859,6 @@ struct ChordPaletteSheet: View {
                         applySuggestion(suggestion)
                     }
                 }
-            }
-        }
-    }
-    
-    private var progressionsView: some View {
-        VStack(spacing: 12) {
-            ForEach(popularProgressions.indices, id: \.self) { index in
-                let progression = popularProgressions[index]
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(progression.name)
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                            ForEach(progression.progression) { chord in
-                                Text(chord.display)
-                                    .font(DesignSystem.Typography.caption)
-                                    .foregroundStyle(DesignSystem.Colors.textPrimary)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(
-                                        Capsule()
-                                            .fill(accentColor.opacity(0.2))
-                                            .overlay(
-                                                Capsule()
-                                                    .stroke(accentColor.opacity(0.4), lineWidth: 1)
-                                            )
-                                    )
-                                    .onTapGesture {
-                                        applySuggestion(chord)
-                                    }
-                            }
-                        }
-                    }
-                }
-                .padding(10)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(DesignSystem.Colors.surfaceSecondary)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(accentColor.opacity(0.2), lineWidth: 1)
-                        )
-                )
             }
         }
     }

@@ -154,6 +154,7 @@ struct StudioTabView: View {
                         endPoint: .bottom
                     )
                 )
+                .padding(.bottom, DesignSystem.Spacing.lg)
             }
         }
         .onAppear {
@@ -595,9 +596,16 @@ struct StudioTimelineView: View {
                     } label: {
                         Image(systemName: "play.fill")
                             .font(DesignSystem.Typography.title3)
-                            .foregroundStyle(DesignSystem.Colors.textPrimary)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary.opacity(0.7))
                             .padding(8)
-                            .background(Circle().fill(accentColor))
+                            .background(
+                                Circle()
+                                    .fill(accentColor)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(accentColor.opacity(0.6), lineWidth: 1)
+                                    )
+                            )
                     }
                     .disabled(isPlaying)
 
@@ -767,7 +775,7 @@ struct StudioTrackEditorView: View {
                     editorContent
                 }
                 .padding(DesignSystem.Spacing.lg)
-                .padding(.bottom, 140)
+                .padding(.bottom, 120)
             }
 
             playbackHud
@@ -1420,7 +1428,7 @@ struct StudioNoteEditor: View {
 
     private var gridHeight: CGFloat {
         let contentHeight = CGFloat(pitchRows.count) * cellHeight
-        return min(contentHeight, 360)
+        return min(contentHeight, 420)
     }
 
     private var selectedNote: StudioNote? {
@@ -1430,43 +1438,41 @@ struct StudioNoteEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
+            HStack(alignment: .center, spacing: 12) {
                 Text("Note Editor")
                     .font(DesignSystem.Typography.headline)
                     .foregroundStyle(DesignSystem.Colors.textPrimary)
 
                 Spacer()
 
-                HStack(spacing: 10) {
-                    octaveControl
-
-                    Menu {
-                        ForEach(durationOptions, id: \.self) { option in
-                            Button {
-                                defaultDuration = option
-                            } label: {
-                                Text("\(option, specifier: "%.2g") beats")
-                            }
+                Menu {
+                    ForEach(durationOptions, id: \.self) { option in
+                        Button {
+                            defaultDuration = option
+                        } label: {
+                            Text("\(option, specifier: "%.2g") beats")
                         }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text("Length")
-                                .font(DesignSystem.Typography.caption)
-                            Text("\(defaultDuration, specifier: "%.2g")")
-                                .font(DesignSystem.Typography.caption2)
-                                .foregroundStyle(DesignSystem.Colors.textSecondary)
-                            Image(systemName: "chevron.down")
-                                .font(DesignSystem.Typography.caption2)
-                        }
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule()
-                                .fill(track.instrument.color.opacity(0.2))
-                        )
                     }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "timer")
+                            .font(DesignSystem.Typography.caption2)
+                        Text("\(defaultDuration, specifier: "%.2g")")
+                            .font(DesignSystem.Typography.caption2)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        Image(systemName: "chevron.down")
+                            .font(DesignSystem.Typography.caption2)
+                    }
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(track.instrument.color.opacity(0.18))
+                    )
                 }
+
+                octaveControl
             }
 
             ScrollView(.vertical, showsIndicators: true) {
@@ -1550,7 +1556,7 @@ struct StudioNoteEditor: View {
             }
 
             Text("Oct \(track.octaveShift >= 0 ? "+\(track.octaveShift)" : "\(track.octaveShift)")")
-                .font(DesignSystem.Typography.caption)
+                .font(DesignSystem.Typography.caption2)
 
             octaveButton(
                 systemName: "plus",
@@ -1560,11 +1566,11 @@ struct StudioNoteEditor: View {
             }
         }
         .foregroundStyle(DesignSystem.Colors.textPrimary)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
         .background(
-            Capsule()
-                .fill(track.instrument.color.opacity(0.2))
+            RoundedRectangle(cornerRadius: 10)
+                .fill(track.instrument.color.opacity(0.12))
         )
         .buttonStyle(.plain)
     }
@@ -1576,11 +1582,11 @@ struct StudioNoteEditor: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.caption)
-                .frame(width: 28, height: 28)
+                .font(.caption2)
+                .frame(width: 24, height: 24)
                 .background(
                     Circle()
-                        .fill(track.instrument.color.opacity(0.25))
+                        .fill(track.instrument.color.opacity(0.2))
                 )
         }
         .disabled(!isEnabled)

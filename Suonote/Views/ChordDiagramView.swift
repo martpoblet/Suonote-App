@@ -36,7 +36,7 @@ struct ChordDiagramView: View {
             case .piano:
                 PianoChordDiagram(notes: chordNotes, accentColor: accentColor)
             case .guitar:
-                GuitarChordDiagram(root: root, quality: quality, accentColor: accentColor)
+                GuitarChordDiagram(notes: chordNotes, accentColor: accentColor)
             }
             
             ChordNoteChips(display: display, notes: chordNotes, accentColor: accentColor)
@@ -134,12 +134,11 @@ private struct PianoChordDiagram: View {
 // MARK: - Guitar Diagram
 
 private struct GuitarChordDiagram: View {
-    let root: String
-    let quality: ChordQuality
+    let notes: [String]
     let accentColor: Color
     
     private var fingerPositions: [Int?] {
-        getGuitarFingeringPosition(root: root, quality: quality)
+        getGuitarFingeringPosition(notes: notes)
     }
     
     var body: some View {
@@ -244,60 +243,26 @@ private struct GuitarChordDiagram: View {
         }
     }
     
-    private func getGuitarFingeringPosition(root: String, quality: ChordQuality) -> [Int?] {
-        // Simple guitar chord shapes (strings from low E to high E)
-        // nil = don't play, 0 = open, 1-4 = fret number
-        
-        let chordShapes: [String: [String: [Int?]]] = [
-            "C": [
-                "major": [nil, 3, 2, 0, 1, 0],
-                "minor": [nil, 3, 1, 0, 1, 3]
-            ],
-            "D": [
-                "major": [nil, nil, 0, 2, 3, 2],
-                "minor": [nil, nil, 0, 2, 3, 1]
-            ],
-            "E": [
-                "major": [0, 2, 2, 1, 0, 0],
-                "minor": [0, 2, 2, 0, 0, 0]
-            ],
-            "F": [
-                "major": [1, 3, 3, 2, 1, 1],
-                "minor": [1, 3, 3, 1, 1, 1]
-            ],
-            "G": [
-                "major": [3, 2, 0, 0, 0, 3],
-                "minor": [3, 5, 5, 3, 3, 3]
-            ],
-            "A": [
-                "major": [nil, 0, 2, 2, 2, 0],
-                "minor": [nil, 0, 2, 2, 1, 0]
-            ],
-            "B": [
-                "major": [nil, 2, 4, 4, 4, 2],
-                "minor": [nil, 2, 4, 4, 3, 2]
-            ]
-        ]
-        
-        let qualityKey: String
-        switch quality {
-        case .major:
-            qualityKey = "major"
-        case .minor:
-            qualityKey = "minor"
-        case .diminished, .augmented, .dominant7, .major7, .minor7, .sus2, .sus4, 
-             .minorMajor7, .diminished7, .halfDiminished7, .augmented7, 
-             .dominant9, .major9, .minor9:
-            // For other qualities, default to major shape
-            qualityKey = "major"
+    private func getGuitarFingeringPosition(notes: [String]) -> [Int?] {
+        let noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+        let tuning = ["E", "A", "D", "G", "B", "E"] // Low E to high E
+        let noteSet = Set(notes)
+        let maxFret = 4
+
+        func noteIndex(_ name: String) -> Int? {
+            noteNames.firstIndex(of: name)
         }
-        
-        if let shapes = chordShapes[root], let shape = shapes[qualityKey] {
-            return shape
+
+        return tuning.compactMap { openNote in
+            guard let openIndex = noteIndex(openNote) else { return nil }
+            for fret in 0...maxFret {
+                let note = noteNames[(openIndex + fret) % 12]
+                if noteSet.contains(note) {
+                    return fret
+                }
+            }
+            return nil
         }
-        
-        // Default shape if not found
-        return [nil, nil, nil, nil, nil, nil]
     }
 }
 

@@ -20,6 +20,10 @@ struct ActiveRecordingView: View {
     @State private var isReadyToRecord = true
     @State private var showingTypePicker = false
     
+    private var accentColor: Color {
+        selectedRecordingType.color
+    }
+    
     init(project: Project, audioManager: AudioRecordingManager, recordingType: RecordingType) {
         self.project = project
         self.audioManager = audioManager
@@ -29,7 +33,15 @@ struct ActiveRecordingView: View {
     var body: some View {
         ZStack(alignment: .top) {
             // Background gradient
-            DesignSystem.Colors.background
+            LinearGradient(
+                colors: [
+                    DesignSystem.Colors.backgroundTertiary,
+                    DesignSystem.Colors.background,
+                    accentColor.opacity(0.12)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
             .ignoresSafeArea()
             
             // Pulse border overlay with blur
@@ -100,7 +112,14 @@ struct ActiveRecordingView: View {
                         .font(DesignSystem.Typography.title3)
                         .foregroundStyle(DesignSystem.Colors.textPrimary)
                         .frame(width: 44, height: 44)
-                        .background(Circle().fill(DesignSystem.Colors.border))
+                        .background(
+                            Circle()
+                                .fill(DesignSystem.Colors.surfaceSecondary)
+                                .overlay(
+                                    Circle()
+                                        .stroke(DesignSystem.Colors.border, lineWidth: 1)
+                                )
+                        )
                 }
                 
                 Spacer()
@@ -147,9 +166,9 @@ struct ActiveRecordingView: View {
             HStack(spacing: 20) {
                 ForEach(0..<tempoBeatsPerBar, id: \.self) { beat in
                     Circle()
-                        .fill(beat < countInBeats % tempoBeatsPerBar ? DesignSystem.Colors.warning : DesignSystem.Colors.border.opacity(0.5))
+                        .fill(beat < countInBeats % tempoBeatsPerBar ? accentColor : DesignSystem.Colors.border.opacity(0.5))
                         .frame(width: 16, height: 16)
-                        .shadow(color: beat < countInBeats % tempoBeatsPerBar ? DesignSystem.Colors.warning.opacity(0.6) : .clear, radius: 8)
+                        .shadow(color: beat < countInBeats % tempoBeatsPerBar ? accentColor.opacity(0.6) : .clear, radius: 8)
                 }
             }
         }
@@ -179,13 +198,13 @@ struct ActiveRecordingView: View {
                     Text("Recording Type: \(selectedRecordingType.rawValue)")
                         .font(DesignSystem.Typography.title3)
                 }
-                .foregroundStyle(selectedRecordingType.color)
+                .foregroundStyle(accentColor)
                 .padding(.horizontal, 24)
                 .padding(.vertical, 12)
                 .background(
                     Capsule()
-                        .fill(selectedRecordingType.color.opacity(0.15))
-                        .overlay(Capsule().stroke(selectedRecordingType.color, lineWidth: 2))
+                        .fill(accentColor.opacity(0.15))
+                        .overlay(Capsule().stroke(accentColor, lineWidth: 2))
                 )
             }
             
@@ -288,11 +307,32 @@ struct ActiveRecordingView: View {
                 .fontWeight(.medium)
                 .foregroundStyle(DesignSystem.Colors.textPrimary)
                 .monospacedDigit()
+                .padding(.horizontal, 24)
+                .padding(.vertical, 12)
+                .background(
+                    Capsule()
+                        .fill(DesignSystem.Colors.surfaceSecondary)
+                        .overlay(
+                            Capsule()
+                                .stroke(DesignSystem.Colors.border.opacity(0.6), lineWidth: 1)
+                        )
+                )
             
             // Waveform
-            RealTimeWaveformView(levels: audioLevels)
-                .frame(height: 120)
-                .padding(.horizontal, 24)
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("Input Clip")
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    Spacer()
+                    Image(systemName: "waveform.path")
+                        .font(DesignSystem.Typography.caption2)
+                        .foregroundStyle(accentColor)
+                }
+                RealTimeWaveformView(levels: audioLevels, accentColor: accentColor)
+                    .frame(height: 140)
+            }
+            .padding(.horizontal, 24)
             
             // Bar and beat counter
             VStack(spacing: 16) {
@@ -317,9 +357,9 @@ struct ActiveRecordingView: View {
                         HStack(spacing: 10) {
                             ForEach(0..<tempoBeatsPerBar, id: \.self) { beat in
                                 Circle()
-                                    .fill(beat == currentBeat ? DesignSystem.Colors.error : DesignSystem.Colors.textMuted)
+                                    .fill(beat == currentBeat ? accentColor : DesignSystem.Colors.textMuted)
                                     .frame(width: beat == currentBeat ? 18 : 14, height: beat == currentBeat ? 18 : 14)
-                                    .shadow(color: beat == currentBeat ? DesignSystem.Colors.error.opacity(0.6) : .clear, radius: 10)
+                                    .shadow(color: beat == currentBeat ? accentColor.opacity(0.6) : .clear, radius: 10)
                                     .animation(.spring(response: 0.2), value: currentBeat)
                             }
                         }
@@ -331,7 +371,7 @@ struct ActiveRecordingView: View {
                         .fill(DesignSystem.Colors.surfaceSecondary)
                         .overlay(
                             RoundedRectangle(cornerRadius: 20)
-                                .stroke(DesignSystem.Colors.border, lineWidth: 1)
+                                .stroke(accentColor.opacity(0.3), lineWidth: 1)
                         )
                 )
             }
@@ -521,37 +561,46 @@ struct RecordingTypePickerSheet: View {
 
 struct RealTimeWaveformView: View {
     let levels: [Float]
+    let accentColor: Color
     
     var body: some View {
         GeometryReader { geometry in
             let barWidth = (geometry.size.width / CGFloat(levels.count)) - 1
+            let midLine = geometry.size.height / 2
             
             HStack(spacing: 1) {
                 ForEach(Array(levels.enumerated()), id: \.offset) { index, level in
-                    let barHeight = max(4, CGFloat(level) * geometry.size.height)
+                    let barHeight = max(6, CGFloat(level) * geometry.size.height * 0.9)
                     let isRecent = index > levels.count - 10
                     
                     RoundedRectangle(cornerRadius: barWidth / 2)
                         .fill(
                             LinearGradient(
                                 colors: isRecent ?
-                                    [DesignSystem.Colors.error, DesignSystem.Colors.warning] :
-                                    [DesignSystem.Colors.error.opacity(0.6), DesignSystem.Colors.warning.opacity(0.6)],
+                                    [accentColor, DesignSystem.Colors.warning] :
+                                    [accentColor.opacity(0.6), DesignSystem.Colors.warning.opacity(0.4)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
                         )
                         .frame(width: barWidth, height: barHeight)
-                        .frame(height: geometry.size.height, alignment: .center)
+                        .offset(y: midLine - (barHeight / 2))
                 }
             }
+            .overlay(
+                Rectangle()
+                    .fill(DesignSystem.Colors.border.opacity(0.6))
+                    .frame(height: 1)
+                    .offset(y: midLine),
+                alignment: .topLeading
+            )
         }
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(DesignSystem.Colors.surfaceSecondary.opacity(0.3))
+                .fill(DesignSystem.Colors.surfaceSecondary.opacity(0.6))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(DesignSystem.Colors.error.opacity(0.3), lineWidth: 1)
+                        .stroke(accentColor.opacity(0.3), lineWidth: 1)
                 )
         )
     }

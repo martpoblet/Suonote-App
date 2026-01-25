@@ -191,7 +191,7 @@ private struct ProjectTabBar: View {
         )
         .shadow(color: DesignSystem.Colors.textPrimary.opacity(0.08), radius: 16, x: 0, y: 8)
         .padding(.horizontal, 16)
-        .padding(.bottom, 16)
+        .padding(.bottom, 24)
         .ignoresSafeArea(.keyboard, edges: .bottom)
     }
 }
@@ -216,6 +216,9 @@ struct ProjectTabContainer<Content: View>: View {
         ZStack {
             ProjectBackgroundView()
             content
+        }
+        .safeAreaInset(edge: .bottom) {
+            Color.clear.frame(height: 96)
         }
     }
 }
