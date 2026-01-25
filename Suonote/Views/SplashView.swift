@@ -9,7 +9,7 @@ struct SplashView: View {
             DesignSystem.Colors.background
                 .ignoresSafeArea()
 
-            AppLogoView(height: 26)
+            AppLogoView(height: 32)
                 .scaleEffect(scale)
                 .opacity(opacity)
         }

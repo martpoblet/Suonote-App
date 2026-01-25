@@ -140,7 +140,7 @@ struct ProjectsListView: View {
     
     private var customHeader: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-            AppLogoView(height: 15)
+            AppLogoView(height: 24)
                 .padding(.bottom, 2)
 
             Text("Your Ideas")
