@@ -9,9 +9,9 @@ struct DesignSystem {
 
     struct Colors {
         // Primary Palette - Pastel Harmony
-        static let primary = Color(hexNonOptional: "6F8FDD")        // Periwinkle with more contrast
-        static let primaryLight = Color(hexNonOptional: "B8C7F0")   // Light lavender blue
-        static let primaryDark = Color(hexNonOptional: "4E73C8")    // Muted periwinkle
+        static let primary = Color(hexNonOptional: "00CCBE")        // Suonote teal
+        static let primaryLight = Color(hexNonOptional: "8FE9E3")   // Light teal
+        static let primaryDark = Color(hexNonOptional: "00AFA3")    // Deep teal
         static let accent = Color(hexNonOptional: "E3A894")         // Warm peach
 
         // Backgrounds - Light mode
