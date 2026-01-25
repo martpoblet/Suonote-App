@@ -193,7 +193,7 @@ private struct ProjectTabBar: View {
         )
         .shadow(color: DesignSystem.Colors.textPrimary.opacity(0.08), radius: 16, x: 0, y: 8)
         .padding(.horizontal, 16)
-        .padding(.bottom, 24)
+        .padding(.bottom, 20)
         .ignoresSafeArea(.keyboard, edges: .bottom)
     }
 }
