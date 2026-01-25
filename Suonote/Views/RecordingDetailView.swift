@@ -65,6 +65,7 @@ struct RecordingDetailView: View {
                 get: { recording.recordingType },
                 set: { recording.recordingType = $0 }
             ))
+            .studioModalStyle()
         }
         .onAppear {
             tempName = recording.name

@@ -91,8 +91,9 @@ struct ActiveRecordingView: View {
             .frame(maxHeight: .infinity, alignment: .top)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .sheet(isPresented: $showingTypePicker) {
+        .sheet(isPresented: $showingTypePicker) {
             RecordingTypePickerSheet(selectedType: $selectedRecordingType)
+                .studioModalStyle()
         }
         .onDisappear {
             cleanup()

@@ -112,6 +112,7 @@ struct ComposeTabView: View {
             SectionCreatorView(project: project, onSectionCreated: { section in
                 selectedSection = section
             })
+            .studioModalStyle()
         }
         .sheet(item: $selectedChordSlot) { slot in
             // Find the section that contains this chord slot
@@ -126,19 +127,24 @@ struct ComposeTabView: View {
                         playChordPreview(root: root, quality: quality)
                     }
                 )
+                .studioModalStyle()
             }
         }
         .sheet(isPresented: $showingKeyPicker) {
             KeyPickerSheet(project: project)
+                .studioModalStyle()
         }
         .sheet(isPresented: $showingExport) {
             ExportView(project: project)
+                .studioModalStyle()
         }
         .sheet(isPresented: $showingEditSheet) {
             EditProjectSheet(project: project)
+                .studioModalStyle()
         }
         .sheet(item: $editingSection) { section in
             SectionEditorSheet(section: section)
+                .studioModalStyle()
         }
     }
     
@@ -2436,6 +2442,7 @@ struct ChordPaletteSheet: View {
                         showingSmartSuggestionsModal = false
                     }
                 )
+                .studioModalStyle()
             }
         }
         .toolbarBackground(DesignSystem.Colors.backgroundSecondary, for: .navigationBar)

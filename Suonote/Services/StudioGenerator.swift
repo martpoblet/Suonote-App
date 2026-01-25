@@ -119,6 +119,74 @@ struct StudioGenerator {
         }
     }
 
+    static func appendNotesForNewContent(
+        for project: Project,
+        style: StudioStyle,
+        modelContext: ModelContext,
+        newChordIds: Set<UUID>,
+        previousTotalBars: Int
+    ) -> Bool {
+        let timeline = buildTimeline(for: project)
+        let beatsPerBar = project.timeTop
+        let timeBottom = project.timeBottom
+        let diatonicMap = diatonicQualityMap(forKey: project.keyRoot, mode: project.keyMode)
+        let defaultDrumPreset = DrumPreset.defaultPreset(
+            for: style,
+            beatsPerBar: beatsPerBar,
+            timeBottom: timeBottom
+        )
+        let previousTotalBeats = Double(previousTotalBars * beatsPerBar)
+        let newChordSpans = timeline.chords.filter { newChordIds.contains($0.chord.id) }
+        let newChordRanges = newChordSpans.map { span in
+            (start: span.startBeat, end: span.startBeat + max(0.25, span.duration))
+        }
+        var didAppend = false
+
+        for track in project.studioTracks where !track.instrument.isAudio {
+            if track.instrument == .drums {
+                guard timeline.totalBars > previousTotalBars else { continue }
+                let preset = track.drumPreset ?? defaultDrumPreset
+                track.drumPreset = preset
+                let drumNotes = generateDrumNotes(
+                    totalBars: timeline.totalBars,
+                    beatsPerBar: beatsPerBar,
+                    timeBottom: timeBottom,
+                    style: style,
+                    preset: preset
+                )
+                let newNotes = drumNotes.filter { $0.startBeat >= previousTotalBeats }
+                didAppend = appendNotes(newNotes, to: track, modelContext: modelContext) || didAppend
+                continue
+            }
+
+            guard !newChordRanges.isEmpty else { continue }
+            let notes = notesForInstrument(
+                track.instrument,
+                chords: timeline.chords,
+                totalBars: timeline.totalBars,
+                beatsPerBar: beatsPerBar,
+                timeBottom: timeBottom,
+                style: style,
+                drumPreset: nil,
+                octaveShift: track.octaveShift,
+                keyRoot: project.keyRoot,
+                diatonicMap: diatonicMap
+            )
+            let newNotes = notes.filter { note in
+                newChordRanges.contains { range in
+                    note.startBeat >= range.start && note.startBeat < range.end
+                }
+            }
+            didAppend = appendNotes(newNotes, to: track, modelContext: modelContext) || didAppend
+        }
+
+        return didAppend
+    }
+
+    static func timeline(for project: Project) -> (chords: [ChordSpan], totalBars: Int) {
+        buildTimeline(for: project)
+    }
+
     static func generateNotes(
         for instrument: StudioInstrument,
         project: Project,
@@ -219,6 +287,29 @@ struct StudioGenerator {
             )
         }
         return (chords: adjusted, totalBars: totalBars)
+    }
+
+    private static func appendNotes(
+        _ notes: [StudioNote],
+        to track: StudioTrack,
+        modelContext: ModelContext
+    ) -> Bool {
+        guard !notes.isEmpty else { return false }
+        var appended = false
+        for note in notes {
+            guard !track.notes.contains(where: { existing in
+                existing.pitch == note.pitch
+                    && abs(existing.startBeat - note.startBeat) < 0.0001
+                    && abs(existing.duration - note.duration) < 0.0001
+            }) else {
+                continue
+            }
+            note.track = track
+            track.notes.append(note)
+            modelContext.insert(note)
+            appended = true
+        }
+        return appended
     }
 
     private static func notesForInstrument(

@@ -99,6 +99,7 @@ struct RecordingsTabView: View {
         }
         .sheet(isPresented: $showingTypePicker) {
             RecordingTypePickerSheet(selectedType: $selectedRecordingType)
+                .studioModalStyle()
         }
         .sheet(item: $selectedRecordingForLink) { recording in
             SectionLinkSheet(
@@ -108,6 +109,7 @@ struct RecordingsTabView: View {
                     recording.linkedSectionId = sectionId
                 }
             )
+            .studioModalStyle()
         }
         .sheet(isPresented: $showingEffects) {
             AudioEffectsSheet(
@@ -116,6 +118,7 @@ struct RecordingsTabView: View {
                     effectsProcessor.applyEffects()
                 }
             )
+            .studioModalStyle()
         }
         .sheet(item: $selectedRecordingForDetail) { recording in
             RecordingDetailView(
@@ -126,6 +129,7 @@ struct RecordingsTabView: View {
                 }
             )
             .presentationDetents([.large])
+            .studioModalStyle()
         }
         .onAppear {
             audioManager.setup(project: project)
