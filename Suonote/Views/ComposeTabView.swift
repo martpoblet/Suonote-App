@@ -1970,16 +1970,7 @@ struct ChordSlotButton: View {
     private func chordPillBase(text: String, isRest: Bool) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: 8)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            section.color.opacity(isRest ? 0.25 : 0.7),
-                            section.color.opacity(isRest ? 0.15 : 0.5)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .fill(section.color.opacity(isRest ? 0.22 : 0.55))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
                         .stroke(isRest ? DesignSystem.Colors.textSecondary.opacity(0.6) : DesignSystem.Colors.border, style: StrokeStyle(lineWidth: 1, dash: isRest ? [6, 4] : []))
@@ -2449,10 +2440,6 @@ struct ChordPaletteSheet: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.light, for: .navigationBar)
         .presentationBackground(DesignSystem.Colors.backgroundSecondary)
-    }
-    
-    private var backgroundGradient: some View {
-        DesignSystem.Colors.background
     }
     
     private var chordPreviewSection: some View {
@@ -2978,11 +2965,7 @@ struct LinkedRecordingCard: View {
                 // Play button
                 ZStack {
                     Circle()
-                        .fill(
-                            isPlaying ?
-                                LinearGradient(colors: [DesignSystem.Colors.success, DesignSystem.Colors.info], startPoint: .topLeading, endPoint: .bottomTrailing) :
-                                LinearGradient(colors: [recording.recordingType.color.opacity(0.3), recording.recordingType.color.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                        )
+                        .fill(isPlaying ? DesignSystem.Colors.success : recording.recordingType.color.opacity(0.4))
                         .frame(width: 26, height: 26)
                     
                     if isPlaying {

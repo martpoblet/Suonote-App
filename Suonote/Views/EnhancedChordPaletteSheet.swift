@@ -106,7 +106,7 @@ struct EnhancedChordPaletteSheet: View {
                 .padding(.vertical, DesignSystem.Spacing.sm)
                 .background(
                     selectedTab == tab ?
-                        AnyView(Capsule().fill(DesignSystem.Colors.primaryGradient)) :
+                        AnyView(Capsule().fill(DesignSystem.Colors.primary)) :
                         AnyView(Color.clear)
                 )
         }
@@ -324,7 +324,7 @@ struct EnhancedChordPaletteSheet: View {
                             .padding(.vertical, DesignSystem.Spacing.sm)
                             .background(
                                 selectedCategory == category ?
-                                    AnyView(Capsule().fill(DesignSystem.Colors.primaryGradient)) :
+                                    AnyView(Capsule().fill(DesignSystem.Colors.primary)) :
                                     AnyView(Capsule().stroke(DesignSystem.Colors.border, lineWidth: 1))
                             )
                     }
@@ -483,7 +483,7 @@ struct EnhancedChordPaletteSheet: View {
                         .frame(width: 36, height: 36)
                         .background(
                             Circle()
-                                .fill(DesignSystem.Colors.accentGradient.opacity(0.3))
+                            .fill(DesignSystem.Colors.accent.opacity(0.2))
                                 .overlay(
                                     Circle().stroke(DesignSystem.Colors.accent, lineWidth: 1)
                                 )

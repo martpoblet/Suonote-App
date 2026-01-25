@@ -193,7 +193,7 @@ private struct ProjectTabBar: View {
         )
         .shadow(color: DesignSystem.Colors.textPrimary.opacity(0.08), radius: 16, x: 0, y: 8)
         .padding(.horizontal, 16)
-        .padding(.bottom, 20)
+        .padding(.bottom, DesignSystem.Layout.projectTabBarBottomInset)
         .ignoresSafeArea(.keyboard, edges: .bottom)
     }
 }
@@ -746,7 +746,6 @@ struct BPMSelector: View {
     let timeBottom: Int
     @StateObject private var tempoPreviewer = TempoPreviewer()
     
-    private let sliderGradient: [Color] = [DesignSystem.Colors.primary, DesignSystem.Colors.info, DesignSystem.Colors.accent]
     private let presets = [60, 90, 120, 140, 180]
     private let bpmRange = 40...240
     private let bpmStep = 1
@@ -802,13 +801,7 @@ struct BPMSelector: View {
             get: { Double(bpm) },
             set: { bpm = Int($0) }
         ), in: Double(bpmRange.lowerBound)...Double(bpmRange.upperBound), step: Double(bpmStep))
-        .tint(
-            LinearGradient(
-                colors: sliderGradient,
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-        )
+        .tint(DesignSystem.Colors.primary)
     }
     
     private var bpmPresets: some View {

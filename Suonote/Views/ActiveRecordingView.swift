@@ -32,32 +32,14 @@ struct ActiveRecordingView: View {
     
     var body: some View {
         ZStack(alignment: .top) {
-            // Background gradient
-            LinearGradient(
-                colors: [
-                    DesignSystem.Colors.backgroundTertiary,
-                    DesignSystem.Colors.background,
-                    accentColor.opacity(0.12)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            // Background
+            DesignSystem.Colors.backgroundSecondary
+                .ignoresSafeArea()
             
             // Pulse border overlay with blur
             if !isInCountIn && audioManager.isRecording {
                 RoundedRectangle(cornerRadius: 50)
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [
-                                currentBeat == 0 ? DesignSystem.Colors.error : DesignSystem.Colors.warning,
-                                (currentBeat == 0 ? DesignSystem.Colors.error : DesignSystem.Colors.warning).opacity(0.35)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ),
-                        lineWidth: 12
-                    )
+                    .strokeBorder(currentBeat == 0 ? DesignSystem.Colors.error : DesignSystem.Colors.warning, lineWidth: 12)
                     .scaleEffect(pulseScale)
                     .blur(radius: 8)
                     .opacity(0.8)
@@ -251,13 +233,7 @@ struct ActiveRecordingView: View {
             } label: {
                 ZStack {
                     Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [DesignSystem.Colors.error.opacity(0.8), DesignSystem.Colors.error],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .fill(DesignSystem.Colors.error)
                         .frame(width: 120, height: 120)
                         .shadow(color: DesignSystem.Colors.error.opacity(0.35), radius: 20, x: 0, y: 10)
                     
@@ -575,15 +551,7 @@ struct RealTimeWaveformView: View {
                     let isRecent = index > levels.count - 10
                     
                     RoundedRectangle(cornerRadius: barWidth / 2)
-                        .fill(
-                            LinearGradient(
-                                colors: isRecent ?
-                                    [accentColor, DesignSystem.Colors.warning] :
-                                    [accentColor.opacity(0.6), DesignSystem.Colors.warning.opacity(0.4)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
+                        .fill(isRecent ? accentColor : accentColor.opacity(0.6))
                         .frame(width: barWidth, height: barHeight)
                         .offset(y: midLine - (barHeight / 2))
                 }

@@ -32,16 +32,7 @@ struct RecordingDetailView: View {
                 }
                 .padding(24)
             }
-            .background(
-                LinearGradient(
-                    colors: [
-                        DesignSystem.Colors.backgroundSecondary,
-                        DesignSystem.Colors.backgroundTertiary
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
+            .background(DesignSystem.Colors.backgroundSecondary)
             .navigationTitle("Edit Recording")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -77,16 +68,7 @@ struct RecordingDetailView: View {
         VStack(spacing: 16) {
             // Visual waveform placeholder
             RoundedRectangle(cornerRadius: 16)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            recording.recordingType.color.opacity(0.3),
-                            recording.recordingType.color.opacity(0.1)
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
+                .fill(recording.recordingType.color.opacity(0.2))
                 .frame(height: 100)
                 .overlay(
                     HStack(spacing: 2) {

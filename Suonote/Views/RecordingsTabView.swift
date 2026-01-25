@@ -487,13 +487,7 @@ struct WaveformView: View {
                     let barHeight = max(4, CGFloat(level) * geometry.size.height)
                     
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(
-                            LinearGradient(
-                                colors: [DesignSystem.Colors.error, DesignSystem.Colors.error.opacity(0.6)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
+                        .fill(DesignSystem.Colors.error.opacity(0.7))
                         .frame(width: barWidth, height: barHeight)
                         .frame(height: geometry.size.height, alignment: .center)
                 }
@@ -520,11 +514,7 @@ struct ModernTakeCard: View {
             // Play button with type indicator
             ZStack {
                 Circle()
-                    .fill(
-                        isPlaying ? 
-                            LinearGradient(colors: [DesignSystem.Colors.success, DesignSystem.Colors.info], startPoint: .topLeading, endPoint: .bottomTrailing) :
-                            LinearGradient(colors: [recording.recordingType.color.opacity(0.3), recording.recordingType.color.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                    )
+                    .fill(isPlaying ? DesignSystem.Colors.success : recording.recordingType.color.opacity(0.4))
                     .frame(width: 56, height: 56)
                 
                 if isPlaying {

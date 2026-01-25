@@ -18,7 +18,7 @@ struct CreateProjectView: View {
     
     var body: some View {
         ZStack {
-            // Gradient background
+            // Background
             DesignSystem.Colors.background
             .ignoresSafeArea()
             
@@ -77,8 +77,8 @@ struct CreateProjectView: View {
                                             RoundedRectangle(cornerRadius: 20)
                                                 .stroke(
                                                     isTitleFocused ? 
-                                                    DesignSystem.Colors.primaryGradient :
-                                                    LinearGradient(colors: [DesignSystem.Colors.border], startPoint: .leading, endPoint: .trailing),
+                                                    DesignSystem.Colors.primary :
+                                                    DesignSystem.Colors.border,
                                                     lineWidth: 2
                                                 )
                                         )
@@ -141,13 +141,7 @@ struct CreateProjectView: View {
                                     get: { Double(bpm) },
                                     set: { bpm = Int($0) }
                                 ), in: Double(bpmRange.lowerBound)...Double(bpmRange.upperBound), step: Double(bpmStep))
-                                .tint(
-                                    LinearGradient(
-                                        colors: [DesignSystem.Colors.primary, DesignSystem.Colors.info, DesignSystem.Colors.accent],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
+                                .tint(DesignSystem.Colors.primary)
                                 
                                 HStack {
                                     ForEach([60, 90, 120, 140, 180], id: \.self) { preset in
@@ -210,13 +204,7 @@ struct CreateProjectView: View {
                                         } label: {
                                             Image(systemName: "plus.circle.fill")
                                                 .font(DesignSystem.Typography.title3)
-                                                .foregroundStyle(
-                                                    LinearGradient(
-                                                        colors: [DesignSystem.Colors.info, DesignSystem.Colors.primary],
-                                                        startPoint: .topLeading,
-                                                        endPoint: .bottomTrailing
-                                                    )
-                                                )
+                                                .foregroundStyle(DesignSystem.Colors.primary)
                                         }
                                     }
                                 }

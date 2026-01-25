@@ -67,24 +67,6 @@ struct DesignSystem {
         static let tabBarActive = primaryDark
         static let tabBarInactive = textSecondary
 
-        // Gradients
-        static let primaryGradient = LinearGradient(
-            colors: [primary, primaryLight],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-
-        static let accentGradient = LinearGradient(
-            colors: [accent, primaryLight],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-
-        static let subtleGradient = LinearGradient(
-            colors: [Color(hexNonOptional: "FAF9FB"), Color(hexNonOptional: "F5F3F7")],
-            startPoint: .top,
-            endPoint: .bottom
-        )
     }
 
     // MARK: - Typography
@@ -148,6 +130,15 @@ struct DesignSystem {
         static let xl: CGFloat = 24
         static let xxl: CGFloat = 32
         static let xxxl: CGFloat = 40
+    }
+
+    // MARK: - Layout
+
+    struct Layout {
+        static let projectTabBarHeight: CGFloat = 60
+        static let projectTabBarBottomInset: CGFloat = 8
+        static let projectTabBarGap: CGFloat = 8
+        static let projectTabBarClearance: CGFloat = 10
     }
 
     // MARK: - Corner Radius

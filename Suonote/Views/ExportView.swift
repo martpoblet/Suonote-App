@@ -10,15 +10,8 @@ struct ExportView: View {
         NavigationStack {
             ZStack {
                 // Background
-                LinearGradient(
-                    colors: [
-                        DesignSystem.Colors.backgroundSecondary,
-                        DesignSystem.Colors.backgroundTertiary
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
+                DesignSystem.Colors.backgroundSecondary
+                    .ignoresSafeArea()
                 
                 ScrollView {
                     VStack(spacing: 24) {
@@ -26,13 +19,7 @@ struct ExportView: View {
                         VStack(spacing: 8) {
                             Image(systemName: "square.and.arrow.up.circle.fill")
                                 .font(DesignSystem.Typography.jumbo)
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [DesignSystem.Colors.primary, DesignSystem.Colors.info],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
+                                .foregroundStyle(DesignSystem.Colors.primary)
                             
                             Text("Export Project")
                                 .font(DesignSystem.Typography.title)

@@ -123,7 +123,7 @@ struct StudioTabView: View {
                         )
                     }
                     .padding(DesignSystem.Spacing.lg)
-                    .padding(.bottom, 120)
+                    .padding(.bottom, DesignSystem.Layout.projectTabBarClearance)
                 }
                 
                 // Fixed timeline at bottom
@@ -147,16 +147,9 @@ struct StudioTabView: View {
                     .padding(DesignSystem.Spacing.md)
                 }
                 .background(
-                    LinearGradient(
-                        colors: [
-                            DesignSystem.Colors.backgroundTertiary,
-                            DesignSystem.Colors.backgroundSecondary
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
+                    DesignSystem.Colors.backgroundSecondary
                 )
-                .padding(.bottom, DesignSystem.Spacing.xs)
+                .padding(.bottom, DesignSystem.Layout.projectTabBarClearance)
             }
         }
         .onAppear {
@@ -421,9 +414,11 @@ struct StudioTabView: View {
         let timeline = StudioGenerator.timeline(for: project)
         let currentChordIds = Set(timeline.chords.map { $0.chord.id })
         let newChordIds = currentChordIds.subtracting(lastChordIds)
+        let removedChordIds = lastChordIds.subtracting(currentChordIds)
         let previousTotalBars = lastTotalBars
         lastChordIds = currentChordIds
         lastTotalBars = timeline.totalBars
+        let barsChanged = timeline.totalBars != previousTotalBars
 
         guard let style = project.studioStyle else {
             needsRebuild = true
@@ -432,14 +427,25 @@ struct StudioTabView: View {
         }
 
         if !project.studioTracks.isEmpty {
-            let appended = StudioGenerator.appendNotesForNewContent(
-                for: project,
-                style: style,
-                modelContext: modelContext,
-                newChordIds: newChordIds,
-                previousTotalBars: previousTotalBars
-            )
-            if appended {
+            let canAppend = removedChordIds.isEmpty && !newChordIds.isEmpty && !barsChanged
+            if canAppend {
+                let appended = StudioGenerator.appendNotesForNewContent(
+                    for: project,
+                    style: style,
+                    modelContext: modelContext,
+                    newChordIds: newChordIds,
+                    previousTotalBars: previousTotalBars
+                )
+                if appended {
+                    project.updatedAt = Date()
+                    try? modelContext.save()
+                }
+            } else {
+                StudioGenerator.regenerateNotes(
+                    for: project,
+                    style: style,
+                    modelContext: modelContext
+                )
                 project.updatedAt = Date()
                 try? modelContext.save()
             }
@@ -878,14 +884,7 @@ struct StudioTrackEditorView: View {
         }
         .padding(DesignSystem.Spacing.lg)
         .background(
-            LinearGradient(
-                colors: [
-                    accentColor.opacity(0.35),
-                    DesignSystem.Colors.backgroundTertiary
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+            DesignSystem.Colors.surfaceSecondary
         )
     }
 
@@ -1121,14 +1120,7 @@ struct StudioTrackEditorView: View {
             .padding(DesignSystem.Spacing.md)
         }
         .background(
-            LinearGradient(
-                colors: [
-                    accentColor.opacity(0.12),
-                    DesignSystem.Colors.backgroundTertiary
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+            DesignSystem.Colors.backgroundSecondary
         )
     }
 }

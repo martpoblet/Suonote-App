@@ -285,7 +285,11 @@ struct ProjectsListView: View {
                 if let originalSection = item.sectionTemplate {
                     let clonedSection = SectionTemplate(
                         name: originalSection.name,
-                        bars: originalSection.bars
+                        bars: originalSection.bars,
+                        patternPreset: originalSection.patternPreset,
+                        lyricsText: originalSection.lyricsText,
+                        notesText: originalSection.notesText,
+                        colorHex: originalSection.colorHex ?? SectionColor.sage.hex
                     )
                     
                     // Clone chord events
@@ -303,7 +307,10 @@ struct ProjectsListView: View {
                         clonedSection.chordEvents.append(clonedChord)
                     }
                     
-                    let clonedArrangementItem = ArrangementItem(orderIndex: item.orderIndex)
+                    let clonedArrangementItem = ArrangementItem(
+                        orderIndex: item.orderIndex,
+                        labelOverride: item.labelOverride
+                    )
                     clonedArrangementItem.sectionTemplate = clonedSection
                     clonedProject.arrangementItems.append(clonedArrangementItem)
                 }
@@ -319,6 +326,11 @@ struct ProjectsListView: View {
                     audioRecordingId: track.audioRecordingId,
                     audioStartBeat: track.audioStartBeat
                 )
+                clonedTrack.octaveShift = track.octaveShift
+                clonedTrack.volume = track.volume
+                clonedTrack.pan = track.pan
+                clonedTrack.variant = track.variant
+                clonedTrack.drumPreset = track.drumPreset
 
                 for note in track.notes {
                     let clonedNote = StudioNote(
@@ -499,13 +511,7 @@ struct FloatingActionButton: View {
         Button(action: action) {
             ZStack {
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [DesignSystem.Colors.primary, DesignSystem.Colors.info],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(DesignSystem.Colors.primary)
                     .frame(width: 64, height: 64)
                 
                 Image(systemName: "plus")
