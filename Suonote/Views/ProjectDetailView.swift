@@ -99,9 +99,11 @@ struct ProjectDetailView: View {
         // MARK: Sheets
         .sheet(isPresented: $showingEditSheet) {
             EditProjectSheet(project: project)
+                .studioModalStyle()
         }
         .sheet(isPresented: $showingStatusPicker) {
             StatusPickerSheet(project: project)
+                .studioModalStyle()
         }
         .toolbarBackground(Color.clear, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)

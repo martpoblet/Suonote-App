@@ -16,6 +16,8 @@ struct StudioTabView: View {
     @State private var editingTrack: StudioTrack?
     @State private var needsRebuild = true
     @State private var lastProjectSignature = ""
+    @State private var lastChordIds: Set<UUID> = []
+    @State private var lastTotalBars = 0
     @StateObject private var playback = StudioPlaybackEngine()
 
     private var sortedTracks: [StudioTrack] {
@@ -154,7 +156,7 @@ struct StudioTabView: View {
                         endPoint: .bottom
                     )
                 )
-                .padding(.bottom, DesignSystem.Spacing.lg)
+                .padding(.bottom, DesignSystem.Spacing.xs)
             }
         }
         .onAppear {
@@ -166,6 +168,9 @@ struct StudioTabView: View {
             }
             playback.prepare(project: project)
             lastProjectSignature = projectStudioSignature
+            let timeline = StudioGenerator.timeline(for: project)
+            lastChordIds = Set(timeline.chords.map { $0.chord.id })
+            lastTotalBars = timeline.totalBars
         }
         .onChange(of: projectStudioSignature) { _, newSignature in
             handleProjectChange(newSignature: newSignature)
@@ -413,6 +418,13 @@ struct StudioTabView: View {
         guard newSignature != lastProjectSignature else { return }
         lastProjectSignature = newSignature
 
+        let timeline = StudioGenerator.timeline(for: project)
+        let currentChordIds = Set(timeline.chords.map { $0.chord.id })
+        let newChordIds = currentChordIds.subtracting(lastChordIds)
+        let previousTotalBars = lastTotalBars
+        lastChordIds = currentChordIds
+        lastTotalBars = timeline.totalBars
+
         guard let style = project.studioStyle else {
             needsRebuild = true
             playback.prepare(project: project)
@@ -420,8 +432,17 @@ struct StudioTabView: View {
         }
 
         if !project.studioTracks.isEmpty {
-            StudioGenerator.regenerateNotes(for: project, style: style, modelContext: modelContext)
-            try? modelContext.save()
+            let appended = StudioGenerator.appendNotesForNewContent(
+                for: project,
+                style: style,
+                modelContext: modelContext,
+                newChordIds: newChordIds,
+                previousTotalBars: previousTotalBars
+            )
+            if appended {
+                project.updatedAt = Date()
+                try? modelContext.save()
+            }
         }
 
         if playback.isPlaying {
@@ -577,7 +598,7 @@ struct StudioTimelineView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(currentSection?.label ?? "Timeline")
@@ -692,7 +713,9 @@ struct StudioTimelineView: View {
                 )
             }
             .frame(height: 44)
+            .padding(.top, DesignSystem.Spacing.sm)
         }
+        .padding(.top, DesignSystem.Spacing.xs)
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 16)
