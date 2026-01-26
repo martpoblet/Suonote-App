@@ -29,6 +29,7 @@ struct DesignSystem {
         static let textPrimary = Color(hexNonOptional: "2F2E35")    // Soft charcoal (unified ink)
         static let textSecondary = Color(hexNonOptional: "6E7480")  // Neutral gray
         static let textTertiary = Color(hexNonOptional: "9EA5B1")   // Light gray
+        static let textWhite = Color(hexNonOptional: "FEFEFE")      // White
         static let textMuted = Color(hexNonOptional: "B7B0D8")      // Muted lavender
 
         // Border Colors
@@ -136,7 +137,7 @@ struct DesignSystem {
 
     struct Layout {
         static let projectTabBarHeight: CGFloat = 60
-        static let projectTabBarBottomInset: CGFloat = 8
+        static let projectTabBarBottomInset: CGFloat = 2
         static let projectTabBarGap: CGFloat = 8
         static let projectTabBarClearance: CGFloat = 0
     }

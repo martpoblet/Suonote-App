@@ -149,7 +149,7 @@ struct ComposeTabView: View {
     }
     
     private var topControlsBar: some View {
-        HStack(spacing: DesignSystem.Spacing.sm) {
+        HStack(spacing: DesignSystem.Spacing.xs) {
             // Key button
             Button {
                 haptic(.selection)
@@ -202,7 +202,7 @@ struct ComposeTabView: View {
                 showingExport = true
             } label: {
                 Image(systemName: DesignSystem.Icons.export)
-                    .font(DesignSystem.Typography.title3)
+                    .font(DesignSystem.Typography.subheadline)
                     .foregroundStyle(DesignSystem.Colors.textPrimary)
                     .padding(DesignSystem.Spacing.xs)
                     .background(
@@ -1288,7 +1288,8 @@ struct BarRow: View {
             barHeader
             barGrid(slots: slots)
         }
-        .padding(12)
+        .padding(.vertical, 16)
+        .padding(.horizontal, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 12)
@@ -1996,7 +1997,7 @@ struct SectionCreatorView: View {
     @State private var sectionName = ""
     @State private var bars = 4
     @State private var selectedTemplate: SectionPreset = .verse
-    @State private var selectedColor: SectionColor = .purple
+    @State private var selectedColor: SectionColor = .sky
     
     var body: some View {
         NavigationStack {
@@ -2077,7 +2078,9 @@ struct SectionCreatorView: View {
                 }
                 .disabled(sectionName.isEmpty)
             }
-            .padding(24)
+            .padding(.horizontal, 24)
+            .padding(.top, 40)
+            .padding(.bottom, 24)
             .background(DesignSystem.Colors.background)
             .navigationTitle("New Section")
             .navigationBarTitleDisplayMode(.inline)
@@ -3238,7 +3241,6 @@ struct ViewAllSectionsCard: View {
                     .fill(DesignSystem.Colors.surface)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .inset(by: isSelected ? 2 : 1)
                             /* Dash solo si esta deseleccionado */
                             .strokeBorder(isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.border,style: StrokeStyle(lineWidth: isSelected ? 2 : 1, dash: isSelected ? [] : [6, 6]))
                     )

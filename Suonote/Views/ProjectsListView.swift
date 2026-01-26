@@ -182,7 +182,7 @@ struct ProjectsListView: View {
     
     private var filterChipsView: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DesignSystem.Spacing.sm) {
+            HStack(spacing: DesignSystem.Spacing.xxs) {
                 ForEach(ProjectStatus.allCases, id: \.self) { status in
                     ModernFilterChip(
                         title: status.rawValue,
@@ -379,14 +379,14 @@ struct ModernFilterChip: View {
                             .fill(color.opacity(0.2))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 20)
-                                    .stroke(color.opacity(0.6), lineWidth: 2)
+                                    .strokeBorder(color.opacity(0.6), lineWidth: 2)
                             )
                     } else {
                         RoundedRectangle(cornerRadius: 20)
                             .fill(DesignSystem.Colors.surfaceSecondary)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 20)
-                                    .stroke(DesignSystem.Colors.border, lineWidth: 1)
+                                    .strokeBorder(DesignSystem.Colors.border, lineWidth: 1)
                             )
                     }
                 }
@@ -417,15 +417,24 @@ struct ModernProjectCard: View {
                 
                 // Metadata
                 HStack(spacing: 12) {
-                    Label("\(project.keyRoot)\(project.keyMode == .minor ? "m" : "")", systemImage: "music.note")
-                        .font(DesignSystem.Typography.caption)
+                    HStack(spacing: 4) {
+                        Image(systemName: "music.note")
+                        Text("\(project.keyRoot)\(project.keyMode == .minor ? "m" : "")")
+                    }
+                    .font(DesignSystem.Typography.caption)
                     
-                    Label("\(project.bpm)", systemImage: "metronome")
-                        .font(DesignSystem.Typography.caption)
+                    HStack(spacing: 4) {
+                        Image(systemName: "metronome")
+                        Text("\(project.bpm)")
+                    }
+                    .font(DesignSystem.Typography.caption)
                     
                     if project.recordingsCount > 0 {
-                        Label("\(project.recordingsCount)", systemImage: "waveform")
-                            .font(DesignSystem.Typography.caption)
+                        HStack(spacing: 4) {
+                            Image(systemName: "waveform")
+                            Text("\(project.recordingsCount)")
+                        }
+                        .font(DesignSystem.Typography.caption)
                     }
                 }
                 .foregroundStyle(DesignSystem.Colors.textSecondary)
@@ -517,7 +526,7 @@ struct FloatingActionButton: View {
                 Image(systemName: "plus")
                     .font(DesignSystem.Typography.sm)
                     .fontWeight(.bold)
-                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+                    .foregroundStyle(DesignSystem.Colors.textWhite)
             }
         }
         .scaleEffect(1.0)

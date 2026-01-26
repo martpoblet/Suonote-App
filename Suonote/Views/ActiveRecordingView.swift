@@ -232,18 +232,25 @@ struct ActiveRecordingView: View {
                 startCountIn()
             } label: {
                 ZStack {
+                    // Outer ring matching the instrument/type
+                    Circle()
+                        .stroke(DesignSystem.Colors.error.opacity(0.3), lineWidth: 3)
+                        .frame(width: 100, height: 100)
+                    
+                    // Outer glow/background
+                    Circle()
+                        .fill(DesignSystem.Colors.error.opacity(0.1))
+                        .frame(width: 100, height: 100)
+
+                    // Record button core
                     Circle()
                         .fill(DesignSystem.Colors.error)
-                        .frame(width: 120, height: 120)
-                        .shadow(color: DesignSystem.Colors.error.opacity(0.35), radius: 20, x: 0, y: 10)
-                    
-                    Circle()
-                        .stroke(DesignSystem.Colors.textMuted, lineWidth: 3)
-                        .frame(width: 120, height: 120)
-                    
-                    Image(systemName: "circle.fill")
-                        .font(DesignSystem.Typography.xl)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
+                        .frame(width: 80, height: 80)
+                        .shadow(color: DesignSystem.Colors.error.opacity(0.4), radius: 10, x: 0, y: 5)
+                        .overlay(
+                            Circle()
+                                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                        )
                 }
             }
             

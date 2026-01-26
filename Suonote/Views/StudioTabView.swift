@@ -94,11 +94,12 @@ struct StudioTabView: View {
                 VStack(spacing: 0) {
                     Spacer()
                     
-                    StudioEmptyState(
-                        accentColor: project.studioStyle?.accentColor ?? SectionColor.purple.color,
-                        onPickStyle: { showingStylePicker = true },
-                        onAddTrack: promptAddTrack
-                    )
+                StudioEmptyState(
+                    project: project,
+                    accentColor: project.studioStyle?.accentColor ?? SectionColor.purple.color,
+                    onPickStyle: { showingStylePicker = true },
+                    onAddTrack: promptAddTrack
+                )
                     .padding(.horizontal, DesignSystem.Spacing.xxl)
                     
                     Spacer()
@@ -413,12 +414,8 @@ struct StudioTabView: View {
 
         let timeline = StudioGenerator.timeline(for: project)
         let currentChordIds = Set(timeline.chords.map { $0.chord.id })
-        let newChordIds = currentChordIds.subtracting(lastChordIds)
-        let removedChordIds = lastChordIds.subtracting(currentChordIds)
-        let previousTotalBars = lastTotalBars
         lastChordIds = currentChordIds
         lastTotalBars = timeline.totalBars
-        let barsChanged = timeline.totalBars != previousTotalBars
 
         guard let style = project.studioStyle else {
             needsRebuild = true
@@ -427,28 +424,13 @@ struct StudioTabView: View {
         }
 
         if !project.studioTracks.isEmpty {
-            let canAppend = removedChordIds.isEmpty && !newChordIds.isEmpty && !barsChanged
-            if canAppend {
-                let appended = StudioGenerator.appendNotesForNewContent(
-                    for: project,
-                    style: style,
-                    modelContext: modelContext,
-                    newChordIds: newChordIds,
-                    previousTotalBars: previousTotalBars
-                )
-                if appended {
-                    project.updatedAt = Date()
-                    try? modelContext.save()
-                }
-            } else {
-                StudioGenerator.regenerateNotes(
-                    for: project,
-                    style: style,
-                    modelContext: modelContext
-                )
-                project.updatedAt = Date()
-                try? modelContext.save()
-            }
+            StudioGenerator.regenerateNotes(
+                for: project,
+                style: style,
+                modelContext: modelContext
+            )
+            project.updatedAt = Date()
+            try? modelContext.save()
         }
 
         if playback.isPlaying {
@@ -496,6 +478,7 @@ struct StudioTabView: View {
 }
 
 struct StudioEmptyState: View {
+    let project: Project
     let accentColor: Color
     let onPickStyle: () -> Void
     let onAddTrack: () -> Void
@@ -518,35 +501,39 @@ struct StudioEmptyState: View {
             }
 
             HStack(spacing: 12) {
-                Button {
-                    onPickStyle()
-                } label: {
-                    Text("Pick Style")
+                if project.studioStyle == nil {
+                    Button {
+                        onPickStyle()
+                    } label: {
+                        Text("Pick Style")
+                            .font(.subheadline)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(
+                                Capsule()
+                                    .fill(accentColor.opacity(0.3))
+                            )
+                    }
+                }
+
+                if project.studioStyle != nil {
+                    Button {
+                        onAddTrack()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "plus.circle.fill")
+                            Text("Add Track")
+                        }
                         .font(.subheadline)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
+                        .foregroundStyle(DesignSystem.Colors.textWhite)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 10)
                         .background(
                             Capsule()
-                                .fill(accentColor.opacity(0.3))
+                                .fill(accentColor)
                         )
-                }
-
-                Button {
-                    onAddTrack()
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "plus.circle.fill")
-                        Text("Add Track")
                     }
-                    .font(.subheadline)
-                    .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(
-                        Capsule()
-                            .fill(accentColor)
-                    )
                 }
             }
         }
@@ -1336,7 +1323,7 @@ struct StudioTrackRow: View {
                 .fill(DesignSystem.Colors.surfaceSecondary)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(isSelected ? track.instrument.color : DesignSystem.Colors.border, lineWidth: isSelected ? 2 : 1)
+                        .strokeBorder(isSelected ? track.instrument.color : DesignSystem.Colors.border, lineWidth: isSelected ? 2 : 1)
                 )
         )
         .contentShape(Rectangle())
@@ -2014,7 +2001,7 @@ struct StudioStylePickerView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(
                                 RoundedRectangle(cornerRadius: 16)
-                                    .fill(style.accentColor.opacity(currentSelection == style ? 0.35 : 0.15))
+                                    .fill(style.accentColor.opacity(0.1))
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 16)
                                             .stroke(style.accentColor.opacity(0.7), lineWidth: currentSelection == style ? 2 : 1)
@@ -2111,10 +2098,10 @@ struct StudioInstrumentPickerView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .background(
                                     RoundedRectangle(cornerRadius: 16)
-                                        .fill(instrument.color.opacity(isAdded ? 0.2 : 0.3))
+                                        .fill(instrument.color.opacity(0.1))
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 16)
-                                                .stroke(instrument.color.opacity(isAdded ? 0.5 : 0.8), lineWidth: isAdded ? 1 : 2)
+                                                .stroke(instrument.color.opacity(isAdded ? 0.5 : 0.8), lineWidth: 1)
                                         )
                                 )
                             }

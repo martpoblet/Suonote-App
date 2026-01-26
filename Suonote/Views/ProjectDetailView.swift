@@ -165,11 +165,11 @@ private struct ProjectTabBar: View {
                 } label: {
                     VStack(spacing: 4) {
                         Image(systemName: tab.icon)
-                            .font(DesignSystem.Typography.callout)
+                            .font(DesignSystem.Typography.bodyMedium)
                             .foregroundStyle(tab.tintColor)
                         Text(tab.title)
-                            .font(DesignSystem.Typography.caption2)
-                            .foregroundStyle(selectedTab == tab ? tab.tintColor : DesignSystem.Colors.textSecondary)
+                            .font(DesignSystem.Typography.bodyMedium)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
@@ -193,7 +193,6 @@ private struct ProjectTabBar: View {
         )
         .shadow(color: DesignSystem.Colors.textPrimary.opacity(0.08), radius: 16, x: 0, y: 8)
         .padding(.horizontal, 16)
-        .padding(.bottom, DesignSystem.Layout.projectTabBarBottomInset)
         .ignoresSafeArea(.keyboard, edges: .bottom)
     }
 }
@@ -325,7 +324,7 @@ struct EditProjectSheet: View {
                                 } label: {
                                     Text(signature.rawValue)
                                         .font(.headline)
-                                        .foregroundStyle(isSelected(signature) ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
+                                        .foregroundStyle(DesignSystem.Colors.textSecondary)
                                         .frame(maxWidth: .infinity)
                                         .frame(height: 44)
                                         .background(

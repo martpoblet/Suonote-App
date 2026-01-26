@@ -93,7 +93,7 @@ struct CreateProjectView: View {
                                 .textCase(.uppercase)
                             
                             ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 12) {
+                                HStack(spacing: 6) {
                                     ForEach(ProjectStatus.allCases.filter { $0 != .archived }, id: \.self) { statusOption in
                                         StatusSelectionCard(
                                             status: statusOption,
@@ -116,7 +116,7 @@ struct CreateProjectView: View {
                                 .textCase(.uppercase)
                             
                             VStack(spacing: 16) {
-                                HStack(alignment: .bottom, spacing: 16) {
+                                HStack(alignment: .center, spacing: 16) {
                                     bpmAdjustButton(systemImage: "minus", isEnabled: bpm > bpmRange.lowerBound) {
                                         adjustBpm(by: -bpmStep)
                                     }
@@ -134,7 +134,6 @@ struct CreateProjectView: View {
                                     Text("BPM")
                                         .font(DesignSystem.Typography.title3)
                                         .foregroundStyle(DesignSystem.Colors.textSecondary)
-                                        .padding(.top, 40)
                                 }
                                 
                                 Slider(value: Binding(
@@ -322,11 +321,11 @@ struct StatusSelectionCard: View {
             VStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(DesignSystem.Typography.title2)
-                    .foregroundStyle(isSelected ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
+                    .foregroundStyle(isSelected ? color : DesignSystem.Colors.textSecondary)
                 
                 Text(status.rawValue)
                     .font(DesignSystem.Typography.caption)
-                    .foregroundStyle(isSelected ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
+                    .foregroundStyle(isSelected ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textSecondary)
             }
             .frame(width: 100, height: 100)
             .background(
@@ -334,7 +333,7 @@ struct StatusSelectionCard: View {
                     .fill(isSelected ? color.opacity(0.15) : DesignSystem.Colors.surfaceSecondary.opacity(0.5))
                     .overlay(
                         RoundedRectangle(cornerRadius: 20)
-                            .stroke(isSelected ? color : DesignSystem.Colors.border, lineWidth: isSelected ? 2 : 1)
+                            .strokeBorder(isSelected ? color : DesignSystem.Colors.border, lineWidth: isSelected ? 2 : 1)
                     )
             )
         }
