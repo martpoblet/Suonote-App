@@ -80,16 +80,16 @@ struct DesignSystem {
         static let largeTitle = Font.erode(36).weight(.semibold)
         static let title = Font.erode(30).weight(.semibold)
         static let title2 = Font.erode(24).weight(.semibold)
-        static let title3 = Font.erode(22).weight(.medium)
+        static let title3 = Font.erode(22).weight(.semibold)
 
         // Headlines (Erode for emphasis) - Using Erode more
         static let headline = Font.erode(18).weight(.semibold)
-        static let subheadline = Font.erode(16).weight(.medium)
+        static let subheadline = Font.erode(16).weight(.semibold)
 
         // Body (Mix of Erode and Manrope)
         static let body = Font.manrope(15)
         static let bodyBold = Font.erode(15).weight(.semibold)
-        static let bodyMedium = Font.erode(15).weight(.medium)
+        static let bodyMedium = Font.erode(15).weight(.semibold)
         static let callout = Font.manrope(13)
         static let calloutBold = Font.erode(13).weight(.semibold)
 
@@ -138,7 +138,7 @@ struct DesignSystem {
         static let projectTabBarHeight: CGFloat = 60
         static let projectTabBarBottomInset: CGFloat = 8
         static let projectTabBarGap: CGFloat = 8
-        static let projectTabBarClearance: CGFloat = 10
+        static let projectTabBarClearance: CGFloat = 0
     }
 
     // MARK: - Corner Radius

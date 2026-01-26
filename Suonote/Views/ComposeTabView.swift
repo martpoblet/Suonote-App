@@ -185,15 +185,11 @@ struct ComposeTabView: View {
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     AppChip(
-                        text: "\(project.bpm)",
+                        text: "\(project.bpm) BPM",
                         icon: DesignSystem.Icons.waveform,
                         tint: DesignSystem.Colors.accent,
                         font: DesignSystem.Typography.callout
                     )
-                    Text(TempoUtils.tempoDescription(for: project.bpm).split(separator: " ").first.map(String.init) ?? "")
-                        .font(DesignSystem.Typography.caption2)
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                        .padding(.leading, 24)
                 }
             }
             .buttonStyle(.haptic(.light))
@@ -616,7 +612,7 @@ struct SectionTimelineCard: View {
                     // Delete button
                     Button(action: { showingDeleteConfirmation = true }) {
                         Image(systemName: "xmark.circle.fill")
-                            .font(DesignSystem.Typography.caption)
+                            .font(DesignSystem.Typography.callout)
                             .foregroundStyle(DesignSystem.Colors.textTertiary)
                     }
                     .buttonStyle(.plain)
@@ -1404,6 +1400,7 @@ struct BarRow: View {
                 .foregroundStyle(showBlocked ? DesignSystem.Colors.error : section.color)
                 .frame(maxWidth: .infinity)
                 .frame(height: 50)
+                .padding(.vertical, 4)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
                         .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
@@ -3215,32 +3212,35 @@ struct ViewAllSectionsCard: View {
     
     var body: some View {
         Button(action: onSelect) {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Image(systemName: "square.grid.2x2.fill")
-                        .font(DesignSystem.Typography.title3)
-                        .foregroundStyle(isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.textPrimary)
+                        .font(DesignSystem.Typography.headline)
+                        .foregroundStyle(isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.textTertiary)
                     
                     Spacer()
                 }
                 
                 Text("View All")
-                    .font(.subheadline)
-                    .foregroundStyle(isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.textPrimary)
+                    .font(DesignSystem.Typography.subheadline)
+                    .foregroundStyle(isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.textTertiary)
                     .lineLimit(1)
                 
                 Text("Sections")
                     .font(DesignSystem.Typography.caption2)
-                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    .foregroundStyle(DesignSystem.Colors.textTertiary)
             }
             .padding(12)
-            .frame(width: 120)
+            /* 100% height */
+            .frame(width: 120, height: 115)
             .background(
                 RoundedRectangle(cornerRadius: 16)
                     .fill(DesignSystem.Colors.surface)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke(isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.border, lineWidth: isSelected ? 2 : 1)
+                            .inset(by: isSelected ? 2 : 1)
+                            /* Dash solo si esta deseleccionado */
+                            .strokeBorder(isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.border,style: StrokeStyle(lineWidth: isSelected ? 2 : 1, dash: isSelected ? [] : [6, 6]))
                     )
             )
         }

@@ -292,7 +292,7 @@ struct EditProjectSheet: View {
                                         Text(status.rawValue)
                                             .font(.subheadline)
                                     }
-                                    .foregroundStyle(tempStatus == status ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
+                                    .foregroundStyle(tempStatus == status ? DesignSystem.Colors.textSecondary : DesignSystem.Colors.textSecondary)
                                     .frame(maxWidth: .infinity)
                                     .frame(height: 44)
                                     .background(

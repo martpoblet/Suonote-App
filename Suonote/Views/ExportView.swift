@@ -27,7 +27,7 @@ struct ExportView: View {
                                 .foregroundStyle(DesignSystem.Colors.textPrimary)
                             
                             Text(project.title)
-                                .font(DesignSystem.Typography.subheadline)
+                                .font(DesignSystem.Typography.body)
                                 .foregroundStyle(DesignSystem.Colors.textSecondary)
                         }
                         .padding(.top, 20)

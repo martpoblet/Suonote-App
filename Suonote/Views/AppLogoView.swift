@@ -37,7 +37,7 @@ struct AppLogoView: View {
 }
 
 #Preview {
-    AppLogoView(height: 30)
+    AppLogoView(height: 34)
         .padding()
         .background(DesignSystem.Colors.background)
 }
