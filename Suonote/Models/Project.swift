@@ -25,6 +25,15 @@ final class Project {
     var recordings: [Recording]
 
     var studioStyleRaw: String?
+    var studioSyncSignature: String?
+    var studioLastChordIds: String?
+    var studioLastTotalBars: Int
+    var studioLastChordSignature: String?
+    var studioLastBpm: Int
+    var studioLastTimeTop: Int
+    var studioLastTimeBottom: Int
+    var studioLastKeyRoot: String?
+    var studioLastKeyModeRaw: String?
     
     @Relationship(deleteRule: .cascade)
     var studioTracks: [StudioTrack]
@@ -54,6 +63,15 @@ final class Project {
         self.arrangementItems = []
         self.recordings = []
         self.studioStyleRaw = nil
+        self.studioSyncSignature = nil
+        self.studioLastChordIds = nil
+        self.studioLastTotalBars = 0
+        self.studioLastChordSignature = nil
+        self.studioLastBpm = bpm
+        self.studioLastTimeTop = timeTop
+        self.studioLastTimeBottom = timeBottom
+        self.studioLastKeyRoot = keyRoot
+        self.studioLastKeyModeRaw = keyMode.rawValue
         self.studioTracks = []
     }
     
@@ -157,6 +175,30 @@ extension Project {
         for recording in recordings {
             recording.timeTop = newTimeTop
             recording.timeBottom = newTimeBottom
+        }
+    }
+
+    func applyKeyChange(oldRoot: String, newRoot: String) {
+        let semitones = NoteUtils.intervalBetween(from: oldRoot, to: newRoot)
+        guard semitones != 0 else { return }
+
+        let arrangementSections = arrangementItems.compactMap { $0.sectionTemplate }
+        for section in arrangementSections where !sectionTemplates.contains(where: { $0.id == section.id }) {
+            sectionTemplates.append(section)
+        }
+        var seenSectionIds = Set<UUID>()
+        let allSections = (sectionTemplates + arrangementSections).filter { section in
+            seenSectionIds.insert(section.id).inserted
+        }
+
+        for section in allSections {
+            for chord in section.chordEvents {
+                guard !chord.isRest else { continue }
+                chord.root = NoteUtils.transpose(note: chord.root, semitones: semitones)
+                if let slash = chord.slashRoot, !slash.isEmpty {
+                    chord.slashRoot = NoteUtils.transpose(note: slash, semitones: semitones)
+                }
+            }
         }
     }
 }

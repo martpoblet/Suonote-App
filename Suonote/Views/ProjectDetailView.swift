@@ -240,13 +240,25 @@ struct EditProjectSheet: View {
     @State private var tempTags: [String] = []
     @State private var newTag: String = ""
     @State private var tempStatus: ProjectStatus = .idea
-    @State private var showingTimeSignatureWarning = false
+    @State private var showingProjectChangeWarning = false
     
     private let roots = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
     private let timeSignatures = TimeSignaturePreset.allCases
     
     private var timeSignatureChanged: Bool {
         tempTimeTop != project.timeTop || tempTimeBottom != project.timeBottom
+    }
+
+    private var bpmChanged: Bool {
+        tempBPM != project.bpm
+    }
+
+    private var keyChanged: Bool {
+        tempKeyRoot != project.keyRoot || tempKeyMode != project.keyMode
+    }
+
+    private var shouldWarnAboutStructure: Bool {
+        (timeSignatureChanged || bpmChanged || keyChanged) && !project.arrangementItems.isEmpty
     }
     
     var body: some View {
@@ -470,8 +482,8 @@ struct EditProjectSheet: View {
                 
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        if timeSignatureChanged && !project.arrangementItems.isEmpty {
-                            showingTimeSignatureWarning = true
+                        if shouldWarnAboutStructure {
+                            showingProjectChangeWarning = true
                         } else {
                             saveChanges()
                         }
@@ -482,13 +494,13 @@ struct EditProjectSheet: View {
             }
         }
         
-        .alert("Change Time Signature?", isPresented: $showingTimeSignatureWarning) {
+        .alert("Update Project Settings?", isPresented: $showingProjectChangeWarning) {
             Button("Cancel", role: .cancel) {}
-            Button("Save Anyway", role: .destructive) {
+            Button("Apply Changes", role: .destructive) {
                 saveChanges()
             }
         } message: {
-            Text("Changing the time signature will affect the structure of your existing sections. Chord progressions may need adjustment.")
+            Text("Changing tempo, key, or time signature will update your sections and regenerate Studio notes. This can affect existing arrangements.")
         }
         .onAppear {
             loadCurrentValues()
@@ -522,6 +534,7 @@ struct EditProjectSheet: View {
     private func saveChanges() {
         let oldTimeTop = project.timeTop
         let oldTimeBottom = project.timeBottom
+        let oldKeyRoot = project.keyRoot
         let shouldReflow = tempTimeTop != oldTimeTop || tempTimeBottom != oldTimeBottom
 
         project.title = tempTitle
@@ -532,6 +545,9 @@ struct EditProjectSheet: View {
         project.keyMode = tempKeyMode
         project.tags = tempTags
         project.status = tempStatus
+        if oldKeyRoot != tempKeyRoot {
+            project.applyKeyChange(oldRoot: oldKeyRoot, newRoot: tempKeyRoot)
+        }
         if shouldReflow {
             project.applyTimeSignatureChange(
                 oldTimeTop: oldTimeTop,

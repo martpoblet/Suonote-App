@@ -3128,6 +3128,10 @@ struct SectionEditorSheet: View {
 struct KeyPickerSheet: View {
     @Bindable var project: Project
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @State private var tempRoot: String = ""
+    @State private var tempMode: KeyMode = .major
+    @State private var showingConfirm = false
     
     private let roots = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
     
@@ -3142,16 +3146,16 @@ struct KeyPickerSheet: View {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 8) {
                         ForEach(roots, id: \.self) { root in
                             Button {
-                                project.keyRoot = root
+                                tempRoot = root
                             } label: {
                                     Text(root)
                                         .font(DesignSystem.Typography.headline)
-                                        .foregroundStyle(project.keyRoot == root ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
+                                        .foregroundStyle(tempRoot == root ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
                                         .frame(height: 50)
                                         .frame(maxWidth: .infinity)
                                         .background(
                                             RoundedRectangle(cornerRadius: 12)
-                                                .fill(project.keyRoot == root ? DesignSystem.Colors.primary : DesignSystem.Colors.surfaceSecondary)
+                                                .fill(tempRoot == root ? DesignSystem.Colors.primary : DesignSystem.Colors.surfaceSecondary)
                                         )
                                 }
                             }
@@ -3165,30 +3169,30 @@ struct KeyPickerSheet: View {
                     
                     HStack(spacing: 12) {
                         Button {
-                            project.keyMode = .major
+                            tempMode = .major
                         } label: {
                             Text("Major")
                                 .font(.subheadline)
-                                .foregroundStyle(project.keyMode == .major ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
+                                .foregroundStyle(tempMode == .major ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 50)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(project.keyMode == .major ? DesignSystem.Colors.info : DesignSystem.Colors.surfaceSecondary)
+                                        .fill(tempMode == .major ? DesignSystem.Colors.info : DesignSystem.Colors.surfaceSecondary)
                                 )
                         }
                         
                         Button {
-                            project.keyMode = .minor
+                            tempMode = .minor
                         } label: {
                             Text("Minor")
                                 .font(.subheadline)
-                                .foregroundStyle(project.keyMode == .minor ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
+                                .foregroundStyle(tempMode == .minor ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 50)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(project.keyMode == .minor ? DesignSystem.Colors.info : DesignSystem.Colors.surfaceSecondary)
+                                        .fill(tempMode == .minor ? DesignSystem.Colors.info : DesignSystem.Colors.surfaceSecondary)
                                 )
                         }
                     }
@@ -3197,12 +3201,36 @@ struct KeyPickerSheet: View {
                 Spacer()
                 
                 AppButton(title: "Done", kind: .primary(DesignSystem.Colors.primary)) {
-                    dismiss()
+                    if tempRoot != project.keyRoot || tempMode != project.keyMode {
+                        showingConfirm = true
+                    } else {
+                        dismiss()
+                    }
                 }
             }
             .padding(24)
             .navigationTitle("Change Key")
             .navigationBarTitleDisplayMode(.inline)
+        }
+        .alert("Apply Key Change?", isPresented: $showingConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Apply", role: .destructive) {
+                let oldRoot = project.keyRoot
+                project.keyRoot = tempRoot
+                project.keyMode = tempMode
+                if oldRoot != tempRoot {
+                    project.applyKeyChange(oldRoot: oldRoot, newRoot: tempRoot)
+                }
+                project.updatedAt = Date()
+                try? modelContext.save()
+                dismiss()
+            }
+        } message: {
+            Text("Changing key will transpose existing chords and update Studio notes.")
+        }
+        .onAppear {
+            tempRoot = project.keyRoot
+            tempMode = project.keyMode
         }
         
     }

@@ -165,6 +165,7 @@ struct StudioTabView: View {
             let timeline = StudioGenerator.timeline(for: project)
             lastChordIds = Set(timeline.chords.map { $0.chord.id })
             lastTotalBars = timeline.totalBars
+            syncStudioIfNeeded()
         }
         .onChange(of: projectStudioSignature) { _, newSignature in
             handleProjectChange(newSignature: newSignature)
@@ -192,6 +193,7 @@ struct StudioTabView: View {
                             modelContext: modelContext,
                             resetDrumPreset: true
                         )
+                        updateStudioSyncState(signature: projectStudioSignature, timeline: StudioGenerator.timeline(for: project))
                         needsRebuild = true
                         try? modelContext.save()
                     } else {
@@ -301,6 +303,7 @@ struct StudioTabView: View {
     private func regenerateNotes() {
         guard let style = project.studioStyle else { return }
         StudioGenerator.regenerateNotes(for: project, style: style, modelContext: modelContext)
+        updateStudioSyncState(signature: projectStudioSignature, timeline: StudioGenerator.timeline(for: project))
         project.updatedAt = Date()
         try? modelContext.save()
         needsRebuild = true
@@ -348,6 +351,7 @@ struct StudioTabView: View {
         }
 
         selectedTrackId = track.id
+        updateStudioSyncState(signature: projectStudioSignature, timeline: StudioGenerator.timeline(for: project))
         project.updatedAt = Date()
         try? modelContext.save()
         needsRebuild = true
@@ -412,32 +416,150 @@ struct StudioTabView: View {
         guard newSignature != lastProjectSignature else { return }
         lastProjectSignature = newSignature
 
-        let timeline = StudioGenerator.timeline(for: project)
-        let currentChordIds = Set(timeline.chords.map { $0.chord.id })
-        lastChordIds = currentChordIds
-        lastTotalBars = timeline.totalBars
-
-        guard let style = project.studioStyle else {
-            needsRebuild = true
-            playback.prepare(project: project)
-            return
-        }
-
-        if !project.studioTracks.isEmpty {
-            StudioGenerator.regenerateNotes(
-                for: project,
-                style: style,
-                modelContext: modelContext
-            )
-            project.updatedAt = Date()
-            try? modelContext.save()
-        }
+        syncStudioIfNeeded()
 
         if playback.isPlaying {
             playback.stop(resetPosition: false)
         }
         needsRebuild = true
         playback.prepare(project: project)
+    }
+
+    private func syncStudioIfNeeded() {
+        guard let style = project.studioStyle, !project.studioTracks.isEmpty else { return }
+
+        let signature = projectStudioSignature
+        guard project.studioSyncSignature != signature else { return }
+
+        let timeline = StudioGenerator.timeline(for: project)
+        let currentChordIds = Set(timeline.chords.map { $0.chord.id })
+        let previousChordIds: Set<UUID> = {
+            guard let raw = project.studioLastChordIds, !raw.isEmpty else { return [] }
+            let ids = raw.split(separator: ",").compactMap { UUID(uuidString: String($0)) }
+            return Set(ids)
+        }()
+        let previousTotalBars = project.studioLastTotalBars
+
+        let currentSignatureMap = chordSignatureMap(from: timeline)
+        let previousSignatureMap = parseChordSignatureMap(project.studioLastChordSignature)
+
+        let newChordIds = currentChordIds.subtracting(previousChordIds)
+        let removedChordIds = previousChordIds.subtracting(currentChordIds)
+        let barsChanged = timeline.totalBars != previousTotalBars
+        let headerChanged = project.studioLastBpm != project.bpm
+            || project.studioLastTimeTop != project.timeTop
+            || project.studioLastTimeBottom != project.timeBottom
+            || project.studioLastKeyRoot != project.keyRoot
+            || project.studioLastKeyModeRaw != project.keyMode.rawValue
+        let changedChordIds: Set<UUID> = Set(currentSignatureMap.compactMap { entry in
+            let (id, signature) = entry
+            guard let previous = previousSignatureMap[id] else { return nil }
+            return previous == signature ? nil : id
+        })
+
+        let canAppend = !headerChanged
+            && removedChordIds.isEmpty
+            && !newChordIds.isEmpty
+            && timeline.totalBars >= previousTotalBars
+            && !barsChanged
+
+        if headerChanged || barsChanged || !removedChordIds.isEmpty {
+            StudioGenerator.regenerateNotes(
+                for: project,
+                style: style,
+                modelContext: modelContext
+            )
+            project.updatedAt = Date()
+        } else if !changedChordIds.isEmpty {
+            let affectedSections = sectionIds(containing: changedChordIds)
+            let updated = StudioGenerator.replaceNotesForSections(
+                for: project,
+                style: style,
+                modelContext: modelContext,
+                sectionIds: affectedSections
+            )
+            if updated {
+                project.updatedAt = Date()
+            }
+        } else if canAppend {
+            let appended = StudioGenerator.appendNotesForNewContent(
+                for: project,
+                style: style,
+                modelContext: modelContext,
+                newChordIds: newChordIds,
+                previousTotalBars: previousTotalBars
+            )
+            if appended {
+                project.updatedAt = Date()
+            }
+        } else {
+            StudioGenerator.regenerateNotes(
+                for: project,
+                style: style,
+                modelContext: modelContext
+            )
+            project.updatedAt = Date()
+        }
+
+        updateStudioSyncState(signature: signature, timeline: timeline)
+        try? modelContext.save()
+        needsRebuild = true
+    }
+
+    private func updateStudioSyncState(signature: String, timeline: (chords: [StudioGenerator.ChordSpan], totalBars: Int)) {
+        project.studioSyncSignature = signature
+        project.studioLastChordIds = timeline.chords.map { $0.chord.id.uuidString }.joined(separator: ",")
+        project.studioLastTotalBars = timeline.totalBars
+        project.studioLastChordSignature = encodeChordSignatureMap(chordSignatureMap(from: timeline))
+        project.studioLastBpm = project.bpm
+        project.studioLastTimeTop = project.timeTop
+        project.studioLastTimeBottom = project.timeBottom
+        project.studioLastKeyRoot = project.keyRoot
+        project.studioLastKeyModeRaw = project.keyMode.rawValue
+    }
+
+    private func chordSignatureMap(from timeline: (chords: [StudioGenerator.ChordSpan], totalBars: Int)) -> [UUID: String] {
+        var map: [UUID: String] = [:]
+        for span in timeline.chords {
+            map[span.chord.id] = chordSignature(span.chord)
+        }
+        return map
+    }
+
+    private func chordSignature(_ chord: ChordEvent) -> String {
+        let ext = chord.extensions.joined(separator: ",")
+        let beat = String(format: "%.3f", chord.beatOffset)
+        let duration = String(format: "%.3f", chord.duration)
+        let restFlag = chord.isRest ? "rest" : "chord"
+        return "\(chord.barIndex)|\(beat)|\(duration)|\(restFlag)|\(chord.root)|\(chord.quality.rawValue)|\(ext)|\(chord.slashRoot ?? "")"
+    }
+
+    private func encodeChordSignatureMap(_ map: [UUID: String]) -> String {
+        map.map { "\($0.key.uuidString)=\($0.value)" }.sorted().joined(separator: "||")
+    }
+
+    private func parseChordSignatureMap(_ raw: String?) -> [UUID: String] {
+        guard let raw, !raw.isEmpty else { return [:] }
+        var map: [UUID: String] = [:]
+        let entries = raw.components(separatedBy: "||").filter { !$0.isEmpty }
+        for entry in entries {
+            let parts = entry.split(separator: "=", maxSplits: 1)
+            guard parts.count == 2, let id = UUID(uuidString: String(parts[0])) else { continue }
+            map[id] = String(parts[1])
+        }
+        return map
+    }
+
+    private func sectionIds(containing chordIds: Set<UUID>) -> Set<UUID> {
+        guard !chordIds.isEmpty else { return [] }
+        let sections = project.arrangementItems.compactMap { $0.sectionTemplate }
+        var ids = Set<UUID>()
+        for section in sections {
+            if section.chordEvents.contains(where: { chordIds.contains($0.id) }) {
+                ids.insert(section.id)
+            }
+        }
+        return ids
     }
 
     private var projectStudioSignature: String {

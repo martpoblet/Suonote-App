@@ -183,6 +183,50 @@ struct StudioGenerator {
         return didAppend
     }
 
+    static func replaceNotesForSections(
+        for project: Project,
+        style: StudioStyle,
+        modelContext: ModelContext,
+        sectionIds: Set<UUID>
+    ) -> Bool {
+        guard !sectionIds.isEmpty else { return false }
+        let timeline = buildTimeline(for: project)
+        let beatsPerBar = project.timeTop
+        let timeBottom = project.timeBottom
+        let diatonicMap = diatonicQualityMap(forKey: project.keyRoot, mode: project.keyMode)
+
+        let ranges = sectionRanges(for: project).filter { sectionIds.contains($0.sectionId) }
+        guard !ranges.isEmpty else { return false }
+
+        let chordsInRanges = timeline.chords.filter { span in
+            ranges.contains { span.startBeat >= $0.startBeat && span.startBeat < $0.endBeat }
+        }
+        guard !chordsInRanges.isEmpty else { return false }
+
+        var didChange = false
+
+        for track in project.studioTracks where !track.instrument.isAudio && track.instrument != .drums {
+            let removed = removeNotes(in: ranges, from: track, modelContext: modelContext)
+            didChange = removed || didChange
+
+            let notes = notesForInstrument(
+                track.instrument,
+                chords: chordsInRanges,
+                totalBars: timeline.totalBars,
+                beatsPerBar: beatsPerBar,
+                timeBottom: timeBottom,
+                style: style,
+                drumPreset: nil,
+                octaveShift: track.octaveShift,
+                keyRoot: project.keyRoot,
+                diatonicMap: diatonicMap
+            )
+            didChange = appendNotes(notes, to: track, modelContext: modelContext) || didChange
+        }
+
+        return didChange
+    }
+
     static func timeline(for project: Project) -> (chords: [ChordSpan], totalBars: Int) {
         buildTimeline(for: project)
     }
@@ -287,6 +331,50 @@ struct StudioGenerator {
             )
         }
         return (chords: adjusted, totalBars: totalBars)
+    }
+
+    private struct SectionRange {
+        let sectionId: UUID
+        let startBeat: Double
+        let endBeat: Double
+    }
+
+    private static func sectionRanges(for project: Project) -> [SectionRange] {
+        let orderedItems = project.arrangementItems.sorted { $0.orderIndex < $1.orderIndex }
+        var ranges: [SectionRange] = []
+        var sectionStartBar = 0
+        let beatsPerBar = project.timeTop
+
+        for item in orderedItems {
+            guard let section = item.sectionTemplate else { continue }
+            let sectionBars = max(1, section.bars)
+            let startBeat = Double(sectionStartBar * beatsPerBar)
+            let endBeat = Double((sectionStartBar + sectionBars) * beatsPerBar)
+            ranges.append(SectionRange(sectionId: section.id, startBeat: startBeat, endBeat: endBeat))
+            sectionStartBar += sectionBars
+        }
+        return ranges
+    }
+
+    private static func removeNotes(
+        in ranges: [SectionRange],
+        from track: StudioTrack,
+        modelContext: ModelContext
+    ) -> Bool {
+        guard !ranges.isEmpty else { return false }
+        var removed = false
+        let toRemove = track.notes.filter { note in
+            ranges.contains { note.startBeat >= $0.startBeat && note.startBeat < $0.endBeat }
+        }
+        guard !toRemove.isEmpty else { return false }
+        for note in toRemove {
+            modelContext.delete(note)
+        }
+        track.notes.removeAll { note in
+            toRemove.contains { $0.id == note.id }
+        }
+        removed = true
+        return removed
     }
 
     private static func appendNotes(
