@@ -66,7 +66,15 @@ struct SuonoteApp: App {
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([Project.self])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        let cloudKitContainerId = "iCloud.Suonote"
+        let modelConfiguration = ModelConfiguration(
+            "Cloud",
+            schema: schema,
+            isStoredInMemoryOnly: false,
+            allowsSave: true,
+            groupContainer: .none,
+            cloudKitDatabase: .private(cloudKitContainerId)
+        )
         
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])

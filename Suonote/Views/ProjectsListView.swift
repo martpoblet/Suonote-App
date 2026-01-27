@@ -291,6 +291,8 @@ struct ProjectsListView: View {
                         notesText: originalSection.notesText,
                         colorHex: originalSection.colorHex ?? SectionColor.sage.hex
                     )
+                    clonedSection.project = clonedProject
+                    clonedProject.sectionTemplates.append(clonedSection)
                     
                     // Clone chord events
                     for chordEvent in originalSection.chordEvents {
@@ -304,6 +306,7 @@ struct ProjectsListView: View {
                             extensions: chordEvent.extensions,
                             slashRoot: chordEvent.slashRoot
                         )
+                        clonedChord.sectionTemplate = clonedSection
                         clonedSection.chordEvents.append(clonedChord)
                     }
                     
@@ -312,6 +315,7 @@ struct ProjectsListView: View {
                         labelOverride: item.labelOverride
                     )
                     clonedArrangementItem.sectionTemplate = clonedSection
+                    clonedArrangementItem.project = clonedProject
                     clonedProject.arrangementItems.append(clonedArrangementItem)
                 }
             }
@@ -399,6 +403,7 @@ struct ModernFilterChip: View {
 }
 
 struct ModernProjectCard: View {
+    @Environment(\.modelContext) private var modelContext
     let project: Project
     
     var body: some View {
@@ -461,6 +466,8 @@ struct ModernProjectCard: View {
             }
             
             Spacer()
+            
+            SyncStatusIndicator()
         }
         .padding(16)
         .background(

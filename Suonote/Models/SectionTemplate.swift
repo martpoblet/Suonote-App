@@ -3,18 +3,17 @@ import SwiftData
 
 @Model
 final class SectionTemplate {
-    var id: UUID
-    var name: String
-    var bars: Int  // Keep for backward compatibility, but will be calculated dynamically
-    var patternPreset: PatternPreset
-    var lyricsText: String
-    var notesText: String
-    var colorHex: String?  // Color personalizado para la sección (opcional para migración)
+    var id: UUID = UUID()
+    var name: String = "New Section"
+    var bars: Int = 4  // Keep for backward compatibility, but will be calculated dynamically
+    var patternPreset: PatternPreset = PatternPreset.simple
+    var lyricsText: String = ""
+    var notesText: String = ""
+    var colorHex: String? = "#6B7B6B"  // Color personalizado para la sección (opcional para migración)
     
-    @Relationship(deleteRule: .cascade)
-    var chordEvents: [ChordEvent]
+    var chordEventsStore: [ChordEvent]? = []
     
-    var project: Project?
+    var projectStore: Project?
     
     // Computed property: Color from hex string
     var color: Color {
@@ -42,19 +41,35 @@ final class SectionTemplate {
     init(
         name: String = "New Section",
         bars: Int = 4,
-        patternPreset: PatternPreset = .simple,
+        patternPreset: PatternPreset = PatternPreset.simple,
         lyricsText: String = "",
         notesText: String = "",
         colorHex: String = "#6B7B6B"  // Default sage
     ) {
-        self.id = UUID()
         self.name = name
         self.bars = bars
         self.patternPreset = patternPreset
         self.lyricsText = lyricsText
         self.notesText = notesText
         self.colorHex = colorHex
-        self.chordEvents = []
+        self.chordEventsStore = []
+    }
+
+    var chordEvents: [ChordEvent] {
+        get { chordEventsStore ?? [] }
+        set {
+            chordEventsStore = newValue
+            for chord in newValue {
+                if chord.sectionTemplateStore !== self {
+                    chord.sectionTemplateStore = self
+                }
+            }
+        }
+    }
+
+    var project: Project? {
+        get { projectStore }
+        set { projectStore = newValue }
     }
 }
 

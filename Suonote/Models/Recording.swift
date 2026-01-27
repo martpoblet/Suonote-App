@@ -4,18 +4,18 @@ import SwiftUI
 
 @Model
 final class Recording {
-    var id: UUID
-    var name: String
-    var fileName: String
-    var duration: TimeInterval
-    var bpm: Int
-    var timeTop: Int
-    var timeBottom: Int
-    var countIn: Int
-    var createdAt: Date
-    var isFavorite: Bool
-    var linkedSectionId: UUID?
-    private var _recordingType: String?
+    var id: UUID = UUID()
+    var name: String = "Take"
+    var fileName: String = ""
+    var duration: TimeInterval = 0
+    var bpm: Int = 120
+    var timeTop: Int = 4
+    var timeBottom: Int = 4
+    var countIn: Int = 1
+    var createdAt: Date = Date()
+    var isFavorite: Bool = false
+    var linkedSectionId: UUID? = nil
+    private var _recordingType: String? = RecordingType.voice.rawValue
     
     // Audio Effects Settings
     var reverbEnabled: Bool = false
@@ -36,7 +36,7 @@ final class Recording {
     var compressionThreshold: Float = -20
     var compressionRatio: Float = 4.0
     
-    var project: Project?
+    var projectStore: Project?
     
     var recordingType: RecordingType {
         get {
@@ -50,6 +50,11 @@ final class Recording {
             _recordingType = newValue.rawValue
         }
     }
+
+    var project: Project? {
+        get { projectStore }
+        set { projectStore = newValue }
+    }
     
     init(
         name: String = "Take",
@@ -61,7 +66,6 @@ final class Recording {
         countIn: Int = 1,
         recordingType: RecordingType? = nil
     ) {
-        self.id = UUID()
         self.name = name
         self.fileName = fileName
         self.duration = duration

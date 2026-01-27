@@ -3,52 +3,47 @@ import SwiftData
 
 @Model
 final class Project {
-    var id: UUID
-    var title: String
-    var status: ProjectStatus
-    var tags: [String]
-    var keyRoot: String
-    var keyMode: KeyMode
-    var bpm: Int
-    var timeTop: Int
-    var timeBottom: Int
-    var createdAt: Date
-    var updatedAt: Date
+    var id: UUID = UUID()
+    var title: String = "New Idea"
+    var status: ProjectStatus = ProjectStatus.idea
+    var tags: [String] = []
+    var keyRoot: String = "C"
+    var keyMode: KeyMode = KeyMode.major
+    var bpm: Int = 120
+    var timeTop: Int = 4
+    var timeBottom: Int = 4
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
     
-    @Relationship(deleteRule: .cascade)
-    var sectionTemplates: [SectionTemplate]
+    var sectionTemplatesStore: [SectionTemplate]? = []
     
-    @Relationship(deleteRule: .cascade)
-    var arrangementItems: [ArrangementItem]
+    var arrangementItemsStore: [ArrangementItem]? = []
     
-    @Relationship(deleteRule: .cascade)
-    var recordings: [Recording]
+    var recordingsStore: [Recording]? = []
 
-    var studioStyleRaw: String?
-    var studioSyncSignature: String?
-    var studioLastChordIds: String?
-    var studioLastTotalBars: Int
-    var studioLastChordSignature: String?
-    var studioLastBpm: Int
-    var studioLastTimeTop: Int
-    var studioLastTimeBottom: Int
-    var studioLastKeyRoot: String?
-    var studioLastKeyModeRaw: String?
+    var studioStyleRaw: String? = nil
+    var studioSyncSignature: String? = nil
+    var studioLastChordIds: String? = nil
+    var studioLastTotalBars: Int = 0
+    var studioLastChordSignature: String? = nil
+    var studioLastBpm: Int = 120
+    var studioLastTimeTop: Int = 4
+    var studioLastTimeBottom: Int = 4
+    var studioLastKeyRoot: String? = "C"
+    var studioLastKeyModeRaw: String? = KeyMode.major.rawValue
     
-    @Relationship(deleteRule: .cascade)
-    var studioTracks: [StudioTrack]
+    var studioTracksStore: [StudioTrack]? = []
     
     init(
         title: String = "New Idea",
-        status: ProjectStatus = .idea,
+        status: ProjectStatus = ProjectStatus.idea,
         tags: [String] = [],
         keyRoot: String = "C",
-        keyMode: KeyMode = .major,
+        keyMode: KeyMode = KeyMode.major,
         bpm: Int = 120,
         timeTop: Int = 4,
         timeBottom: Int = 4
     ) {
-        self.id = UUID()
         self.title = title
         self.status = status
         self.tags = tags
@@ -59,9 +54,9 @@ final class Project {
         self.timeBottom = timeBottom
         self.createdAt = Date()
         self.updatedAt = Date()
-        self.sectionTemplates = []
-        self.arrangementItems = []
-        self.recordings = []
+        self.sectionTemplatesStore = []
+        self.arrangementItemsStore = []
+        self.recordingsStore = []
         self.studioStyleRaw = nil
         self.studioSyncSignature = nil
         self.studioLastChordIds = nil
@@ -72,7 +67,47 @@ final class Project {
         self.studioLastTimeBottom = timeBottom
         self.studioLastKeyRoot = keyRoot
         self.studioLastKeyModeRaw = keyMode.rawValue
-        self.studioTracks = []
+        self.studioTracksStore = []
+    }
+
+    var sectionTemplates: [SectionTemplate] {
+        get { sectionTemplatesStore ?? [] }
+        set {
+            sectionTemplatesStore = newValue
+            for section in newValue {
+                section.projectStore = self
+            }
+        }
+    }
+
+    var arrangementItems: [ArrangementItem] {
+        get { arrangementItemsStore ?? [] }
+        set {
+            arrangementItemsStore = newValue
+            for item in newValue {
+                item.projectStore = self
+            }
+        }
+    }
+
+    var recordings: [Recording] {
+        get { recordingsStore ?? [] }
+        set {
+            recordingsStore = newValue
+            for recording in newValue {
+                recording.projectStore = self
+            }
+        }
+    }
+
+    var studioTracks: [StudioTrack] {
+        get { studioTracksStore ?? [] }
+        set {
+            studioTracksStore = newValue
+            for track in newValue {
+                track.project = self
+            }
+        }
     }
     
     var recordingsCount: Int {

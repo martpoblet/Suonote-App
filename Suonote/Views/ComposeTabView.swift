@@ -2102,6 +2102,8 @@ struct SectionCreatorView: View {
             bars: 1,
             colorHex: selectedColor.hex
         )
+        section.project = project
+        project.sectionTemplates.append(section)
         let arrangementItem = ArrangementItem(orderIndex: project.arrangementItems.count)
         arrangementItem.sectionTemplate = section
         

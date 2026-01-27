@@ -3,18 +3,18 @@ import SwiftData
 
 @Model
 final class ChordEvent {
-    var id: UUID
-    var barIndex: Int
-    var beatOffset: Double  // Changed to Double to support fractional beats
-    var duration: Double    // Duration in beats (0.5 = half beat, 1 = full beat, 2 = two beats)
-    var isRest: Bool
-    var root: String
-    var quality: ChordQuality
-    var extensions: [String]
-    var slashRoot: String?
-    var display: String
+    var id: UUID = UUID()
+    var barIndex: Int = 0
+    var beatOffset: Double = 0  // Changed to Double to support fractional beats
+    var duration: Double = 1.0  // Duration in beats (0.5 = half beat, 1 = full beat, 2 = two beats)
+    var isRest: Bool = false
+    var root: String = "C"
+    var quality: ChordQuality = ChordQuality.major
+    var extensions: [String] = []
+    var slashRoot: String? = nil
+    var display: String = ""
     
-    var sectionTemplate: SectionTemplate?
+    var sectionTemplateStore: SectionTemplate?
     
     init(
         barIndex: Int,
@@ -22,11 +22,10 @@ final class ChordEvent {
         duration: Double = 1.0,
         isRest: Bool = false,
         root: String,
-        quality: ChordQuality = .major,
+        quality: ChordQuality = ChordQuality.major,
         extensions: [String] = [],
         slashRoot: String? = nil
     ) {
-        self.id = UUID()
         self.barIndex = barIndex
         self.beatOffset = beatOffset
         self.duration = duration
@@ -48,6 +47,11 @@ final class ChordEvent {
             }
             self.display = displayStr
         }
+    }
+
+    var sectionTemplate: SectionTemplate? {
+        get { sectionTemplateStore }
+        set { sectionTemplateStore = newValue }
     }
 }
 

@@ -67,9 +67,12 @@ struct ProjectDetailView: View {
             ToolbarItem(placement: .principal) {
                 VStack(spacing: 4) {
                     // Título del proyecto
-                    Text(project.title)
-                        .font(DesignSystem.Typography.headline)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
+                    HStack(spacing: 6) {
+                        Text(project.title)
+                            .font(DesignSystem.Typography.headline)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
+                        SyncStatusIndicator()
+                    }
                     
                     // Badge de estado (Idea, In Progress, etc.)
                     Button {

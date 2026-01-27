@@ -499,23 +499,22 @@ enum InstrumentVariant: String, Codable, CaseIterable {
 
 @Model
 final class StudioTrack {
-    var id: UUID
-    var name: String
-    var orderIndex: Int
-    private var _instrument: String
-    private var _drumPreset: String
-    private var _variant: String?
-    var octaveShift: Int
-    var isMuted: Bool
-    var isSolo: Bool
-    var volume: Float
-    var pan: Float
-    var createdAt: Date
-    var audioRecordingId: UUID?
-    var audioStartBeat: Double
+    var id: UUID = UUID()
+    var name: String = ""
+    var orderIndex: Int = 0
+    private var _instrument: String = StudioInstrument.piano.rawValue
+    private var _drumPreset: String = ""
+    private var _variant: String? = nil
+    var octaveShift: Int = 0
+    var isMuted: Bool = false
+    var isSolo: Bool = false
+    var volume: Float = 0.75
+    var pan: Float = 0.0
+    var createdAt: Date = Date()
+    var audioRecordingId: UUID? = nil
+    var audioStartBeat: Double = 0
 
-    @Relationship(deleteRule: .cascade)
-    var notes: [StudioNote]
+    var notesStore: [StudioNote]? = []
     var project: Project?
 
     var instrument: StudioInstrument {
@@ -553,7 +552,6 @@ final class StudioTrack {
         audioRecordingId: UUID? = nil,
         audioStartBeat: Double = 0
     ) {
-        self.id = UUID()
         self.name = name
         self.orderIndex = orderIndex
         self._instrument = instrument.rawValue
@@ -571,17 +569,27 @@ final class StudioTrack {
         self.createdAt = Date()
         self.audioRecordingId = audioRecordingId
         self.audioStartBeat = audioStartBeat
-        self.notes = []
+        self.notesStore = []
+    }
+
+    var notes: [StudioNote] {
+        get { notesStore ?? [] }
+        set {
+            notesStore = newValue
+            for note in newValue {
+                note.track = self
+            }
+        }
     }
 }
 
 @Model
 final class StudioNote {
-    var id: UUID
-    var startBeat: Double
-    var duration: Double
-    var pitch: Int
-    var velocity: Int
+    var id: UUID = UUID()
+    var startBeat: Double = 0
+    var duration: Double = 1
+    var pitch: Int = 60
+    var velocity: Int = 90
     var track: StudioTrack?
 
     init(
@@ -590,7 +598,6 @@ final class StudioNote {
         pitch: Int,
         velocity: Int = 90
     ) {
-        self.id = UUID()
         self.startBeat = startBeat
         self.duration = duration
         self.pitch = pitch

@@ -236,21 +236,38 @@ struct ImmersiveLyricsEditor: View {
     }
 }
 
+private struct LyricsTabViewPreview: View {
+    let container: ModelContainer
+    let project: Project
+
+    init() {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try! ModelContainer(for: Project.self, configurations: config)
+        let project = Project(title: "Test")
+        container.mainContext.insert(project)
+
+        let section = SectionTemplate(
+            name: "Verse 1",
+            lyricsText: "This is a sample lyric\nWith multiple lines\nTo show the preview"
+        )
+        section.project = project
+        project.sectionTemplates.append(section)
+
+        let item = ArrangementItem(orderIndex: 0)
+        item.sectionTemplate = section
+        item.project = project
+        project.arrangementItems.append(item)
+
+        self.container = container
+        self.project = project
+    }
+
+    var body: some View {
+        LyricsTabView(project: project)
+            .modelContainer(container)
+    }
+}
+
 #Preview {
-    let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(for: Project.self, configurations: config)
-    let project = Project(title: "Test")
-    container.mainContext.insert(project)
-    
-    let section = SectionTemplate(name: "Verse 1", lyricsText: "This is a sample lyric\nWith multiple lines\nTo show the preview")
-    section.project = project
-    project.sectionTemplates.append(section)
-    
-    let item = ArrangementItem(orderIndex: 0)
-    item.sectionTemplate = section
-    item.project = project
-    project.arrangementItems.append(item)
-    
-    return LyricsTabView(project: project)
-        .modelContainer(container)
-        }
+    LyricsTabViewPreview()
+}
