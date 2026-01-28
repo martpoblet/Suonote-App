@@ -138,7 +138,7 @@ struct DesignSystem {
     struct Layout {
         static let projectTabBarHeight: CGFloat = 60
         static let projectTabBarBottomInset: CGFloat = 2
-        static let projectTabBarGap: CGFloat = 8
+        static let projectTabBarGap: CGFloat = 5
         static let projectTabBarClearance: CGFloat = 0
     }
 

@@ -222,7 +222,11 @@ struct ProjectTabContainer<Content: View>: View {
             content
         }
         .safeAreaInset(edge: .bottom) {
-            Color.clear.frame(height: 96)
+            Color.clear.frame(
+                height: DesignSystem.Layout.projectTabBarHeight
+                    + DesignSystem.Layout.projectTabBarGap
+                    + DesignSystem.Layout.projectTabBarBottomInset
+            )
         }
     }
 }

@@ -19,6 +19,7 @@ struct StudioTabView: View {
     @State private var lastChordIds: Set<UUID> = []
     @State private var lastTotalBars = 0
     @StateObject private var playback = StudioPlaybackEngine()
+    @State private var showingNoSectionsAlert = false
 
     private var sortedTracks: [StudioTrack] {
         project.studioTracks.sorted { $0.orderIndex < $1.orderIndex }
@@ -39,6 +40,10 @@ struct StudioTabView: View {
 
     private var availableInstruments: [StudioInstrument] {
         StudioInstrument.allCases.filter { !$0.isAudio }
+    }
+
+    private var hasSections: Bool {
+        project.arrangementItems.contains { $0.sectionTemplate != nil }
     }
 
     private var totalBars: Int {
@@ -106,7 +111,7 @@ struct StudioTabView: View {
                 }
             } else {
                 ScrollView {
-                    LazyVStack(spacing: DesignSystem.Spacing.lg) {
+                    LazyVStack(spacing: DesignSystem.Spacing.xs) {
                         StudioTrackList(
                             tracks: sortedTracks,
                             selectedTrackId: $selectedTrackId,
@@ -127,31 +132,34 @@ struct StudioTabView: View {
                     .padding(.bottom, DesignSystem.Layout.projectTabBarClearance)
                 }
                 
-                // Fixed timeline at bottom
-                VStack(spacing: 0) {
-                    Divider().overlay(DesignSystem.Colors.border)
-                    
-                    StudioTimelineView(
-                        segments: timelineSegments,
-                        beatsPerBar: project.timeTop,
-                        totalBars: totalBars,
-                        currentBeat: playback.currentBeat,
-                        isPlaying: playback.isPlaying,
-                        accentColor: project.studioStyle?.accentColor ?? SectionColor.purple.color,
-                        onPlay: handlePlay,
-                        onPause: playback.pause,
-                        onStop: handleStop,
-                        onSeek: { beat in
-                            playback.seek(to: beat)
-                        }
-                    )
-                    .padding(DesignSystem.Spacing.md)
+                if hasSections {
+                    // Fixed timeline at bottom
+                    VStack(spacing: 0) {                        
+                        StudioTimelineView(
+                            segments: timelineSegments,
+                            beatsPerBar: project.timeTop,
+                            totalBars: totalBars,
+                            currentBeat: playback.currentBeat,
+                            isPlaying: playback.isPlaying,
+                            accentColor: project.studioStyle?.accentColor ?? SectionColor.purple.color,
+                            onPlay: handlePlay,
+                            onPause: playback.pause,
+                            onStop: handleStop,
+                            onSeek: { beat in
+                                playback.seek(to: beat)
+                            }
+                        )
+                        .padding(.horizontal, DesignSystem.Spacing.md)
+                        .padding(.vertical, DesignSystem.Spacing.sm)
+                    }
+                    .padding(.bottom, DesignSystem.Layout.projectTabBarClearance + 5)
                 }
-                .background(
-                    DesignSystem.Colors.backgroundSecondary
-                )
-                .padding(.bottom, DesignSystem.Layout.projectTabBarClearance)
             }
+        }
+        .alert("Add sections first", isPresented: $showingNoSectionsAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Create at least one section in Compose to add instruments and play the Studio.")
         }
         .onAppear {
             if project.studioStyle == nil {
@@ -169,6 +177,11 @@ struct StudioTabView: View {
         }
         .onChange(of: projectStudioSignature) { _, newSignature in
             handleProjectChange(newSignature: newSignature)
+        }
+        .onChange(of: project.arrangementItems.count) { _, newValue in
+            if newValue == 0 {
+                playback.stop(resetPosition: true)
+            }
         }
         .onChange(of: showingStylePicker) { _, isShowing in
             guard !isShowing else { return }
@@ -297,6 +310,7 @@ struct StudioTabView: View {
                 )
             }
             .animatedPress()
+            .disabled(!hasSections)
         }
     }
 
@@ -311,6 +325,10 @@ struct StudioTabView: View {
     }
 
     private func promptAddTrack() {
+        guard hasSections else {
+            showingNoSectionsAlert = true
+            return
+        }
         guard project.studioStyle != nil else {
             pendingAddTrackAfterStyle = true
             showingStylePicker = true
@@ -320,6 +338,7 @@ struct StudioTabView: View {
     }
 
     private func addInstrumentTrack(_ instrument: StudioInstrument) {
+        guard hasSections else { return }
         guard let style = project.studioStyle else { return }
         guard !existingInstrumentSet.contains(instrument) else { return }
 
@@ -401,6 +420,10 @@ struct StudioTabView: View {
     }
 
     private func handlePlay() {
+        guard hasSections else {
+            showingNoSectionsAlert = true
+            return
+        }
         if needsRebuild {
             playback.rebuildSequence(project: project)
             needsRebuild = false
@@ -714,62 +737,27 @@ struct StudioTimelineView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
-            HStack {
+            HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(currentSection?.label ?? "Timeline")
-                        .font(DesignSystem.Typography.headline)
+                        .font(DesignSystem.Typography.title3)
                         .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    Text(timeLabel)
-                        .font(DesignSystem.Typography.caption)
+                    Text(timeLabel.uppercased())
+                        .font(DesignSystem.Typography.nano)
                         .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        .tracking(0.6)
                 }
 
                 Spacer()
 
-                HStack(spacing: 12) {
-                    Button {
-                        onPlay()
-                    } label: {
-                        Image(systemName: "play.fill")
-                            .font(DesignSystem.Typography.title3)
-                            .foregroundStyle(DesignSystem.Colors.textPrimary.opacity(0.7))
-                            .padding(8)
-                            .background(
-                                Circle()
-                                    .fill(accentColor)
-                                    .overlay(
-                                        Circle()
-                                            .stroke(accentColor.opacity(0.6), lineWidth: 1)
-                                    )
-                            )
-                    }
-                    .disabled(isPlaying)
-
-                    Button {
-                        onPause()
-                    } label: {
-                        Image(systemName: "pause.fill")
-                            .font(DesignSystem.Typography.title3)
-                            .foregroundStyle(DesignSystem.Colors.textPrimary)
-                            .padding(8)
-                            .background(
-                                Circle()
-                                    .fill(DesignSystem.Colors.surfaceSecondary)
-                                    .overlay(
-                                        Circle()
-                                            .stroke(DesignSystem.Colors.border, lineWidth: 1)
-                                    )
-                            )
-                    }
-                    .disabled(!isPlaying)
-
+                HStack(spacing: 8) {
                     Button {
                         onStop()
                     } label: {
                         Image(systemName: "stop.fill")
-                            .font(DesignSystem.Typography.title3)
+                            .font(DesignSystem.Typography.caption)
                             .foregroundStyle(DesignSystem.Colors.textPrimary)
-                            .padding(8)
+                            .frame(width: 28, height: 28)
                             .background(
                                 Circle()
                                     .fill(DesignSystem.Colors.surfaceSecondary)
@@ -778,46 +766,69 @@ struct StudioTimelineView: View {
                                             .stroke(DesignSystem.Colors.border, lineWidth: 1)
                                     )
                             )
+                    }
+
+                    Button {
+                        isPlaying ? onPause() : onPlay()
+                    } label: {
+                        Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                            .font(DesignSystem.Typography.title3)
+                            .foregroundStyle(DesignSystem.Colors.textWhite)
+                            .frame(width: 40, height: 40)
+                            .background(
+                                Circle()
+                                    .fill(accentColor)
+                            )
+                            .shadow(color: accentColor.opacity(0.25), radius: 8, x: 0, y: 4)
                     }
                 }
             }
 
             GeometryReader { geo in
                 let barWidth = geo.size.width / CGFloat(max(1, totalBars))
-                let playheadX = CGFloat(currentBeat / Double(beatsPerBar)) * barWidth
+                let progressX = CGFloat(currentBeat / Double(beatsPerBar)) * barWidth
 
-                ZStack(alignment: .topLeading) {
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(DesignSystem.Colors.backgroundTertiary)
+                        .frame(height: 18)
+                        .overlay(
+                            Capsule()
+                                .stroke(DesignSystem.Colors.borderSubtle, lineWidth: 1)
+                        )
+
                     ForEach(segments) { segment in
                         let width = CGFloat(segment.bars) * barWidth
                         let x = CGFloat(segment.startBar) * barWidth
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(segment.color.opacity(0.5))
-                            .frame(width: width, height: 40)
+                        Capsule()
+                            .fill(segment.color.opacity(0.25))
+                            .frame(width: width, height: 18)
                             .overlay(
-                                Text(segment.label)
-                                    .font(DesignSystem.Typography.caption2)
-                                    .foregroundStyle(DesignSystem.Colors.textPrimary)
-                                    .lineLimit(1)
-                                    .padding(.horizontal, 6),
-                                alignment: .center
+                                Capsule()
+                                    .stroke(segment.color.opacity(0.5), lineWidth: 1)
                             )
                             .offset(x: x)
                     }
 
-                    Rectangle()
+                    Capsule()
                         .fill(accentColor)
-                        .frame(width: 2, height: 44)
-                        .offset(x: max(0, min(playheadX, geo.size.width - 2)))
+                        .frame(width: max(2, progressX), height: 18)
 
-                    Circle()
-                        .fill(accentColor)
-                        .frame(width: 10, height: 10)
-                        .offset(
-                            x: max(0, min(playheadX - 4, geo.size.width - 10)),
-                            y: -5
-                        )
+                    ZStack {
+                        Circle()
+                            .fill(DesignSystem.Colors.backgroundSecondary)
+                            .frame(width: 18, height: 18)
+                            .shadow(color: accentColor.opacity(0.25), radius: 4, x: 0, y: 2)
+                        Circle()
+                            .stroke(accentColor, lineWidth: 2)
+                            .frame(width: 18, height: 18)
+                        Circle()
+                            .fill(accentColor)
+                            .frame(width: 4, height: 4)
+                    }
+                    .offset(x: max(0, min(progressX - 9, geo.size.width - 18)))
                 }
-                .contentShape(Rectangle())
+                .contentShape(Rectangle().inset(by: -12))
                 .gesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { value in
@@ -827,17 +838,15 @@ struct StudioTimelineView: View {
                         }
                 )
             }
-            .frame(height: 44)
-            .padding(.top, DesignSystem.Spacing.sm)
+            .frame(height: 20)
         }
-        .padding(.top, DesignSystem.Spacing.xs)
         .padding(14)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: 18)
                 .fill(DesignSystem.Colors.surfaceSecondary)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(accentColor.opacity(0.4), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 18)
+                        .stroke(accentColor.opacity(0.35), lineWidth: 1)
                 )
         )
     }
@@ -913,10 +922,12 @@ struct StudioTrackEditorView: View {
                     editorContent
                 }
                 .padding(DesignSystem.Spacing.lg)
-                .padding(.bottom, 120)
+                .padding(.bottom, 80)
             }
 
-            playbackHud
+            if !project.arrangementItems.isEmpty {
+                playbackHud
+            }
         }
         .background(DesignSystem.Colors.background.ignoresSafeArea())
         .sheet(isPresented: $showingRegenerateOptions) {
@@ -1210,8 +1221,6 @@ struct StudioTrackEditorView: View {
 
     private var playbackHud: some View {
         VStack(spacing: 0) {
-            Divider().overlay(DesignSystem.Colors.border)
-
             StudioTimelineView(
                 segments: timelineSegments,
                 beatsPerBar: beatsPerBar,
@@ -1226,11 +1235,9 @@ struct StudioTrackEditorView: View {
                     playback.seek(to: beat)
                 }
             )
-            .padding(DesignSystem.Spacing.md)
+            .padding(.horizontal, DesignSystem.Spacing.md)
+            .padding(.vertical, DesignSystem.Spacing.sm)
         }
-        .background(
-            DesignSystem.Colors.backgroundSecondary
-        )
     }
 }
 

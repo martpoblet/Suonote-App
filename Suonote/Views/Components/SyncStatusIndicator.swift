@@ -6,6 +6,7 @@ struct SyncStatusIndicator: View {
     @State private var showDetails = false
     @State private var isAnimating = false
     @State private var rotation: Double = 0
+    @State private var spinTask: Task<Void, Never>?
     @AppStorage("sync_lastSuccess") private var lastSyncTime: Double = 0
     @AppStorage("sync_pendingSince") private var pendingSince: Double = 0
 
@@ -36,14 +37,12 @@ struct SyncStatusIndicator: View {
                     }
                     .frame(width: 16, height: 16)
 
-                    if modelContext.hasChanges {
-                        Text("Sync…")
-                            .font(DesignSystem.Typography.caption2)
-                            .foregroundStyle(DesignSystem.Colors.textSecondary)
-                            .fixedSize()
-                            .layoutPriority(1)
-                            .transition(.opacity.combined(with: .move(edge: .trailing)))
-                    }
+                    Text(modelContext.hasChanges ? "Syncing…" : "Synced")
+                        .font(DesignSystem.Typography.caption2)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        .fixedSize()
+                        .layoutPriority(1)
+                        .transition(.opacity.combined(with: .move(edge: .trailing)))
                 }
                 .contentShape(Rectangle())
                 .accessibilityLabel(modelContext.hasChanges ? "Syncing" : "Synced")
@@ -68,13 +67,23 @@ struct SyncStatusIndicator: View {
     }
 
     private func updateAnimationState(isSyncing: Bool) {
+        spinTask?.cancel()
+        spinTask = nil
+
         isAnimating = isSyncing
         if isSyncing {
             if pendingSince == 0 {
                 pendingSince = Date().timeIntervalSince1970
             }
             rotation = 0
-            withAnimation(.linear(duration: 1.0).repeatForever(autoreverses: false)) { rotation = 360 }
+            spinTask = Task { @MainActor in
+                while !Task.isCancelled {
+                    withAnimation(.linear(duration: 1.0)) {
+                        rotation += 360
+                    }
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                }
+            }
         } else {
             pendingSince = 0
             lastSyncTime = Date().timeIntervalSince1970
@@ -190,55 +199,6 @@ private struct SyncDetailsSheet: View {
     }
 }
 
-struct CloudStatusSummary: View {
-    @Environment(\.modelContext) private var modelContext
-    @AppStorage("sync_lastSuccess") private var lastSyncTime: Double = 0
-    @AppStorage("sync_pendingSince") private var pendingSince: Double = 0
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: iconName)
-                .font(DesignSystem.Typography.caption2)
-                .foregroundStyle(statusColor)
-            Text(statusText)
-                .font(DesignSystem.Typography.caption2)
-                .foregroundStyle(DesignSystem.Colors.textSecondary)
-        }
-    }
-
-    private var iconName: String {
-        modelContext.hasChanges ? "arrow.triangle.2.circlepath" : "icloud"
-    }
-
-    private var statusText: String {
-        if modelContext.hasChanges {
-            if pendingSince > 0 && Date().timeIntervalSince1970 - pendingSince > 120 {
-                return "Cloud paused (quota)"
-            }
-            return "Syncing to iCloud…"
-        }
-        if lastSyncTime > 0 {
-            return "Synced \(relativeDateString(from: Date(timeIntervalSince1970: lastSyncTime)))"
-        }
-        return "Sync pending"
-    }
-
-    private var statusColor: Color {
-        if modelContext.hasChanges {
-            if pendingSince > 0 && Date().timeIntervalSince1970 - pendingSince > 120 {
-                return DesignSystem.Colors.warning
-            }
-            return DesignSystem.Colors.warning
-        }
-        return DesignSystem.Colors.success
-    }
-
-    private func relativeDateString(from date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        return formatter.localizedString(for: date, relativeTo: Date())
-    }
-}
 
 #Preview {
     SyncStatusIndicator()

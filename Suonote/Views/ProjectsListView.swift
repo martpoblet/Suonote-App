@@ -149,9 +149,12 @@ struct ProjectsListView: View {
                 .foregroundStyle(DesignSystem.Colors.textPrimary)
             
             if !allProjects.isEmpty {
-                Text("\(allProjects.count) project\(allProjects.count == 1 ? "" : "s")")
-                    .font(DesignSystem.Typography.callout)
-                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+                HStack(spacing: 8) {
+                    Text("\(allProjects.count) project\(allProjects.count == 1 ? "" : "s")")
+                        .font(DesignSystem.Typography.callout)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    SyncStatusIndicator()
+                }
             }
             
             // Search bar con glassmorphism
@@ -467,7 +470,6 @@ struct ModernProjectCard: View {
             
             Spacer()
             
-            SyncStatusIndicator()
         }
         .padding(16)
         .background(
