@@ -54,6 +54,7 @@ struct StudioGenerator {
                 timeBottom: project.timeBottom,
                 style: style,
                 drumPreset: instrument == .drums ? track.drumPreset : nil,
+                drumVariant: track.variant,
                 octaveShift: track.octaveShift,
                 keyRoot: project.keyRoot,
                 diatonicMap: diatonicMap
@@ -107,6 +108,7 @@ struct StudioGenerator {
                 timeBottom: project.timeBottom,
                 style: style,
                 drumPreset: activeDrumPreset,
+                drumVariant: track.variant,
                 octaveShift: track.octaveShift,
                 keyRoot: project.keyRoot,
                 diatonicMap: diatonicMap
@@ -152,7 +154,8 @@ struct StudioGenerator {
                     beatsPerBar: beatsPerBar,
                     timeBottom: timeBottom,
                     style: style,
-                    preset: preset
+                    preset: preset,
+                    variant: track.variant
                 )
                 let newNotes = drumNotes.filter { $0.startBeat >= previousTotalBeats }
                 didAppend = appendNotes(newNotes, to: track, modelContext: modelContext) || didAppend
@@ -168,6 +171,7 @@ struct StudioGenerator {
                 timeBottom: timeBottom,
                 style: style,
                 drumPreset: nil,
+                drumVariant: nil,
                 octaveShift: track.octaveShift,
                 keyRoot: project.keyRoot,
                 diatonicMap: diatonicMap
@@ -217,6 +221,7 @@ struct StudioGenerator {
                 timeBottom: timeBottom,
                 style: style,
                 drumPreset: nil,
+                drumVariant: nil,
                 octaveShift: track.octaveShift,
                 keyRoot: project.keyRoot,
                 diatonicMap: diatonicMap
@@ -236,6 +241,7 @@ struct StudioGenerator {
         project: Project,
         style: StudioStyle,
         drumPreset: DrumPreset? = nil,
+        drumVariant: InstrumentVariant? = nil,
         octaveShift: Int = 0,
         intensity: Double = 0.5,
         complexity: Double = 0.5
@@ -260,6 +266,7 @@ struct StudioGenerator {
             timeBottom: project.timeBottom,
             style: style,
             drumPreset: resolvedPreset,
+            drumVariant: drumVariant,
             octaveShift: octaveShift,
             keyRoot: project.keyRoot,
             diatonicMap: diatonicMap,
@@ -274,6 +281,7 @@ struct StudioGenerator {
         timeBottom: Int,
         style: StudioStyle,
         preset: DrumPreset?,
+        variant: InstrumentVariant? = nil,
         intensity: Double = 0.5,
         complexity: Double = 0.5
     ) -> [StudioNote] {
@@ -288,6 +296,7 @@ struct StudioGenerator {
             timeBottom: timeBottom,
             style: style,
             preset: resolvedPreset,
+            variant: variant,
             intensity: intensity,
             complexity: complexity
         )
@@ -408,6 +417,7 @@ struct StudioGenerator {
         timeBottom: Int,
         style: StudioStyle,
         drumPreset: DrumPreset?,
+        drumVariant: InstrumentVariant?,
         octaveShift: Int,
         keyRoot: String,
         diatonicMap: [String: ChordQuality],
@@ -426,6 +436,7 @@ struct StudioGenerator {
                     beatsPerBar: beatsPerBar,
                     timeBottom: timeBottom
                 ),
+                variant: drumVariant,
                 intensity: intensity,
                 complexity: complexity
             )
@@ -503,6 +514,11 @@ struct StudioGenerator {
             pitches = Array(Set(pitches)).sorted()
             pitches = fitPitches(pitches, in: range)
             
+            // Woodwinds are monophonic: pick a single melodic pitch
+            if instrument == .woodwinds, let pitch = pitches.last {
+                pitches = [pitch]
+            }
+
             // Simplify guitar voicings - use fewer notes for clearer sound
             if instrument == .guitar {
                 // Complexity affects how many notes we use
@@ -675,6 +691,7 @@ struct StudioGenerator {
         timeBottom: Int,
         style: StudioStyle,
         preset: DrumPreset,
+        variant: InstrumentVariant?,
         intensity: Double = 0.5,
         complexity: Double = 0.5
     ) -> [StudioNote] {
@@ -694,8 +711,16 @@ struct StudioGenerator {
             pattern = DrumPattern(
                 kick: pattern.kick.filter { $0 % stepsPerBeat == 0 },
                 snare: Array(pattern.snare.prefix(1)),
-                hat: pattern.hat.filter { $0 % stepsPerBeat == 0 },
-                clap: []
+                hatClosed: pattern.hatClosed.filter { $0 % stepsPerBeat == 0 },
+                hatOpen: [],
+                clap: [],
+                rim: [],
+                tomLow: [],
+                tomMid: [],
+                tomHigh: [],
+                ride: [],
+                crash: [],
+                perc: []
             )
         } else if density > 0.75 {
             let offbeatSteps = stepsFromOffsets(
@@ -703,13 +728,21 @@ struct StudioGenerator {
                 stepsPerBeat: stepsPerBeat,
                 stepsPerBar: stepsPerBar
             )
-            let extraHat = pattern.hat + offbeatSteps
+            let extraHat = pattern.hatClosed + offbeatSteps
             let extraSnare = density > 0.9 ? (pattern.snare + offbeatSteps) : pattern.snare
             pattern = DrumPattern(
                 kick: pattern.kick,
                 snare: Array(Set(extraSnare)).sorted(),
-                hat: Array(Set(extraHat)).sorted(),
-                clap: pattern.clap
+                hatClosed: Array(Set(extraHat)).sorted(),
+                hatOpen: pattern.hatOpen,
+                clap: pattern.clap,
+                rim: pattern.rim,
+                tomLow: pattern.tomLow,
+                tomMid: pattern.tomMid,
+                tomHigh: pattern.tomHigh,
+                ride: pattern.ride,
+                crash: pattern.crash,
+                perc: pattern.perc
             )
         }
 
@@ -717,11 +750,108 @@ struct StudioGenerator {
             pulseOffsets: meter.pulseOffsets,
             stepsPerBeat: stepsPerBeat
         )
+        let beatSteps = stepsFromOffsets(
+            meter.beatOffsets,
+            stepsPerBeat: stepsPerBeat,
+            stepsPerBar: stepsPerBar
+        )
+        let offbeatSteps = stepsFromOffsets(
+            meter.offbeatOffsets,
+            stepsPerBeat: stepsPerBeat,
+            stepsPerBar: stepsPerBar
+        )
+        let backbeatSteps = stepsFromOffsets(
+            meter.backbeatOffsets,
+            stepsPerBeat: stepsPerBeat,
+            stepsPerBar: stepsPerBar
+        )
+        let isLatinPreset = preset == .latin || preset == .bossa
         var notes: [StudioNote] = []
         let kickVelocityBase = style == .rock ? 118 : 112
         let snareVelocityBase = style == .rock ? 108 : 102
         let hatVelocityBase = style == .ambient ? 62 : 72
         let clapVelocityBase = style == .edm ? 98 : 90
+        let rimVelocityBase = style == .hiphop ? 92 : 84
+        let tomVelocityBase = style == .rock ? 108 : 96
+        let rideVelocityBase = style == .jazz ? 76 : 72
+        let crashVelocityBase = style == .rock ? 114 : 106
+        let percVelocityBase = isLatinPreset ? 96 : 88
+        let pitchMap = SoundFontManager.drumPitchMap(for: variant)
+        var openHatSteps = pattern.hatOpen
+        if intensity > 0.55 {
+            openHatSteps.append(contentsOf: offbeatSteps)
+        }
+        if density > 0.8 {
+            openHatSteps.append(contentsOf: backbeatSteps)
+        }
+        openHatSteps = Array(Set(openHatSteps)).sorted()
+
+        var rideSteps: [Int] = []
+        switch style {
+        case .jazz:
+            if density > 0.45 {
+                rideSteps = Array(Set(beatSteps + offbeatSteps)).sorted()
+            }
+        case .rock, .funk:
+            if density > 0.6 {
+                rideSteps = beatSteps
+            }
+        case .edm, .pop:
+            if density > 0.7 {
+                rideSteps = offbeatSteps
+            }
+        case .lofi, .hiphop, .ambient:
+            rideSteps = []
+        }
+        if isLatinPreset, density > 0.55, rideSteps.isEmpty {
+            rideSteps = beatSteps
+        }
+
+        var crashSteps: [Int] = []
+        if intensity > 0.45 || style == .rock || style == .edm {
+            crashSteps = [0]
+            if density > 0.85 {
+                crashSteps.append(contentsOf: backbeatSteps)
+            }
+        }
+        crashSteps = Array(Set(crashSteps)).sorted()
+
+        var rimSteps: [Int] = []
+        if style == .hiphop || style == .lofi {
+            rimSteps = density < 0.6 ? offbeatSteps : backbeatSteps
+        }
+
+        var percSteps: [Int] = []
+        if isLatinPreset {
+            percSteps = offbeatSteps
+        } else if style == .funk && density > 0.5 {
+            percSteps = offbeatSteps
+        } else if style == .edm && density > 0.8 {
+            percSteps = beatSteps
+        }
+
+        var tomLowSteps: [Int] = []
+        var tomMidSteps: [Int] = []
+        var tomHighSteps: [Int] = []
+        if density > 0.7 || intensity > 0.7 {
+            let fillStart = max(stepsPerBar - stepsPerBeat, 0)
+            let fillSteps = (0..<min(stepsPerBeat, 3)).map { fillStart + $0 }.filter { $0 < stepsPerBar }
+            if let first = fillSteps.first {
+                tomLowSteps.append(first)
+            }
+            if fillSteps.count > 1 {
+                tomMidSteps.append(fillSteps[1])
+            }
+            if fillSteps.count > 2 {
+                tomHighSteps.append(fillSteps[2])
+            }
+        }
+        if style == .rock && density > 0.6 {
+            tomMidSteps.append(contentsOf: backbeatSteps.filter { $0 % stepsPerBeat == 0 })
+        }
+        tomLowSteps = Array(Set(tomLowSteps)).sorted()
+        tomMidSteps = Array(Set(tomMidSteps)).sorted()
+        tomHighSteps = Array(Set(tomHighSteps)).sorted()
 
         for bar in 0..<totalBars {
             let barStart = Double(bar * beatsPerBar)
@@ -730,7 +860,7 @@ struct StudioGenerator {
                     StudioNote(
                         startBeat: barStart + Double(step) * stepLength,
                         duration: stepLength,
-                        pitch: 36,
+                        pitch: pitchMap.kick,
                         velocity: scaledVelocity(
                             base: step == 0 ? kickVelocityBase : kickVelocityBase - 8,
                             intensity: intensity,
@@ -744,7 +874,7 @@ struct StudioGenerator {
                     StudioNote(
                         startBeat: barStart + Double(step) * stepLength,
                         duration: stepLength,
-                        pitch: 38,
+                        pitch: pitchMap.snare,
                         velocity: scaledVelocity(
                             base: snareVelocityBase,
                             intensity: intensity,
@@ -753,7 +883,22 @@ struct StudioGenerator {
                     )
                 )
             }
-            for step in pattern.hat {
+            for step in pattern.rim + rimSteps {
+                notes.append(
+                    StudioNote(
+                        startBeat: barStart + Double(step) * stepLength,
+                        duration: stepLength,
+                        pitch: pitchMap.rim,
+                        velocity: scaledVelocity(
+                            base: rimVelocityBase,
+                            intensity: intensity,
+                            range: 16
+                        )
+                    )
+                )
+            }
+            let closedHatSteps = pattern.hatClosed.filter { !openHatSteps.contains($0) }
+            for step in closedHatSteps {
                 let velocity = accentSteps.contains(step)
                     ? scaledVelocity(base: hatVelocityBase + 8, intensity: intensity, range: 18)
                     : scaledVelocity(base: hatVelocityBase, intensity: intensity, range: 16)
@@ -761,8 +906,92 @@ struct StudioGenerator {
                     StudioNote(
                         startBeat: barStart + Double(step) * stepLength,
                         duration: stepLength,
-                        pitch: 42,
+                        pitch: pitchMap.hatClosed,
                         velocity: velocity
+                    )
+                )
+            }
+            for step in openHatSteps {
+                notes.append(
+                    StudioNote(
+                        startBeat: barStart + Double(step) * stepLength,
+                        duration: stepLength,
+                        pitch: pitchMap.hatOpen,
+                        velocity: scaledVelocity(
+                            base: hatVelocityBase + 10,
+                            intensity: intensity,
+                            range: 16
+                        )
+                    )
+                )
+            }
+            for step in rideSteps {
+                notes.append(
+                    StudioNote(
+                        startBeat: barStart + Double(step) * stepLength,
+                        duration: stepLength,
+                        pitch: pitchMap.ride,
+                        velocity: scaledVelocity(
+                            base: rideVelocityBase,
+                            intensity: intensity,
+                            range: 14
+                        )
+                    )
+                )
+            }
+            for step in crashSteps {
+                notes.append(
+                    StudioNote(
+                        startBeat: barStart + Double(step) * stepLength,
+                        duration: stepLength,
+                        pitch: pitchMap.crash,
+                        velocity: scaledVelocity(
+                            base: crashVelocityBase,
+                            intensity: intensity,
+                            range: 20
+                        )
+                    )
+                )
+            }
+            for step in tomLowSteps {
+                notes.append(
+                    StudioNote(
+                        startBeat: barStart + Double(step) * stepLength,
+                        duration: stepLength,
+                        pitch: pitchMap.tomLow,
+                        velocity: scaledVelocity(
+                            base: tomVelocityBase - 6,
+                            intensity: intensity,
+                            range: 18
+                        )
+                    )
+                )
+            }
+            for step in tomMidSteps {
+                notes.append(
+                    StudioNote(
+                        startBeat: barStart + Double(step) * stepLength,
+                        duration: stepLength,
+                        pitch: pitchMap.tomMid,
+                        velocity: scaledVelocity(
+                            base: tomVelocityBase,
+                            intensity: intensity,
+                            range: 18
+                        )
+                    )
+                )
+            }
+            for step in tomHighSteps {
+                notes.append(
+                    StudioNote(
+                        startBeat: barStart + Double(step) * stepLength,
+                        duration: stepLength,
+                        pitch: pitchMap.tomHigh,
+                        velocity: scaledVelocity(
+                            base: tomVelocityBase + 4,
+                            intensity: intensity,
+                            range: 18
+                        )
                     )
                 )
             }
@@ -771,11 +1000,25 @@ struct StudioGenerator {
                     StudioNote(
                         startBeat: barStart + Double(step) * stepLength,
                         duration: stepLength,
-                        pitch: 39,
+                        pitch: pitchMap.clap,
                         velocity: scaledVelocity(
                             base: clapVelocityBase,
                             intensity: intensity,
                             range: 18
+                        )
+                    )
+                )
+            }
+            for step in percSteps {
+                notes.append(
+                    StudioNote(
+                        startBeat: barStart + Double(step) * stepLength,
+                        duration: stepLength,
+                        pitch: pitchMap.perc,
+                        velocity: scaledVelocity(
+                            base: percVelocityBase,
+                            intensity: intensity,
+                            range: 14
                         )
                     )
                 )
@@ -1432,8 +1675,16 @@ struct StudioGenerator {
     private struct DrumPattern {
         let kick: [Int]
         let snare: [Int]
-        let hat: [Int]
+        let hatClosed: [Int]
+        let hatOpen: [Int]
         let clap: [Int]
+        let rim: [Int]
+        let tomLow: [Int]
+        let tomMid: [Int]
+        let tomHigh: [Int]
+        let ride: [Int]
+        let crash: [Int]
+        let perc: [Int]
     }
 
     private struct MeterPattern {
@@ -1632,8 +1883,16 @@ struct StudioGenerator {
         return DrumPattern(
             kick: Array(Set(kickSteps)).sorted(),
             snare: Array(Set(snareSteps)).sorted(),
-            hat: Array(Set(hatSteps)).sorted(),
-            clap: Array(Set(clapSteps)).sorted()
+            hatClosed: Array(Set(hatSteps)).sorted(),
+            hatOpen: [],
+            clap: Array(Set(clapSteps)).sorted(),
+            rim: [],
+            tomLow: [],
+            tomMid: [],
+            tomHigh: [],
+            ride: [],
+            crash: [],
+            perc: []
         )
     }
 
