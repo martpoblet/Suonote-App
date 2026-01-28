@@ -2,6 +2,11 @@ import SwiftUI
 import SwiftData
 
 struct SyncStatusIndicator: View {
+    enum Style {
+        case full
+        case minimal
+    }
+
     @Environment(\.modelContext) private var modelContext
     @State private var showDetails = false
     @State private var isAnimating = false
@@ -9,6 +14,11 @@ struct SyncStatusIndicator: View {
     @State private var spinTask: Task<Void, Never>?
     @AppStorage("sync_lastSuccess") private var lastSyncTime: Double = 0
     @AppStorage("sync_pendingSince") private var pendingSince: Double = 0
+    let style: Style
+
+    init(style: Style = .full) {
+        self.style = style
+    }
 
     private var statusIcon: String {
         modelContext.hasChanges ? "icloud.and.arrow.up" : "icloud"
@@ -25,7 +35,7 @@ struct SyncStatusIndicator: View {
             } label: {
                 HStack(spacing: 6) {
                     ZStack {
-                        Image(systemName: "icloud")
+                        Image(systemName: "checkmark.icloud")
                             .font(DesignSystem.Typography.caption)
                             .foregroundStyle(statusColor)
                             .opacity(modelContext.hasChanges ? 0 : 1)
@@ -37,12 +47,14 @@ struct SyncStatusIndicator: View {
                     }
                     .frame(width: 16, height: 16)
 
-                    Text(modelContext.hasChanges ? "Syncing…" : "Synced")
-                        .font(DesignSystem.Typography.caption2)
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                        .fixedSize()
-                        .layoutPriority(1)
-                        .transition(.opacity.combined(with: .move(edge: .trailing)))
+                    if style == .full || modelContext.hasChanges {
+                        Text(modelContext.hasChanges ? "Syncing…" : "Synced")
+                            .font(DesignSystem.Typography.caption2)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
+                            .fixedSize()
+                            .layoutPriority(1)
+                            .transition(.opacity.combined(with: .move(edge: .trailing)))
+                    }
                 }
                 .contentShape(Rectangle())
                 .accessibilityLabel(modelContext.hasChanges ? "Syncing" : "Synced")

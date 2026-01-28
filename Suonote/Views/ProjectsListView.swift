@@ -418,10 +418,19 @@ struct ModernProjectCard: View {
             
             VStack(alignment: .leading, spacing: 6) {
                 // Title
-                Text(project.title)
-                    .font(DesignSystem.Typography.headline)
-                    .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    .lineLimit(1)
+                HStack(spacing: 8) {
+                    Text(project.title)
+                        .font(DesignSystem.Typography.headline)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
+                        .lineLimit(1)
+
+                    AppChip(
+                        text: project.status.rawValue,
+                        icon: statusIcon(for: project.status),
+                        tint: statusColor,
+                        font: DesignSystem.Typography.caption2
+                    )
+                }
                 
                 // Metadata
                 HStack(spacing: 12) {
@@ -489,6 +498,16 @@ struct ModernProjectCard: View {
         case .polished: return DesignSystem.Colors.primary
         case .finished: return DesignSystem.Colors.success
         case .archived: return DesignSystem.Colors.secondary
+        }
+    }
+
+    private func statusIcon(for status: ProjectStatus) -> String {
+        switch status {
+        case .idea: return "lightbulb.fill"
+        case .inProgress: return "hammer.fill"
+        case .polished: return "sparkles"
+        case .finished: return "checkmark.seal.fill"
+        case .archived: return "archivebox.fill"
         }
     }
 }
