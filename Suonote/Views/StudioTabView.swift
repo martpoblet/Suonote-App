@@ -361,6 +361,7 @@ struct StudioTabView: View {
             project: project,
             style: style,
             drumPreset: drumPreset,
+            drumVariant: track.variant,
             octaveShift: track.octaveShift
         )
         for note in notes {
@@ -1102,8 +1103,9 @@ struct StudioTrackEditorView: View {
                     }
                 }
             } label: {
+                let resolvedVariant = SoundFontManager.resolvedVariant(for: track.instrument, variant: track.variant)
                 HStack(spacing: 6) {
-                    Text(track.variant?.displayName ?? track.instrument.variants.first?.displayName ?? track.instrument.title)
+                    Text(resolvedVariant?.displayName ?? track.instrument.variants.first?.displayName ?? track.instrument.title)
                         .font(DesignSystem.Typography.caption)
                     Image(systemName: "chevron.down")
                         .font(DesignSystem.Typography.caption2)
@@ -1201,6 +1203,7 @@ struct StudioTrackEditorView: View {
             project: project,
             style: style,
             drumPreset: track.drumPreset,
+            drumVariant: track.variant,
             octaveShift: track.octaveShift,
             intensity: regenerateIntensity,
             complexity: regenerateComplexity
