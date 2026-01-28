@@ -17,7 +17,7 @@ struct StudioDrumEditor: View {
     private let cellSpacing: CGFloat = 6
     private let laneSpacing: CGFloat = 10
     private let barRulerHeight: CGFloat = 18
-    private let labelColumnWidth: CGFloat = 90
+    private let labelColumnWidth: CGFloat = 110
 
     private var stepsPerBeat: Int {
         timeBottom == 8 ? 2 : 4
@@ -65,16 +65,64 @@ struct StudioDrumEditor: View {
                 velocity: DrumVelocityProfile(ghost: 58, normal: 98, accent: 112)
             ),
             DrumLane(
-                name: "Hat",
-                pitch: pitchMap.hatClosed,
-                color: SectionColor.cyan.color,
-                velocity: DrumVelocityProfile(ghost: 48, normal: 72, accent: 88)
+                name: "Rim",
+                pitch: pitchMap.rim,
+                color: SectionColor.yellow.color,
+                velocity: DrumVelocityProfile(ghost: 52, normal: 86, accent: 102)
             ),
             DrumLane(
                 name: "Clap",
                 pitch: pitchMap.clap,
                 color: SectionColor.purple.color,
                 velocity: DrumVelocityProfile(ghost: 56, normal: 92, accent: 108)
+            ),
+            DrumLane(
+                name: "Hat Closed",
+                pitch: pitchMap.hatClosed,
+                color: SectionColor.cyan.color,
+                velocity: DrumVelocityProfile(ghost: 48, normal: 72, accent: 88)
+            ),
+            DrumLane(
+                name: "Hat Open",
+                pitch: pitchMap.hatOpen,
+                color: SectionColor.blue.color,
+                velocity: DrumVelocityProfile(ghost: 54, normal: 78, accent: 94)
+            ),
+            DrumLane(
+                name: "Ride",
+                pitch: pitchMap.ride,
+                color: SectionColor.green.color,
+                velocity: DrumVelocityProfile(ghost: 50, normal: 76, accent: 92)
+            ),
+            DrumLane(
+                name: "Crash",
+                pitch: pitchMap.crash,
+                color: SectionColor.pink.color,
+                velocity: DrumVelocityProfile(ghost: 64, normal: 96, accent: 112)
+            ),
+            DrumLane(
+                name: "Tom Low",
+                pitch: pitchMap.tomLow,
+                color: SectionColor.orange.color,
+                velocity: DrumVelocityProfile(ghost: 58, normal: 92, accent: 108)
+            ),
+            DrumLane(
+                name: "Tom Mid",
+                pitch: pitchMap.tomMid,
+                color: SectionColor.blue.color,
+                velocity: DrumVelocityProfile(ghost: 60, normal: 94, accent: 110)
+            ),
+            DrumLane(
+                name: "Tom High",
+                pitch: pitchMap.tomHigh,
+                color: SectionColor.cyan.color,
+                velocity: DrumVelocityProfile(ghost: 62, normal: 96, accent: 112)
+            ),
+            DrumLane(
+                name: "Perc",
+                pitch: pitchMap.perc,
+                color: SectionColor.green.color,
+                velocity: DrumVelocityProfile(ghost: 52, normal: 86, accent: 100)
             )
         ]
     }
@@ -383,7 +431,8 @@ struct StudioDrumEditor: View {
             beatsPerBar: beatsPerBar,
             timeBottom: timeBottom,
             style: style,
-            preset: preset
+            preset: preset,
+            variant: track.variant
         )
         replaceNotes(with: notes)
     }

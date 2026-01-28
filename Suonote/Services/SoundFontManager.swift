@@ -12,7 +12,6 @@ enum SoundFontManager {
         // Drums
         .standardDrumKit: "Drums/AcousticKitM.B.2",
         .electronicDrumKit: "Drums/Synth_Percussion",
-        .roomDrumKit: "Drums/AcousticKitM.B.2",
 
         // Synth
         .leadBass: "Synth/Synth_Bass_Lead",
@@ -51,7 +50,7 @@ enum SoundFontManager {
         case .piano:
             return [.acousticPiano, .electricPiano, .electricPiano2]
         case .drums:
-            return [.standardDrumKit, .electronicDrumKit, .roomDrumKit]
+            return [.standardDrumKit, .electronicDrumKit]
         case .synth:
             return [.leadBass]
         case .guitar:
@@ -114,8 +113,9 @@ enum SoundFontManager {
     }
 
     static func usesPercussionBank(for variant: InstrumentVariant?) -> Bool {
-        switch variant {
-        case .standardDrumKit, .roomDrumKit:
+        let resolved = resolvedVariant(for: .drums, variant: variant)
+        switch resolved {
+        case .standardDrumKit:
             return true
         default:
             return false
@@ -128,22 +128,80 @@ enum SoundFontManager {
         let hatClosed: Int
         let hatOpen: Int
         let clap: Int
+        let rim: Int
+        let tomLow: Int
+        let tomMid: Int
+        let tomHigh: Int
+        let ride: Int
+        let crash: Int
+        let perc: Int
     }
 
     static func drumPitchMap(for variant: InstrumentVariant?) -> DrumPitchMap {
-        if usesPercussionBank(for: variant) {
-            return DrumPitchMap(kick: 36, snare: 38, hatClosed: 42, hatOpen: 46, clap: 39)
+        let resolved = resolvedVariant(for: .drums, variant: variant)
+        if usesPercussionBank(for: resolved) {
+            return DrumPitchMap(
+                kick: 36,
+                snare: 38,
+                hatClosed: 42,
+                hatOpen: 46,
+                clap: 39,
+                rim: 37,
+                tomLow: 45,
+                tomMid: 47,
+                tomHigh: 50,
+                ride: 51,
+                crash: 49,
+                perc: 56
+            )
         }
-        if variant == .standardDrumKit || variant == .roomDrumKit {
-            return DrumPitchMap(kick: 36, snare: 38, hatClosed: 42, hatOpen: 46, clap: 39)
+        if resolved == .standardDrumKit {
+            return DrumPitchMap(
+                kick: 36,
+                snare: 38,
+                hatClosed: 42,
+                hatOpen: 46,
+                clap: 39,
+                rim: 37,
+                tomLow: 45,
+                tomMid: 47,
+                tomHigh: 50,
+                ride: 51,
+                crash: 49,
+                perc: 56
+            )
         }
-        switch variant {
-        case .roomDrumKit:
-            return DrumPitchMap(kick: 60, snare: 62, hatClosed: 65, hatOpen: 67, clap: 69)
+        switch resolved {
         case .electronicDrumKit:
-            return DrumPitchMap(kick: 60, snare: 62, hatClosed: 64, hatOpen: 67, clap: 69)
+            return DrumPitchMap(
+                kick: 60,
+                snare: 62,
+                hatClosed: 64,
+                hatOpen: 67,
+                clap: 69,
+                rim: 63,
+                tomLow: 65,
+                tomMid: 66,
+                tomHigh: 68,
+                ride: 71,
+                crash: 72,
+                perc: 73
+            )
         default:
-            return DrumPitchMap(kick: 60, snare: 62, hatClosed: 64, hatOpen: 67, clap: 69)
+            return DrumPitchMap(
+                kick: 60,
+                snare: 62,
+                hatClosed: 64,
+                hatOpen: 67,
+                clap: 69,
+                rim: 63,
+                tomLow: 65,
+                tomMid: 66,
+                tomHigh: 68,
+                ride: 71,
+                crash: 72,
+                perc: 73
+            )
         }
     }
 }
