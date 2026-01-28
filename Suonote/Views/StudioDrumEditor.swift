@@ -50,28 +50,29 @@ struct StudioDrumEditor: View {
     }
 
     private var drumLanes: [DrumLane] {
-        [
+        let pitchMap = SoundFontManager.drumPitchMap(for: track.variant)
+        return [
             DrumLane(
                 name: "Kick",
-                pitch: 36,
+                pitch: pitchMap.kick,
                 color: SectionColor.red.color,
                 velocity: DrumVelocityProfile(ghost: 62, normal: 108, accent: 120)
             ),
             DrumLane(
                 name: "Snare",
-                pitch: 38,
+                pitch: pitchMap.snare,
                 color: SectionColor.orange.color,
                 velocity: DrumVelocityProfile(ghost: 58, normal: 98, accent: 112)
             ),
             DrumLane(
                 name: "Hat",
-                pitch: 42,
+                pitch: pitchMap.hatClosed,
                 color: SectionColor.cyan.color,
                 velocity: DrumVelocityProfile(ghost: 48, normal: 72, accent: 88)
             ),
             DrumLane(
                 name: "Clap",
-                pitch: 39,
+                pitch: pitchMap.clap,
                 color: SectionColor.purple.color,
                 velocity: DrumVelocityProfile(ghost: 56, normal: 92, accent: 108)
             )

@@ -54,6 +54,7 @@ struct StudioGenerator {
                 timeBottom: project.timeBottom,
                 style: style,
                 drumPreset: instrument == .drums ? track.drumPreset : nil,
+                drumVariant: track.variant,
                 octaveShift: track.octaveShift,
                 keyRoot: project.keyRoot,
                 diatonicMap: diatonicMap
@@ -107,6 +108,7 @@ struct StudioGenerator {
                 timeBottom: project.timeBottom,
                 style: style,
                 drumPreset: activeDrumPreset,
+                drumVariant: track.variant,
                 octaveShift: track.octaveShift,
                 keyRoot: project.keyRoot,
                 diatonicMap: diatonicMap
@@ -152,7 +154,8 @@ struct StudioGenerator {
                     beatsPerBar: beatsPerBar,
                     timeBottom: timeBottom,
                     style: style,
-                    preset: preset
+                    preset: preset,
+                    variant: track.variant
                 )
                 let newNotes = drumNotes.filter { $0.startBeat >= previousTotalBeats }
                 didAppend = appendNotes(newNotes, to: track, modelContext: modelContext) || didAppend
@@ -168,6 +171,7 @@ struct StudioGenerator {
                 timeBottom: timeBottom,
                 style: style,
                 drumPreset: nil,
+                drumVariant: nil,
                 octaveShift: track.octaveShift,
                 keyRoot: project.keyRoot,
                 diatonicMap: diatonicMap
@@ -217,6 +221,7 @@ struct StudioGenerator {
                 timeBottom: timeBottom,
                 style: style,
                 drumPreset: nil,
+                drumVariant: nil,
                 octaveShift: track.octaveShift,
                 keyRoot: project.keyRoot,
                 diatonicMap: diatonicMap
@@ -260,6 +265,7 @@ struct StudioGenerator {
             timeBottom: project.timeBottom,
             style: style,
             drumPreset: resolvedPreset,
+            drumVariant: nil,
             octaveShift: octaveShift,
             keyRoot: project.keyRoot,
             diatonicMap: diatonicMap,
@@ -274,6 +280,7 @@ struct StudioGenerator {
         timeBottom: Int,
         style: StudioStyle,
         preset: DrumPreset?,
+        variant: InstrumentVariant? = nil,
         intensity: Double = 0.5,
         complexity: Double = 0.5
     ) -> [StudioNote] {
@@ -288,6 +295,7 @@ struct StudioGenerator {
             timeBottom: timeBottom,
             style: style,
             preset: resolvedPreset,
+            variant: variant,
             intensity: intensity,
             complexity: complexity
         )
@@ -408,6 +416,7 @@ struct StudioGenerator {
         timeBottom: Int,
         style: StudioStyle,
         drumPreset: DrumPreset?,
+        drumVariant: InstrumentVariant?,
         octaveShift: Int,
         keyRoot: String,
         diatonicMap: [String: ChordQuality],
@@ -426,6 +435,7 @@ struct StudioGenerator {
                     beatsPerBar: beatsPerBar,
                     timeBottom: timeBottom
                 ),
+                variant: drumVariant,
                 intensity: intensity,
                 complexity: complexity
             )
@@ -503,6 +513,11 @@ struct StudioGenerator {
             pitches = Array(Set(pitches)).sorted()
             pitches = fitPitches(pitches, in: range)
             
+            // Woodwinds are monophonic: pick a single melodic pitch
+            if instrument == .woodwinds, let pitch = pitches.last {
+                pitches = [pitch]
+            }
+
             // Simplify guitar voicings - use fewer notes for clearer sound
             if instrument == .guitar {
                 // Complexity affects how many notes we use
@@ -675,6 +690,7 @@ struct StudioGenerator {
         timeBottom: Int,
         style: StudioStyle,
         preset: DrumPreset,
+        variant: InstrumentVariant?,
         intensity: Double = 0.5,
         complexity: Double = 0.5
     ) -> [StudioNote] {
@@ -722,6 +738,7 @@ struct StudioGenerator {
         let snareVelocityBase = style == .rock ? 108 : 102
         let hatVelocityBase = style == .ambient ? 62 : 72
         let clapVelocityBase = style == .edm ? 98 : 90
+        let pitchMap = SoundFontManager.drumPitchMap(for: variant)
 
         for bar in 0..<totalBars {
             let barStart = Double(bar * beatsPerBar)
@@ -730,7 +747,7 @@ struct StudioGenerator {
                     StudioNote(
                         startBeat: barStart + Double(step) * stepLength,
                         duration: stepLength,
-                        pitch: 36,
+                        pitch: pitchMap.kick,
                         velocity: scaledVelocity(
                             base: step == 0 ? kickVelocityBase : kickVelocityBase - 8,
                             intensity: intensity,
@@ -744,7 +761,7 @@ struct StudioGenerator {
                     StudioNote(
                         startBeat: barStart + Double(step) * stepLength,
                         duration: stepLength,
-                        pitch: 38,
+                        pitch: pitchMap.snare,
                         velocity: scaledVelocity(
                             base: snareVelocityBase,
                             intensity: intensity,
@@ -757,11 +774,17 @@ struct StudioGenerator {
                 let velocity = accentSteps.contains(step)
                     ? scaledVelocity(base: hatVelocityBase + 8, intensity: intensity, range: 18)
                     : scaledVelocity(base: hatVelocityBase, intensity: intensity, range: 16)
+                let hatPitch: Int
+                if intensity > 0.6 && step % (stepsPerBeat * 2) == 0 {
+                    hatPitch = pitchMap.hatOpen
+                } else {
+                    hatPitch = pitchMap.hatClosed
+                }
                 notes.append(
                     StudioNote(
                         startBeat: barStart + Double(step) * stepLength,
                         duration: stepLength,
-                        pitch: 42,
+                        pitch: hatPitch,
                         velocity: velocity
                     )
                 )
@@ -771,7 +794,7 @@ struct StudioGenerator {
                     StudioNote(
                         startBeat: barStart + Double(step) * stepLength,
                         duration: stepLength,
-                        pitch: 39,
+                        pitch: pitchMap.clap,
                         velocity: scaledVelocity(
                             base: clapVelocityBase,
                             intensity: intensity,

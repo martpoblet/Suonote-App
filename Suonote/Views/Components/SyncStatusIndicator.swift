@@ -25,7 +25,23 @@ struct SyncStatusIndicator: View {
     }
 
     private var statusColor: Color {
-        modelContext.hasChanges ? DesignSystem.Colors.warning : DesignSystem.Colors.success
+        syncState == .paused ? DesignSystem.Colors.warning : (modelContext.hasChanges ? DesignSystem.Colors.warning : DesignSystem.Colors.success)
+    }
+
+    private enum SyncState {
+        case synced
+        case syncing
+        case paused
+    }
+
+    private var syncState: SyncState {
+        if modelContext.hasChanges {
+            if pendingSince > 0 && Date().timeIntervalSince1970 - pendingSince > 120 {
+                return .paused
+            }
+            return .syncing
+        }
+        return .synced
     }
 
     var body: some View {
@@ -38,17 +54,21 @@ struct SyncStatusIndicator: View {
                         Image(systemName: "checkmark.icloud")
                             .font(DesignSystem.Typography.caption)
                             .foregroundStyle(statusColor)
-                            .opacity(modelContext.hasChanges ? 0 : 1)
+                            .opacity(syncState == .synced ? 1 : 0)
                         Image(systemName: "arrow.triangle.2.circlepath")
                             .font(DesignSystem.Typography.caption)
                             .foregroundStyle(statusColor)
                             .rotationEffect(.degrees(rotation))
-                            .opacity(modelContext.hasChanges ? 1 : 0)
+                            .opacity(syncState == .syncing ? 1 : 0)
+                        Image(systemName: "exclamationmark.icloud")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundStyle(DesignSystem.Colors.warning)
+                            .opacity(syncState == .paused ? 1 : 0)
                     }
                     .frame(width: 16, height: 16)
 
-                    if style == .full || modelContext.hasChanges {
-                        Text(modelContext.hasChanges ? "Syncing…" : "Synced")
+                    if style == .full || syncState != .synced {
+                        Text(syncState == .paused ? "Sync paused" : (syncState == .syncing ? "Syncing…" : "Synced"))
                             .font(DesignSystem.Typography.caption2)
                             .foregroundStyle(DesignSystem.Colors.textSecondary)
                             .fixedSize()
@@ -67,23 +87,23 @@ struct SyncStatusIndicator: View {
                     .presentationDragIndicator(.visible)
             }
             .onAppear {
-                updateAnimationState(isSyncing: modelContext.hasChanges)
+                updateAnimationState(state: syncState)
                 if !modelContext.hasChanges, lastSyncTime == 0 {
                     lastSyncTime = Date().timeIntervalSince1970
                 }
             }
-            .onChange(of: modelContext.hasChanges) { _, newValue in
-                updateAnimationState(isSyncing: newValue)
+            .onChange(of: syncState) { _, newValue in
+                updateAnimationState(state: newValue)
             }
         }
     }
 
-    private func updateAnimationState(isSyncing: Bool) {
+    private func updateAnimationState(state: SyncState) {
         spinTask?.cancel()
         spinTask = nil
 
-        isAnimating = isSyncing
-        if isSyncing {
+        isAnimating = (state == .syncing)
+        if state == .syncing {
             if pendingSince == 0 {
                 pendingSince = Date().timeIntervalSince1970
             }
@@ -96,9 +116,11 @@ struct SyncStatusIndicator: View {
                     try? await Task.sleep(nanoseconds: 1_000_000_000)
                 }
             }
-        } else {
+        } else if state == .synced {
             pendingSince = 0
             lastSyncTime = Date().timeIntervalSince1970
+            withAnimation(.none) { rotation = 0 }
+        } else {
             withAnimation(.none) { rotation = 0 }
         }
     }

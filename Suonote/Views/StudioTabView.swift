@@ -876,7 +876,7 @@ struct StudioTrackEditorView: View {
     }
 
     private var trackSubtitle: String {
-        if let variant = track.variant?.rawValue, !variant.isEmpty {
+        if let variant = track.variant?.displayName, !variant.isEmpty {
             return "\(track.instrument.title) - \(variant)"
         }
         return track.instrument.title
@@ -1094,8 +1094,8 @@ struct StudioTrackEditorView: View {
                         onNotesChanged()
                     } label: {
                         HStack {
-                            Text(variant.rawValue)
-                            if track.variant == variant {
+                                    Text(variant.displayName)
+                                    if track.variant == variant {
                                 Image(systemName: "checkmark")
                             }
                         }
@@ -1103,7 +1103,7 @@ struct StudioTrackEditorView: View {
                 }
             } label: {
                 HStack(spacing: 6) {
-                    Text(track.variant?.rawValue ?? track.instrument.variants.first?.rawValue ?? track.instrument.title)
+                    Text(track.variant?.displayName ?? track.instrument.variants.first?.displayName ?? track.instrument.title)
                         .font(DesignSystem.Typography.caption)
                     Image(systemName: "chevron.down")
                         .font(DesignSystem.Typography.caption2)
@@ -1381,7 +1381,7 @@ struct StudioTrackRow: View {
                                     onTrackChange()
                                 } label: {
                                     HStack {
-                                        Text(variant.rawValue)
+                                        Text(variant.displayName)
                                         if track.variant == variant {
                                             Image(systemName: "checkmark")
                                         }
@@ -1390,7 +1390,7 @@ struct StudioTrackRow: View {
                             }
                         } label: {
                             HStack(spacing: 4) {
-                                Text(track.variant?.rawValue ?? track.instrument.variants.first?.rawValue ?? track.instrument.title)
+                                Text(track.variant?.displayName ?? track.instrument.variants.first?.displayName ?? track.instrument.title)
                                     .font(DesignSystem.Typography.caption)
                                     .foregroundStyle(DesignSystem.Colors.textSecondary)
                                 Image(systemName: "chevron.up.chevron.down")

@@ -21,6 +21,7 @@ final class StudioPlaybackEngine: ObservableObject {
     private var gridBeatInterval: Double = 0.5
     private var playheadTimer: Timer?
     private var customBankStatus: CustomBankStatus = .unknown
+    private var drumMelodicChannels: Set<UUID> = []
 
     private enum CustomBankStatus {
         case unknown
@@ -42,6 +43,7 @@ final class StudioPlaybackEngine: ObservableObject {
         stop(resetPosition: false)
         sequencer = nil
         teardownEngine()
+        drumMelodicChannels.removeAll()
 
         bpm = project.quarterNoteBpm()
         beatScale = 4.0 / Double(project.timeBottom)
@@ -232,7 +234,7 @@ final class StudioPlaybackEngine: ObservableObject {
             let musicTrack = sequencer.createAndAppendTrack()
 
             musicTrack.destinationAudioUnit = sampler
-            addNotes(track.notes, to: musicTrack, channel: midiChannel(for: track.instrument))
+            addNotes(track.notes, to: musicTrack, channel: midiChannel(for: track))
         }
 
         if bpm > 0 {
@@ -319,34 +321,65 @@ final class StudioPlaybackEngine: ObservableObject {
     }
 
     private func loadInstrument(for track: StudioTrack, sampler: AVAudioUnitSampler) {
-        // Use variant's MIDI program if available, otherwise default
         let fallbackProgram = track.variant?.midiProgram ?? programNumber(for: track.instrument)
-        let customURL = resolvedCustomBankURL()
-        let program = resolvedProgram(
-            for: track,
-            customBankURL: customURL,
-            fallbackProgram: fallbackProgram
-        )
-
-        if let url = customURL {
+        if let url = SoundFontManager.soundFontURL(for: track.instrument, variant: track.variant) {
             let logFailure: Bool
             if case .unknown = customBankStatus {
                 logFailure = true
             } else {
                 logFailure = false
             }
+            var primaryBankMSB: UInt8 = UInt8(kAUSampler_DefaultMelodicBankMSB)
+            if track.instrument == .drums {
+                primaryBankMSB = SoundFontManager.usesPercussionBank(for: track.variant)
+                    ? UInt8(kAUSampler_DefaultPercussionBankMSB)
+                    : UInt8(kAUSampler_DefaultMelodicBankMSB)
+            }
             if attemptLoad(
                 sampler,
                 url: url,
-                program: program,
-                bankMSB: appleBankMSB(for: track.instrument),
+                program: 0,
+                bankMSB: primaryBankMSB,
                 bankLSB: UInt8(kAUSampler_DefaultBankLSB),
                 logFailure: logFailure
             ) {
+                if track.instrument == .drums {
+                    if primaryBankMSB == UInt8(kAUSampler_DefaultMelodicBankMSB) {
+                        drumMelodicChannels.insert(track.id)
+                    } else {
+                        drumMelodicChannels.remove(track.id)
+                    }
+                }
                 customBankStatus = .available(url)
                 return
             }
-            customBankStatus = .unavailable
+            if track.instrument == .drums {
+                let fallbackBankMSB = primaryBankMSB == UInt8(kAUSampler_DefaultPercussionBankMSB)
+                    ? UInt8(kAUSampler_DefaultMelodicBankMSB)
+                    : UInt8(kAUSampler_DefaultPercussionBankMSB)
+                if attemptLoad(
+                    sampler,
+                    url: url,
+                    program: 0,
+                    bankMSB: fallbackBankMSB,
+                    bankLSB: UInt8(kAUSampler_DefaultBankLSB),
+                    logFailure: logFailure
+                ) {
+                    if fallbackBankMSB == UInt8(kAUSampler_DefaultMelodicBankMSB) {
+                        drumMelodicChannels.insert(track.id)
+                    } else {
+                        drumMelodicChannels.remove(track.id)
+                    }
+                    customBankStatus = .available(url)
+                    return
+                }
+            }
+            if track.instrument == .drums {
+                print("❌ Drum soundfont failed to load: \(url.lastPathComponent)")
+            }
+            if case .unknown = customBankStatus {
+                customBankStatus = .unavailable
+            }
         }
 
         if let systemURL = systemSoundBankURL() {
@@ -361,8 +394,9 @@ final class StudioPlaybackEngine: ObservableObject {
         }
     }
 
-    private func midiChannel(for instrument: StudioInstrument) -> UInt8 {
-        instrument == .drums ? 9 : 0
+    private func midiChannel(for track: StudioTrack) -> UInt8 {
+        guard track.instrument == .drums else { return 0 }
+        return drumMelodicChannels.contains(track.id) ? 0 : 9
     }
 
     private func programNumber(for instrument: StudioInstrument) -> UInt8 {
@@ -391,19 +425,7 @@ final class StudioPlaybackEngine: ObservableObject {
     }
 
     private func generalSoundFontURL() -> URL? {
-        let candidates = [
-            "Arachno",
-            "Arachno SoundFont - Version 1.0"
-        ]
-        for name in candidates {
-            if let url = Bundle.main.url(forResource: name, withExtension: "sf2") {
-                return url
-            }
-            if let url = Bundle.main.url(forResource: name, withExtension: "sf2", subdirectory: "SoundFonts") {
-                return url
-            }
-        }
-        return nil
+        nil
     }
 
     private func resolvedProgram(
@@ -411,43 +433,11 @@ final class StudioPlaybackEngine: ObservableObject {
         customBankURL: URL?,
         fallbackProgram: UInt8
     ) -> UInt8 {
-        guard track.instrument == .guitar,
-              let variant = track.variant,
-              let customBankURL,
-              isArachnoSoundFont(customBankURL) else {
-            return fallbackProgram
-        }
-
-        // Arachno's nylon/jazz guitars are reported as detuned; use alternate programs.
-        switch variant {
-        case .acousticNylonGuitar:
-            return 25 // Acoustic Guitar (steel)
-        case .jazzGuitar, .cleanGuitar:
-            return 28 // Electric Guitar (muted)
-        case .electricGuitar:
-            return fallbackProgram
-        default:
-            return fallbackProgram
-        }
-    }
-
-    private func isArachnoSoundFont(_ url: URL) -> Bool {
-        url.lastPathComponent.localizedCaseInsensitiveContains("arachno")
+        fallbackProgram
     }
 
     private func resolvedCustomBankURL() -> URL? {
-        switch customBankStatus {
-        case .available(let url):
-            return url
-        case .unavailable:
-            return nil
-        case .unknown:
-            if let url = generalSoundFontURL() {
-                return url
-            }
-            customBankStatus = .unavailable
-            return nil
-        }
+        nil
     }
 
     private func attemptLoad(
