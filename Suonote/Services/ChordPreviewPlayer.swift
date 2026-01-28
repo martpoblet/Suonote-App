@@ -35,7 +35,7 @@ final class ChordPreviewPlayer: ObservableObject {
     
     private func loadPianoSoundFont() {
         // Try custom SoundFont first
-        if let customURL = Bundle.main.url(forResource: "FluidR3_GM", withExtension: "sf2", subdirectory: "SoundFonts") {
+        if let customURL = SoundFontManager.soundFontURL(for: .piano, variant: .acousticPiano) {
             attemptLoad(url: customURL, program: 0) // Piano = 0
             return
         }

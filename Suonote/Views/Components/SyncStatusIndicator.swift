@@ -2,6 +2,11 @@ import SwiftUI
 import SwiftData
 
 struct SyncStatusIndicator: View {
+    enum Style {
+        case full
+        case minimal
+    }
+
     @Environment(\.modelContext) private var modelContext
     @State private var showDetails = false
     @State private var isAnimating = false
@@ -9,13 +14,34 @@ struct SyncStatusIndicator: View {
     @State private var spinTask: Task<Void, Never>?
     @AppStorage("sync_lastSuccess") private var lastSyncTime: Double = 0
     @AppStorage("sync_pendingSince") private var pendingSince: Double = 0
+    let style: Style
+
+    init(style: Style = .full) {
+        self.style = style
+    }
 
     private var statusIcon: String {
         modelContext.hasChanges ? "icloud.and.arrow.up" : "icloud"
     }
 
     private var statusColor: Color {
-        modelContext.hasChanges ? DesignSystem.Colors.warning : DesignSystem.Colors.success
+        syncState == .paused ? DesignSystem.Colors.warning : (modelContext.hasChanges ? DesignSystem.Colors.warning : DesignSystem.Colors.success)
+    }
+
+    private enum SyncState {
+        case synced
+        case syncing
+        case paused
+    }
+
+    private var syncState: SyncState {
+        if modelContext.hasChanges {
+            if pendingSince > 0 && Date().timeIntervalSince1970 - pendingSince > 120 {
+                return .paused
+            }
+            return .syncing
+        }
+        return .synced
     }
 
     var body: some View {
@@ -25,24 +51,30 @@ struct SyncStatusIndicator: View {
             } label: {
                 HStack(spacing: 6) {
                     ZStack {
-                        Image(systemName: "icloud")
+                        Image(systemName: "checkmark.icloud")
                             .font(DesignSystem.Typography.caption)
                             .foregroundStyle(statusColor)
-                            .opacity(modelContext.hasChanges ? 0 : 1)
+                            .opacity(syncState == .synced ? 1 : 0)
                         Image(systemName: "arrow.triangle.2.circlepath")
                             .font(DesignSystem.Typography.caption)
                             .foregroundStyle(statusColor)
                             .rotationEffect(.degrees(rotation))
-                            .opacity(modelContext.hasChanges ? 1 : 0)
+                            .opacity(syncState == .syncing ? 1 : 0)
+                        Image(systemName: "exclamationmark.icloud")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundStyle(DesignSystem.Colors.warning)
+                            .opacity(syncState == .paused ? 1 : 0)
                     }
                     .frame(width: 16, height: 16)
 
-                    Text(modelContext.hasChanges ? "Syncing…" : "Synced")
-                        .font(DesignSystem.Typography.caption2)
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                        .fixedSize()
-                        .layoutPriority(1)
-                        .transition(.opacity.combined(with: .move(edge: .trailing)))
+                    if style == .full || syncState != .synced {
+                        Text(syncState == .paused ? "Sync paused" : (syncState == .syncing ? "Syncing…" : "Synced"))
+                            .font(DesignSystem.Typography.caption2)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
+                            .fixedSize()
+                            .layoutPriority(1)
+                            .transition(.opacity.combined(with: .move(edge: .trailing)))
+                    }
                 }
                 .contentShape(Rectangle())
                 .accessibilityLabel(modelContext.hasChanges ? "Syncing" : "Synced")
@@ -55,23 +87,23 @@ struct SyncStatusIndicator: View {
                     .presentationDragIndicator(.visible)
             }
             .onAppear {
-                updateAnimationState(isSyncing: modelContext.hasChanges)
+                updateAnimationState(state: syncState)
                 if !modelContext.hasChanges, lastSyncTime == 0 {
                     lastSyncTime = Date().timeIntervalSince1970
                 }
             }
-            .onChange(of: modelContext.hasChanges) { _, newValue in
-                updateAnimationState(isSyncing: newValue)
+            .onChange(of: syncState) { _, newValue in
+                updateAnimationState(state: newValue)
             }
         }
     }
 
-    private func updateAnimationState(isSyncing: Bool) {
+    private func updateAnimationState(state: SyncState) {
         spinTask?.cancel()
         spinTask = nil
 
-        isAnimating = isSyncing
-        if isSyncing {
+        isAnimating = (state == .syncing)
+        if state == .syncing {
             if pendingSince == 0 {
                 pendingSince = Date().timeIntervalSince1970
             }
@@ -84,9 +116,11 @@ struct SyncStatusIndicator: View {
                     try? await Task.sleep(nanoseconds: 1_000_000_000)
                 }
             }
-        } else {
+        } else if state == .synced {
             pendingSince = 0
             lastSyncTime = Date().timeIntervalSince1970
+            withAnimation(.none) { rotation = 0 }
+        } else {
             withAnimation(.none) { rotation = 0 }
         }
     }

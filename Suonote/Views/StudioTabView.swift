@@ -361,6 +361,7 @@ struct StudioTabView: View {
             project: project,
             style: style,
             drumPreset: drumPreset,
+            drumVariant: track.variant,
             octaveShift: track.octaveShift
         )
         for note in notes {
@@ -876,7 +877,7 @@ struct StudioTrackEditorView: View {
     }
 
     private var trackSubtitle: String {
-        if let variant = track.variant?.rawValue, !variant.isEmpty {
+        if let variant = track.variant?.displayName, !variant.isEmpty {
             return "\(track.instrument.title) - \(variant)"
         }
         return track.instrument.title
@@ -1094,16 +1095,17 @@ struct StudioTrackEditorView: View {
                         onNotesChanged()
                     } label: {
                         HStack {
-                            Text(variant.rawValue)
-                            if track.variant == variant {
+                                    Text(variant.displayName)
+                                    if track.variant == variant {
                                 Image(systemName: "checkmark")
                             }
                         }
                     }
                 }
             } label: {
+                let resolvedVariant = SoundFontManager.resolvedVariant(for: track.instrument, variant: track.variant)
                 HStack(spacing: 6) {
-                    Text(track.variant?.rawValue ?? track.instrument.variants.first?.rawValue ?? track.instrument.title)
+                    Text(resolvedVariant?.displayName ?? track.instrument.variants.first?.displayName ?? track.instrument.title)
                         .font(DesignSystem.Typography.caption)
                     Image(systemName: "chevron.down")
                         .font(DesignSystem.Typography.caption2)
@@ -1201,6 +1203,7 @@ struct StudioTrackEditorView: View {
             project: project,
             style: style,
             drumPreset: track.drumPreset,
+            drumVariant: track.variant,
             octaveShift: track.octaveShift,
             intensity: regenerateIntensity,
             complexity: regenerateComplexity
@@ -1381,7 +1384,7 @@ struct StudioTrackRow: View {
                                     onTrackChange()
                                 } label: {
                                     HStack {
-                                        Text(variant.rawValue)
+                                        Text(variant.displayName)
                                         if track.variant == variant {
                                             Image(systemName: "checkmark")
                                         }
@@ -1390,7 +1393,7 @@ struct StudioTrackRow: View {
                             }
                         } label: {
                             HStack(spacing: 4) {
-                                Text(track.variant?.rawValue ?? track.instrument.variants.first?.rawValue ?? track.instrument.title)
+                                Text(track.variant?.displayName ?? track.instrument.variants.first?.displayName ?? track.instrument.title)
                                     .font(DesignSystem.Typography.caption)
                                     .foregroundStyle(DesignSystem.Colors.textSecondary)
                                 Image(systemName: "chevron.up.chevron.down")

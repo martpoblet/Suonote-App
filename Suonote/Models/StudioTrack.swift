@@ -135,133 +135,7 @@ enum StudioInstrument: String, Codable, CaseIterable, Identifiable {
     }
     
     var variants: [InstrumentVariant] {
-        switch self {
-        case .piano:
-            return [
-                .acousticPiano,
-                .brightPiano,
-                .electricPiano,
-                .electricPiano2,
-                .honkyTonkPiano,
-                .harpsichord,
-                .clavinet
-            ]
-        case .synth:
-            return [
-                .leadSquare,
-                .leadSaw,
-                .leadCalliope,
-                .leadChiff,
-                .leadCharang,
-                .leadVoice,
-                .leadFifths,
-                .leadBass,
-                .padNewAge,
-                .padWarm,
-                .padPolysynth,
-                .padChoir,
-                .padBowed,
-                .padMetallic,
-                .padHalo,
-                .padSweep
-            ]
-        case .guitar:
-            return [
-                .cleanGuitar,
-                .acousticNylonGuitar,
-                .acousticSteelGuitar,
-                .jazzGuitar,
-                .electricGuitar,
-                .mutedGuitar,
-                .overdriveGuitar,
-                .distortionGuitar,
-                .harmonicsGuitar
-            ]
-        case .bass:
-            return [
-                .acousticBass,
-                .fingerBass,
-                .pickBass,
-                .fretlessBass,
-                .slapBass1,
-                .slapBass2,
-                .synthBass,
-                .synthBass2
-            ]
-        case .strings:
-            return [
-                .tremoloStrings,
-                .pizzicatoStrings,
-                .stringEnsemble,
-                .slowStrings,
-                .synthStrings1,
-                .synthStrings2,
-                .choirAahs,
-                .voiceOohs
-            ]
-        case .brass:
-            return [
-                .trumpet,
-                .trombone,
-                .tuba,
-                .mutedTrumpet,
-                .frenchHorn,
-                .brassSection,
-                .synthBrass1,
-                .synthBrass2
-            ]
-        case .woodwinds:
-            return [
-                .sopranoSax,
-                .altoSax,
-                .tenorSax,
-                .baritoneSax,
-                .oboe,
-                .englishHorn,
-                .bassoon,
-                .clarinet,
-                .piccolo,
-                .flute,
-                .recorder,
-                .panFlute
-            ]
-        case .organ:
-            return [
-                .drawbarOrgan,
-                .percussiveOrgan,
-                .rockOrgan,
-                .churchOrgan,
-                .reedOrgan,
-                .accordion,
-                .harmonica,
-                .tangoAccordion
-            ]
-        case .mallets:
-            return [
-                .celesta,
-                .glockenspiel,
-                .musicBox,
-                .vibraphone,
-                .marimba,
-                .xylophone,
-                .tubularBells,
-                .dulcimer
-            ]
-        case .drums:
-            return [
-                .standardDrumKit,
-                .roomDrumKit,
-                .powerDrumKit,
-                .electronicDrumKit,
-                .tr808DrumKit,
-                .jazzDrumKit,
-                .brushDrumKit,
-                .orchestraDrumKit,
-                .sfxDrumKit
-            ]
-        case .audio:
-            return []
-        }
+        SoundFontManager.supportedVariants(for: self)
     }
 }
 
@@ -274,6 +148,7 @@ enum InstrumentVariant: String, Codable, CaseIterable {
     case honkyTonkPiano = "Honky-Tonk Piano"
     case harpsichord = "Harpsichord"
     case clavinet = "Clavinet"
+    case harp = "Harp"
     
     // Synth variants
     case leadSquare = "Lead (Square)"
@@ -347,6 +222,7 @@ enum InstrumentVariant: String, Codable, CaseIterable {
     case flute = "Flute"
     case recorder = "Recorder"
     case panFlute = "Pan Flute"
+    case ocarina = "Ocarina"
 
     // Organ variants
     case drawbarOrgan = "Drawbar Organ"
@@ -367,6 +243,7 @@ enum InstrumentVariant: String, Codable, CaseIterable {
     case xylophone = "Xylophone"
     case tubularBells = "Tubular Bells"
     case dulcimer = "Dulcimer"
+    case kalimba = "Kalimba"
 
     // Drum variants
     case standardDrumKit = "Standard Kit"
@@ -389,6 +266,7 @@ enum InstrumentVariant: String, Codable, CaseIterable {
         case .honkyTonkPiano: return 3
         case .harpsichord: return 6
         case .clavinet: return 7
+        case .harp: return 46
         
         // Synth
         case .leadSquare: return 80
@@ -462,6 +340,7 @@ enum InstrumentVariant: String, Codable, CaseIterable {
         case .flute: return 73
         case .recorder: return 74
         case .panFlute: return 75
+        case .ocarina: return 79
 
         // Organ
         case .drawbarOrgan: return 16
@@ -482,6 +361,7 @@ enum InstrumentVariant: String, Codable, CaseIterable {
         case .xylophone: return 13
         case .tubularBells: return 14
         case .dulcimer: return 15
+        case .kalimba: return 108
 
         // Drums (GM kits on channel 10)
         case .standardDrumKit: return 0
@@ -493,6 +373,38 @@ enum InstrumentVariant: String, Codable, CaseIterable {
         case .brushDrumKit: return 40
         case .orchestraDrumKit: return 48
         case .sfxDrumKit: return 56
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .roomDrumKit:
+            return "World Percussion"
+        case .harp:
+            return "Concert Harp"
+        case .kalimba:
+            return "Kalimba"
+        case .ocarina:
+            return "Ocarina"
+        default:
+            return rawValue
+        }
+    }
+
+    var isDrumKit: Bool {
+        switch self {
+        case .standardDrumKit,
+             .roomDrumKit,
+             .powerDrumKit,
+             .electronicDrumKit,
+             .tr808DrumKit,
+             .jazzDrumKit,
+             .brushDrumKit,
+             .orchestraDrumKit,
+             .sfxDrumKit:
+            return true
+        default:
+            return false
         }
     }
 }
@@ -556,11 +468,7 @@ final class StudioTrack {
         self.orderIndex = orderIndex
         self._instrument = instrument.rawValue
         self._drumPreset = ""
-        if instrument == .guitar {
-            self._variant = InstrumentVariant.cleanGuitar.rawValue
-        } else {
-            self._variant = instrument.variants.first?.rawValue
-        }
+        self._variant = SoundFontManager.defaultVariant(for: instrument)?.rawValue
         self.octaveShift = 0
         self.isMuted = isMuted
         self.isSolo = isSolo
