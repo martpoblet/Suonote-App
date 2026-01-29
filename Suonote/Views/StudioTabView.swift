@@ -361,7 +361,7 @@ struct StudioTabView: View {
             project: project,
             style: style,
             drumPreset: drumPreset,
-            drumVariant: track.variant,
+            variant: track.variant,
             octaveShift: track.octaveShift
         )
         for note in notes {
@@ -470,11 +470,12 @@ struct StudioTabView: View {
         let newChordIds = currentChordIds.subtracting(previousChordIds)
         let removedChordIds = previousChordIds.subtracting(currentChordIds)
         let barsChanged = timeline.totalBars != previousTotalBars
-        let headerChanged = project.studioLastBpm != project.bpm
-            || project.studioLastTimeTop != project.timeTop
+        let meterChanged = project.studioLastTimeTop != project.timeTop
             || project.studioLastTimeBottom != project.timeBottom
-            || project.studioLastKeyRoot != project.keyRoot
+        let keyChanged = project.studioLastKeyRoot != project.keyRoot
             || project.studioLastKeyModeRaw != project.keyMode.rawValue
+        let tempoChanged = project.studioLastBpm != project.bpm
+        let headerChanged = meterChanged || keyChanged || tempoChanged
         let changedChordIds: Set<UUID> = Set(currentSignatureMap.compactMap { entry in
             let (id, signature) = entry
             guard let previous = previousSignatureMap[id] else { return nil }
@@ -487,11 +488,14 @@ struct StudioTabView: View {
             && timeline.totalBars >= previousTotalBars
             && !barsChanged
 
+        let shouldRegenerateDrums = meterChanged || barsChanged
+
         if headerChanged || barsChanged || !removedChordIds.isEmpty {
             StudioGenerator.regenerateNotes(
                 for: project,
                 style: style,
-                modelContext: modelContext
+                modelContext: modelContext,
+                includeDrums: shouldRegenerateDrums
             )
             project.updatedAt = Date()
         } else if !changedChordIds.isEmpty {
@@ -1185,8 +1189,8 @@ struct StudioTrackEditorView: View {
 
     private func openRegenerateOptions() {
         guard canRegenerate else { return }
-        regenerateIntensity = 0.5
-        regenerateComplexity = 0.5
+        regenerateIntensity = track.regenerateIntensity
+        regenerateComplexity = track.regenerateComplexity
         showingRegenerateOptions = true
     }
 
@@ -1203,7 +1207,7 @@ struct StudioTrackEditorView: View {
             project: project,
             style: style,
             drumPreset: track.drumPreset,
-            drumVariant: track.variant,
+            variant: track.variant,
             octaveShift: track.octaveShift,
             intensity: regenerateIntensity,
             complexity: regenerateComplexity
@@ -1215,6 +1219,8 @@ struct StudioTrackEditorView: View {
             modelContext.insert(note)
         }
 
+        track.regenerateIntensity = regenerateIntensity
+        track.regenerateComplexity = regenerateComplexity
         project.updatedAt = Date()
         try? modelContext.save()
         onNotesChanged()

@@ -422,6 +422,8 @@ final class StudioTrack {
     var isSolo: Bool = false
     var volume: Float = 0.75
     var pan: Float = 0.0
+    var regenerateIntensity: Double = 0.5
+    var regenerateComplexity: Double = 0.5
     var createdAt: Date = Date()
     var audioRecordingId: UUID? = nil
     var audioStartBeat: Double = 0
@@ -474,6 +476,8 @@ final class StudioTrack {
         self.isSolo = isSolo
         self.volume = 0.75
         self.pan = 0.0
+        self.regenerateIntensity = 0.5
+        self.regenerateComplexity = 0.5
         self.createdAt = Date()
         self.audioRecordingId = audioRecordingId
         self.audioStartBeat = audioStartBeat
