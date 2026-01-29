@@ -54,10 +54,12 @@ struct StudioGenerator {
                 timeBottom: project.timeBottom,
                 style: style,
                 drumPreset: instrument == .drums ? track.drumPreset : nil,
-                drumVariant: track.variant,
+                variant: track.variant,
                 octaveShift: track.octaveShift,
                 keyRoot: project.keyRoot,
-                diatonicMap: diatonicMap
+                diatonicMap: diatonicMap,
+                intensity: track.regenerateIntensity,
+                complexity: track.regenerateComplexity
             )
             for note in notes {
                 note.track = track
@@ -75,7 +77,8 @@ struct StudioGenerator {
         for project: Project,
         style: StudioStyle,
         modelContext: ModelContext,
-        resetDrumPreset: Bool = false
+        resetDrumPreset: Bool = false,
+        includeDrums: Bool = true
     ) {
         let timeline = buildTimeline(for: project)
         let diatonicMap = diatonicQualityMap(forKey: project.keyRoot, mode: project.keyMode)
@@ -86,6 +89,9 @@ struct StudioGenerator {
         )
 
         for track in project.studioTracks where !track.instrument.isAudio {
+            if track.instrument == .drums, !includeDrums {
+                continue
+            }
             for note in track.notes {
                 modelContext.delete(note)
             }
@@ -108,10 +114,12 @@ struct StudioGenerator {
                 timeBottom: project.timeBottom,
                 style: style,
                 drumPreset: activeDrumPreset,
-                drumVariant: track.variant,
+                variant: track.variant,
                 octaveShift: track.octaveShift,
                 keyRoot: project.keyRoot,
-                diatonicMap: diatonicMap
+                diatonicMap: diatonicMap,
+                intensity: track.regenerateIntensity,
+                complexity: track.regenerateComplexity
             )
             for note in notes {
                 note.track = track
@@ -155,7 +163,9 @@ struct StudioGenerator {
                     timeBottom: timeBottom,
                     style: style,
                     preset: preset,
-                    variant: track.variant
+                    variant: track.variant,
+                    intensity: track.regenerateIntensity,
+                    complexity: track.regenerateComplexity
                 )
                 let newNotes = drumNotes.filter { $0.startBeat >= previousTotalBeats }
                 didAppend = appendNotes(newNotes, to: track, modelContext: modelContext) || didAppend
@@ -171,10 +181,12 @@ struct StudioGenerator {
                 timeBottom: timeBottom,
                 style: style,
                 drumPreset: nil,
-                drumVariant: nil,
+                variant: track.variant,
                 octaveShift: track.octaveShift,
                 keyRoot: project.keyRoot,
-                diatonicMap: diatonicMap
+                diatonicMap: diatonicMap,
+                intensity: track.regenerateIntensity,
+                complexity: track.regenerateComplexity
             )
             let newNotes = notes.filter { note in
                 newChordRanges.contains { range in
@@ -221,10 +233,12 @@ struct StudioGenerator {
                 timeBottom: timeBottom,
                 style: style,
                 drumPreset: nil,
-                drumVariant: nil,
+                variant: track.variant,
                 octaveShift: track.octaveShift,
                 keyRoot: project.keyRoot,
-                diatonicMap: diatonicMap
+                diatonicMap: diatonicMap,
+                intensity: track.regenerateIntensity,
+                complexity: track.regenerateComplexity
             )
             didChange = appendNotes(notes, to: track, modelContext: modelContext) || didChange
         }
@@ -241,7 +255,7 @@ struct StudioGenerator {
         project: Project,
         style: StudioStyle,
         drumPreset: DrumPreset? = nil,
-        drumVariant: InstrumentVariant? = nil,
+        variant: InstrumentVariant? = nil,
         octaveShift: Int = 0,
         intensity: Double = 0.5,
         complexity: Double = 0.5
@@ -266,7 +280,7 @@ struct StudioGenerator {
             timeBottom: project.timeBottom,
             style: style,
             drumPreset: resolvedPreset,
-            drumVariant: drumVariant,
+            variant: variant,
             octaveShift: octaveShift,
             keyRoot: project.keyRoot,
             diatonicMap: diatonicMap,
@@ -417,7 +431,7 @@ struct StudioGenerator {
         timeBottom: Int,
         style: StudioStyle,
         drumPreset: DrumPreset?,
-        drumVariant: InstrumentVariant?,
+        variant: InstrumentVariant?,
         octaveShift: Int,
         keyRoot: String,
         diatonicMap: [String: ChordQuality],
@@ -436,7 +450,7 @@ struct StudioGenerator {
                     beatsPerBar: beatsPerBar,
                     timeBottom: timeBottom
                 ),
-                variant: drumVariant,
+                variant: variant,
                 intensity: intensity,
                 complexity: complexity
             )
@@ -448,6 +462,7 @@ struct StudioGenerator {
                 beatsPerBar: beatsPerBar,
                 timeBottom: timeBottom,
                 style: style,
+                variant: variant,
                 octaveShift: octaveShift,
                 keyRoot: keyRoot,
                 intensity: intensity,
@@ -461,6 +476,7 @@ struct StudioGenerator {
                 beatsPerBar: beatsPerBar,
                 timeBottom: timeBottom,
                 style: style,
+                variant: variant,
                 octaveShift: octaveShift,
                 keyRoot: keyRoot,
                 diatonicMap: diatonicMap,
@@ -479,12 +495,19 @@ struct StudioGenerator {
         beatsPerBar: Int,
         timeBottom: Int,
         style: StudioStyle,
+        variant: InstrumentVariant?,
         octaveShift: Int,
         keyRoot: String,
         diatonicMap: [String: ChordQuality],
         intensity: Double = 0.5,
         complexity: Double = 0.5
     ) -> [StudioNote] {
+        let voicingProfile = chordVoicingProfile(
+            for: instrument,
+            variant: variant,
+            style: style
+        )
+        let effectiveComplexity = max(0.0, min(1.0, complexity + voicingProfile.extensionBias))
         let range = chordRange(for: instrument, style: style, octaveShift: octaveShift)
         let tonicTarget = anchorPitch(for: keyRoot, in: range)
         var lastCenter = tonicTarget
@@ -498,24 +521,29 @@ struct StudioGenerator {
                 for: span.chord,
                 diatonicMap: diatonicMap
             )
-            var pitches = chordPitches(rootPitch: rootPitch, quality: resolvedQuality)
+            var pitches = chordPitches(
+                rootPitch: rootPitch,
+                quality: resolvedQuality,
+                omitThird: voicingProfile.omitThird
+            )
             let extensions = chordExtensionIntervals(
                 for: resolvedQuality,
                 style: style,
                 instrument: instrument,
-                complexity: complexity
+                variant: variant,
+                complexity: effectiveComplexity
             )
             for interval in extensions {
                 pitches.append(rootPitch + interval)
             }
-            if intensity > 0.7, instrument != .guitar {
+            if intensity > 0.7, instrument != .guitar || voicingProfile.allowOctaveDoubling {
                 pitches.append(rootPitch + 12)
             }
             pitches = Array(Set(pitches)).sorted()
             pitches = fitPitches(pitches, in: range)
             
-            // Woodwinds are monophonic: pick a single melodic pitch
-            if instrument == .woodwinds, let pitch = pitches.last {
+            // Monophonic instruments or variants: pick a single melodic pitch
+            if (instrument == .woodwinds || voicingProfile.monophonic), let pitch = pitches.last {
                 pitches = [pitch]
             }
 
@@ -523,9 +551,18 @@ struct StudioGenerator {
             if instrument == .guitar {
                 // Complexity affects how many notes we use
                 let maxNotes = complexity > 0.7 ? 3 : (complexity > 0.3 ? 2 : 1)
-                if pitches.count > maxNotes {
-                    pitches = Array(pitches.prefix(maxNotes))
+                let cappedNotes = min(maxNotes, voicingProfile.maxNotes ?? maxNotes)
+                if pitches.count > cappedNotes {
+                    pitches = Array(pitches.prefix(cappedNotes))
                 }
+            }
+            
+            if voicingProfile.preferOpenVoicing {
+                pitches = openVoicing(pitches)
+            }
+
+            if let maxNotes = voicingProfile.maxNotes, pitches.count > maxNotes {
+                pitches = Array(pitches.prefix(maxNotes))
             }
             
             let center = pitches.reduce(0, +) / max(1, pitches.count)
@@ -533,6 +570,7 @@ struct StudioGenerator {
             
             // Apply intensity to velocity
             let baseVelocity = chordVelocity(for: instrument, style: style)
+                + chordVelocityAdjustment(for: instrument, variant: variant, style: style)
             let velocity = scaledVelocity(base: baseVelocity, intensity: intensity, range: 40)
             
             let hitOffsets = chordHitOffsets(
@@ -542,7 +580,7 @@ struct StudioGenerator {
                 timeBottom: timeBottom,
                 chordDuration: baseDuration,
                 intensity: intensity,
-                complexity: complexity
+                complexity: effectiveComplexity
             )
 
             for offset in hitOffsets {
@@ -552,7 +590,8 @@ struct StudioGenerator {
                     style: style,
                     timeBottom: timeBottom,
                     baseDuration: baseDuration,
-                    offset: offset
+                    offset: offset,
+                    durationScale: voicingProfile.durationScale
                 )
                 let duration = min(hitDuration, max(0.25, baseDuration - offset))
                 let startBeat = span.startBeat + offset
@@ -579,12 +618,14 @@ struct StudioGenerator {
         beatsPerBar: Int,
         timeBottom: Int,
         style: StudioStyle,
+        variant: InstrumentVariant?,
         octaveShift: Int,
         keyRoot: String,
         intensity: Double = 0.5,
         complexity: Double = 0.5
     ) -> [StudioNote] {
         let range = bassRange(style: style, octaveShift: octaveShift)
+        let bassProfile = bassVoicingProfile(variant: variant, style: style)
         var lastPitch = anchorPitch(for: keyRoot, in: range)
         var notes: [StudioNote] = []
 
@@ -660,9 +701,20 @@ struct StudioGenerator {
                 }
             }
 
-            let durationHint = bassHitDuration(style: style)
+            if bassProfile.syncopationBoost, baseDuration >= 1.0 {
+                hits.append((min(0.5, baseDuration - 0.25), fifth))
+            }
+            if bassProfile.useOctaveJump, baseDuration >= 1.5 {
+                hits.append((min(1.0, baseDuration - 0.25), octave))
+            }
+
+            let durationHint = bassHitDuration(style: style) * bassProfile.durationScale
             let adjustedDuration = max(0.25, durationHint * (1.1 - 0.4 * intensity))
-            let velocity = scaledVelocity(base: bassVelocity(for: style), intensity: intensity, range: 36)
+            let velocity = scaledVelocity(
+                base: bassVelocity(for: style) + bassProfile.velocityOffset,
+                intensity: intensity,
+                range: 36
+            )
             var seenOffsets = Set<Double>()
             let orderedHits = hits
                 .filter { seenOffsets.insert($0.offset).inserted }
@@ -705,6 +757,7 @@ struct StudioGenerator {
             stepsPerBeat: stepsPerBeat,
             stepsPerBar: stepsPerBar
         )
+        let resolvedVariant = SoundFontManager.resolvedVariant(for: .drums, variant: variant) ?? .standardDrumKit
 
         let density = max(0.0, min(1.0, complexity))
         if density < 0.35 {
@@ -765,17 +818,105 @@ struct StudioGenerator {
             stepsPerBeat: stepsPerBeat,
             stepsPerBar: stepsPerBar
         )
+        var kickSteps = pattern.kick
+        var snareSteps = pattern.snare
+        var hatClosedSteps = pattern.hatClosed
+        var clapSteps = pattern.clap
+
+        switch resolvedVariant {
+        case .powerDrumKit:
+            kickSteps = Array(Set(kickSteps + backbeatSteps)).sorted()
+            if density > 0.6 {
+                snareSteps = Array(Set(snareSteps + offbeatSteps)).sorted()
+            }
+        case .roomDrumKit:
+            if density < 0.5 {
+                hatClosedSteps = hatClosedSteps.filter { $0 % stepsPerBeat == 0 }
+            }
+        case .electronicDrumKit, .tr808DrumKit:
+            let electronicHats = density > 0.6 ? Array(0..<stepsPerBar) : offbeatSteps
+            hatClosedSteps = Array(Set(hatClosedSteps + electronicHats)).sorted()
+            if density > 0.5 {
+                kickSteps = Array(Set(kickSteps + offbeatSteps)).sorted()
+            }
+        case .jazzDrumKit:
+            kickSteps = Array(beatSteps.prefix(2))
+            snareSteps = density > 0.6 ? backbeatSteps : Array(snareSteps.prefix(1))
+            hatClosedSteps = beatSteps
+        case .brushDrumKit:
+            kickSteps = [0]
+            snareSteps = density > 0.7 ? backbeatSteps : []
+            hatClosedSteps = []
+            clapSteps = []
+        case .orchestraDrumKit:
+            kickSteps = [0]
+            snareSteps = density > 0.7 ? backbeatSteps : []
+            hatClosedSteps = []
+            clapSteps = []
+        case .sfxDrumKit:
+            kickSteps = density > 0.6 ? beatSteps : [0]
+            snareSteps = []
+            hatClosedSteps = []
+            clapSteps = []
+        default:
+            break
+        }
+        kickSteps = Array(Set(kickSteps)).sorted()
+        snareSteps = Array(Set(snareSteps)).sorted()
+        hatClosedSteps = Array(Set(hatClosedSteps)).sorted()
+        clapSteps = Array(Set(clapSteps)).sorted()
         let isLatinPreset = preset == .latin || preset == .bossa
         var notes: [StudioNote] = []
-        let kickVelocityBase = style == .rock ? 118 : 112
-        let snareVelocityBase = style == .rock ? 108 : 102
-        let hatVelocityBase = style == .ambient ? 62 : 72
-        let clapVelocityBase = style == .edm ? 98 : 90
-        let rimVelocityBase = style == .hiphop ? 92 : 84
-        let tomVelocityBase = style == .rock ? 108 : 96
-        let rideVelocityBase = style == .jazz ? 76 : 72
-        let crashVelocityBase = style == .rock ? 114 : 106
-        let percVelocityBase = isLatinPreset ? 96 : 88
+        var kickVelocityBase = style == .rock ? 118 : 112
+        var snareVelocityBase = style == .rock ? 108 : 102
+        var hatVelocityBase = style == .ambient ? 62 : 72
+        var clapVelocityBase = style == .edm ? 98 : 90
+        var rimVelocityBase = style == .hiphop ? 92 : 84
+        var tomVelocityBase = style == .rock ? 108 : 96
+        var rideVelocityBase = style == .jazz ? 76 : 72
+        var crashVelocityBase = style == .rock ? 114 : 106
+        var percVelocityBase = isLatinPreset ? 96 : 88
+        switch resolvedVariant {
+        case .standardDrumKit:
+            crashVelocityBase -= 6
+        case .powerDrumKit:
+            kickVelocityBase += 6
+            snareVelocityBase += 6
+            crashVelocityBase += 4
+        case .roomDrumKit:
+            hatVelocityBase -= 4
+        case .electronicDrumKit, .tr808DrumKit:
+            kickVelocityBase += 2
+            snareVelocityBase -= 2
+            hatVelocityBase -= 4
+            crashVelocityBase -= 6
+        case .jazzDrumKit:
+            kickVelocityBase -= 8
+            snareVelocityBase -= 10
+            hatVelocityBase -= 8
+            rideVelocityBase -= 4
+            crashVelocityBase -= 10
+        case .brushDrumKit:
+            kickVelocityBase -= 16
+            snareVelocityBase -= 18
+            hatVelocityBase -= 14
+            rideVelocityBase -= 10
+            crashVelocityBase -= 16
+        case .orchestraDrumKit:
+            kickVelocityBase -= 8
+            snareVelocityBase -= 8
+            hatVelocityBase -= 12
+            crashVelocityBase -= 12
+            percVelocityBase -= 6
+        case .sfxDrumKit:
+            kickVelocityBase -= 4
+            snareVelocityBase -= 6
+            hatVelocityBase -= 12
+            crashVelocityBase -= 14
+            percVelocityBase += 4
+        default:
+            break
+        }
         let pitchMap = SoundFontManager.drumPitchMap(for: variant)
         var openHatSteps = pattern.hatOpen
         if intensity > 0.55 {
@@ -783,6 +924,12 @@ struct StudioGenerator {
         }
         if density > 0.8 {
             openHatSteps.append(contentsOf: backbeatSteps)
+        }
+        if resolvedVariant == .electronicDrumKit || resolvedVariant == .tr808DrumKit {
+            openHatSteps.append(contentsOf: offbeatSteps)
+        }
+        if resolvedVariant == .brushDrumKit || resolvedVariant == .orchestraDrumKit || resolvedVariant == .sfxDrumKit {
+            openHatSteps = []
         }
         openHatSteps = Array(Set(openHatSteps)).sorted()
 
@@ -803,18 +950,39 @@ struct StudioGenerator {
         case .lofi, .hiphop, .ambient:
             rideSteps = []
         }
+        switch resolvedVariant {
+        case .jazzDrumKit:
+            rideSteps = density > 0.4 ? Array(Set(beatSteps + offbeatSteps)).sorted() : beatSteps
+        case .brushDrumKit:
+            rideSteps = beatSteps
+        case .electronicDrumKit, .tr808DrumKit, .orchestraDrumKit, .sfxDrumKit:
+            rideSteps = []
+        default:
+            break
+        }
         if isLatinPreset, density > 0.55, rideSteps.isEmpty {
             rideSteps = beatSteps
         }
 
-        var crashSteps: [Int] = []
+        var crashBars: Set<Int> = []
         if intensity > 0.45 || style == .rock || style == .edm {
-            crashSteps = [0]
-            if density > 0.85 {
-                crashSteps.append(contentsOf: backbeatSteps)
+            let interval: Int?
+            switch resolvedVariant {
+            case .standardDrumKit:
+                interval = intensity > 0.6 ? 2 : 4
+            case .powerDrumKit:
+                interval = intensity > 0.6 ? 1 : 2
+            case .roomDrumKit:
+                interval = 2
+            case .electronicDrumKit, .tr808DrumKit, .jazzDrumKit, .brushDrumKit, .orchestraDrumKit, .sfxDrumKit:
+                interval = intensity > 0.85 ? 4 : nil
+            default:
+                interval = 2
+            }
+            if let interval {
+                crashBars = Set(stride(from: 0, to: totalBars, by: interval))
             }
         }
-        crashSteps = Array(Set(crashSteps)).sorted()
 
         var rimSteps: [Int] = []
         if style == .hiphop || style == .lofi {
@@ -827,6 +995,9 @@ struct StudioGenerator {
         } else if style == .funk && density > 0.5 {
             percSteps = offbeatSteps
         } else if style == .edm && density > 0.8 {
+            percSteps = beatSteps
+        }
+        if resolvedVariant == .orchestraDrumKit || resolvedVariant == .sfxDrumKit {
             percSteps = beatSteps
         }
 
@@ -849,13 +1020,21 @@ struct StudioGenerator {
         if style == .rock && density > 0.6 {
             tomMidSteps.append(contentsOf: backbeatSteps.filter { $0 % stepsPerBeat == 0 })
         }
+        if resolvedVariant == .powerDrumKit, density > 0.6 {
+            tomLowSteps.append(contentsOf: backbeatSteps.filter { $0 % stepsPerBeat == 0 })
+        }
+        if resolvedVariant == .brushDrumKit || resolvedVariant == .orchestraDrumKit || resolvedVariant == .sfxDrumKit {
+            tomLowSteps = []
+            tomMidSteps = []
+            tomHighSteps = []
+        }
         tomLowSteps = Array(Set(tomLowSteps)).sorted()
         tomMidSteps = Array(Set(tomMidSteps)).sorted()
         tomHighSteps = Array(Set(tomHighSteps)).sorted()
 
         for bar in 0..<totalBars {
             let barStart = Double(bar * beatsPerBar)
-            for step in pattern.kick {
+            for step in kickSteps {
                 notes.append(
                     StudioNote(
                         startBeat: barStart + Double(step) * stepLength,
@@ -869,7 +1048,7 @@ struct StudioGenerator {
                     )
                 )
             }
-            for step in pattern.snare {
+            for step in snareSteps {
                 notes.append(
                     StudioNote(
                         startBeat: barStart + Double(step) * stepLength,
@@ -897,7 +1076,7 @@ struct StudioGenerator {
                     )
                 )
             }
-            let closedHatSteps = pattern.hatClosed.filter { !openHatSteps.contains($0) }
+            let closedHatSteps = hatClosedSteps.filter { !openHatSteps.contains($0) }
             for step in closedHatSteps {
                 let velocity = accentSteps.contains(step)
                     ? scaledVelocity(base: hatVelocityBase + 8, intensity: intensity, range: 18)
@@ -939,19 +1118,22 @@ struct StudioGenerator {
                     )
                 )
             }
-            for step in crashSteps {
-                notes.append(
-                    StudioNote(
-                        startBeat: barStart + Double(step) * stepLength,
-                        duration: stepLength,
-                        pitch: pitchMap.crash,
-                        velocity: scaledVelocity(
-                            base: crashVelocityBase,
-                            intensity: intensity,
-                            range: 20
+            if crashBars.contains(bar) {
+                let crashSteps = density > 0.85 ? Array(Set([0] + backbeatSteps)).sorted() : [0]
+                for step in crashSteps {
+                    notes.append(
+                        StudioNote(
+                            startBeat: barStart + Double(step) * stepLength,
+                            duration: stepLength,
+                            pitch: pitchMap.crash,
+                            velocity: scaledVelocity(
+                                base: crashVelocityBase,
+                                intensity: intensity,
+                                range: 20
+                            )
                         )
                     )
-                )
+                }
             }
             for step in tomLowSteps {
                 notes.append(
@@ -995,7 +1177,7 @@ struct StudioGenerator {
                     )
                 )
             }
-            for step in pattern.clap {
+            for step in clapSteps {
                 notes.append(
                     StudioNote(
                         startBeat: barStart + Double(step) * stepLength,
@@ -1028,8 +1210,12 @@ struct StudioGenerator {
         return notes
     }
 
-    private static func chordPitches(rootPitch: Int, quality: ChordQuality) -> [Int] {
-        let intervals = simpleIntervals(for: quality)
+    private static func chordPitches(
+        rootPitch: Int,
+        quality: ChordQuality,
+        omitThird: Bool
+    ) -> [Int] {
+        let intervals = simpleIntervals(for: quality, omitThird: omitThird)
         return intervals.map { rootPitch + $0 }
     }
 
@@ -1037,9 +1223,10 @@ struct StudioGenerator {
         for quality: ChordQuality,
         style: StudioStyle,
         instrument: StudioInstrument,
+        variant: InstrumentVariant?,
         complexity: Double
     ) -> [Int] {
-        guard complexity > 0.45 else { return [] }
+        guard complexity > 0.35 else { return [] }
 
         let seventhInterval: Int = {
             switch quality {
@@ -1087,6 +1274,38 @@ struct StudioGenerator {
         case .hiphop:
             if instrument == .piano || instrument == .synth {
                 intervals.append(seventhInterval)
+            }
+        }
+
+        if let variant {
+            switch variant {
+            case .brightPiano, .electricPiano, .electricPiano2, .padWarm, .padHalo, .padSweep:
+                if complexity > 0.5 {
+                    intervals.append(14)
+                }
+            case .padChoir, .padBowed, .padPolysynth, .padNewAge, .padMetallic:
+                if complexity > 0.4 {
+                    intervals.append(14)
+                }
+                if complexity > 0.75 {
+                    intervals.append(17)
+                }
+            case .harpsichord, .honkyTonkPiano, .clavinet, .mutedGuitar, .overdriveGuitar, .distortionGuitar:
+                intervals.removeAll()
+            case .tremoloStrings, .stringEnsemble, .slowStrings, .synthStrings1, .synthStrings2:
+                if complexity > 0.55 {
+                    intervals.append(14)
+                }
+            case .brassSection, .synthBrass1, .synthBrass2:
+                if complexity > 0.6 {
+                    intervals.append(seventhInterval)
+                }
+            case .vibraphone, .marimba:
+                if complexity > 0.6 {
+                    intervals.append(14)
+                }
+            default:
+                break
             }
         }
 
@@ -1338,6 +1557,238 @@ struct StudioGenerator {
         }
     }
 
+    private struct ChordVoicingProfile {
+        var maxNotes: Int?
+        var omitThird: Bool
+        var preferOpenVoicing: Bool
+        var extensionBias: Double
+        var durationScale: Double
+        var monophonic: Bool
+        var allowOctaveDoubling: Bool
+    }
+
+    private struct BassVoicingProfile {
+        var durationScale: Double
+        var velocityOffset: Int
+        var syncopationBoost: Bool
+        var useOctaveJump: Bool
+    }
+
+    private static func chordVoicingProfile(
+        for instrument: StudioInstrument,
+        variant: InstrumentVariant?,
+        style: StudioStyle
+    ) -> ChordVoicingProfile {
+        var profile = ChordVoicingProfile(
+            maxNotes: nil,
+            omitThird: false,
+            preferOpenVoicing: instrument == .strings || instrument == .organ,
+            extensionBias: 0,
+            durationScale: 1,
+            monophonic: instrument == .woodwinds,
+            allowOctaveDoubling: true
+        )
+
+        switch instrument {
+        case .piano:
+            profile.maxNotes = 4
+        case .synth:
+            profile.maxNotes = 4
+            profile.preferOpenVoicing = true
+        case .guitar:
+            profile.maxNotes = 3
+            profile.preferOpenVoicing = true
+        case .strings:
+            profile.maxNotes = 4
+            profile.preferOpenVoicing = true
+        case .brass:
+            profile.maxNotes = 3
+        case .organ:
+            profile.maxNotes = 4
+            profile.preferOpenVoicing = true
+        case .mallets:
+            profile.maxNotes = 2
+            profile.durationScale = 0.7
+        case .bass, .drums, .audio:
+            break
+        }
+
+        if let variant {
+            switch variant {
+            case .brightPiano:
+                profile.extensionBias = 0.1
+            case .electricPiano, .electricPiano2:
+                profile.extensionBias = 0.15
+                profile.preferOpenVoicing = true
+            case .honkyTonkPiano, .harpsichord, .clavinet:
+                profile.maxNotes = 2
+                profile.durationScale = 0.6
+                profile.extensionBias = -0.2
+            case .harp:
+                profile.maxNotes = 3
+                profile.preferOpenVoicing = true
+                profile.allowOctaveDoubling = true
+            case .leadSquare, .leadSaw, .leadCalliope, .leadChiff, .leadCharang, .leadVoice:
+                profile.maxNotes = 1
+                profile.monophonic = true
+                profile.extensionBias = -0.2
+            case .leadFifths:
+                profile.maxNotes = 1
+                profile.monophonic = true
+                profile.omitThird = true
+                profile.extensionBias = -0.2
+            case .leadBass:
+                profile.maxNotes = 2
+                profile.omitThird = true
+                profile.extensionBias = -0.2
+            case .padNewAge, .padWarm, .padPolysynth, .padChoir, .padBowed, .padMetallic, .padHalo, .padSweep:
+                profile.maxNotes = 4
+                profile.preferOpenVoicing = true
+                profile.extensionBias = 0.2
+                profile.durationScale = 1.1
+            case .acousticNylonGuitar, .acousticSteelGuitar:
+                profile.maxNotes = 3
+                profile.preferOpenVoicing = true
+            case .electricGuitar, .cleanGuitar, .jazzGuitar:
+                profile.maxNotes = 3
+            case .mutedGuitar, .overdriveGuitar, .distortionGuitar:
+                profile.maxNotes = 2
+                profile.omitThird = true
+                profile.durationScale = 0.7
+                profile.allowOctaveDoubling = false
+            case .harmonicsGuitar:
+                profile.maxNotes = 2
+                profile.durationScale = 0.5
+                profile.allowOctaveDoubling = true
+            case .tremoloStrings:
+                profile.durationScale = 0.7
+            case .pizzicatoStrings:
+                profile.durationScale = 0.4
+                profile.maxNotes = 2
+            case .stringEnsemble, .slowStrings, .synthStrings1, .synthStrings2:
+                profile.maxNotes = 4
+                profile.preferOpenVoicing = true
+                profile.extensionBias = 0.1
+            case .choirAahs, .voiceOohs:
+                profile.maxNotes = 3
+                profile.preferOpenVoicing = true
+                profile.extensionBias = 0.15
+            case .trumpet, .trombone, .tuba, .mutedTrumpet, .frenchHorn:
+                profile.maxNotes = 2
+                profile.extensionBias = -0.1
+            case .brassSection, .synthBrass1, .synthBrass2:
+                profile.maxNotes = 4
+                profile.extensionBias = 0.1
+            case .drawbarOrgan, .rockOrgan, .churchOrgan, .reedOrgan:
+                profile.maxNotes = 4
+                profile.preferOpenVoicing = true
+                profile.durationScale = 1.1
+            case .percussiveOrgan:
+                profile.maxNotes = 3
+                profile.durationScale = 0.7
+            case .accordion, .harmonica, .tangoAccordion:
+                profile.maxNotes = 2
+                profile.durationScale = 0.8
+            case .celesta, .glockenspiel, .musicBox, .xylophone, .tubularBells:
+                profile.maxNotes = 2
+                profile.durationScale = 0.5
+            case .vibraphone, .marimba:
+                profile.maxNotes = 3
+                profile.durationScale = 0.7
+                profile.preferOpenVoicing = true
+            case .dulcimer, .kalimba:
+                profile.maxNotes = 2
+                profile.durationScale = 0.6
+            default:
+                break
+            }
+        }
+
+        if style == .ambient, (instrument == .synth || instrument == .strings) {
+            profile.durationScale = max(profile.durationScale, 1.2)
+            profile.extensionBias += 0.1
+        }
+
+        return profile
+    }
+
+    private static func bassVoicingProfile(
+        variant: InstrumentVariant?,
+        style: StudioStyle
+    ) -> BassVoicingProfile {
+        var profile = BassVoicingProfile(
+            durationScale: 1,
+            velocityOffset: 0,
+            syncopationBoost: style == .funk,
+            useOctaveJump: style == .edm
+        )
+
+        if let variant {
+            switch variant {
+            case .slapBass1, .slapBass2:
+                profile.velocityOffset = 8
+                profile.durationScale = 0.7
+                profile.syncopationBoost = true
+                profile.useOctaveJump = true
+            case .pickBass:
+                profile.velocityOffset = 6
+                profile.durationScale = 0.85
+            case .fretlessBass:
+                profile.velocityOffset = -4
+                profile.durationScale = 1.2
+            case .synthBass, .synthBass2:
+                profile.velocityOffset = 4
+                profile.durationScale = 0.75
+                profile.syncopationBoost = style == .edm || style == .hiphop
+            case .acousticBass, .fingerBass:
+                profile.durationScale = 1.0
+            default:
+                break
+            }
+        }
+
+        return profile
+    }
+
+    private static func chordVelocityAdjustment(
+        for instrument: StudioInstrument,
+        variant: InstrumentVariant?,
+        style: StudioStyle
+    ) -> Int {
+        guard let variant else { return 0 }
+        switch variant {
+        case .brightPiano:
+            return 6
+        case .electricPiano, .electricPiano2:
+            return 2
+        case .honkyTonkPiano, .harpsichord, .clavinet:
+            return 4
+        case .mutedGuitar:
+            return -6
+        case .overdriveGuitar, .distortionGuitar:
+            return 8
+        case .brassSection, .synthBrass1, .synthBrass2:
+            return style == .rock ? 6 : 2
+        case .tremoloStrings, .stringEnsemble, .slowStrings:
+            return -2
+        case .vibraphone, .marimba:
+            return -4
+        default:
+            return 0
+        }
+    }
+
+    private static func openVoicing(_ pitches: [Int]) -> [Int] {
+        guard pitches.count >= 3 else { return pitches }
+        let sorted = pitches.sorted()
+        let root = sorted[0]
+        let third = sorted[1]
+        let fifth = sorted[2]
+        let rest = sorted.dropFirst(3).map { $0 + 12 }
+        let voicing = [root, fifth, third + 12] + rest
+        return voicing.sorted()
+    }
+
     private static func scaledVelocity(base: Int, intensity: Double, range: Int) -> Int {
         let clamped = max(0.0, min(1.0, intensity))
         let offset = (clamped - 0.5) * Double(range)
@@ -1519,70 +1970,75 @@ struct StudioGenerator {
         style: StudioStyle,
         timeBottom: Int,
         baseDuration: Double,
-        offset: Double
+        offset: Double,
+        durationScale: Double
     ) -> Double {
         let remaining = max(0.25, baseDuration - offset)
         let shortHit = timeBottom == 8 ? 1.0 : 0.5
 
+        let baseDurationValue: Double
         switch style {
         case .lofi:
             // All sustained
-            return remaining
+            baseDurationValue = remaining
             
         case .pop:
             if instrument == .synth {
-                return remaining
+                baseDurationValue = remaining
             } else if instrument == .piano {
-                return min(remaining, 1.5)
+                baseDurationValue = min(remaining, 1.5)
             } else if instrument == .guitar {
-                return min(remaining, 1.0)
+                baseDurationValue = min(remaining, 1.0)
             }
-            return min(remaining, 1.5)
+            baseDurationValue = min(remaining, 1.5)
             
         case .rock:
             if instrument == .guitar {
-                return min(remaining, 0.75) // Short, punchy
+                baseDurationValue = min(remaining, 0.75) // Short, punchy
             } else if instrument == .piano {
-                return min(remaining, 1.0)
+                baseDurationValue = min(remaining, 1.0)
             }
-            return min(remaining, 1.25)
+            baseDurationValue = min(remaining, 1.25)
             
         case .edm:
             if instrument == .synth {
-                return min(remaining, shortHit) // Stabs
+                baseDurationValue = min(remaining, shortHit) // Stabs
             } else if instrument == .piano {
-                return min(remaining, 0.75)
+                baseDurationValue = min(remaining, 0.75)
             }
-            return min(remaining, 1.0)
+            baseDurationValue = min(remaining, 1.0)
             
         case .jazz:
             // Medium-short for comp feel
             if instrument == .piano {
-                return min(remaining, 0.5)
+                baseDurationValue = min(remaining, 0.5)
             } else if instrument == .guitar {
-                return min(remaining, 0.75)
+                baseDurationValue = min(remaining, 0.75)
             }
-            return min(remaining, 0.75)
+            baseDurationValue = min(remaining, 0.75)
             
         case .hiphop:
             // Long, sustained
             if instrument == .piano || instrument == .synth {
-                return remaining
+                baseDurationValue = remaining
             }
-            return remaining
+            baseDurationValue = remaining
             
         case .funk:
             if instrument == .guitar {
-                return min(remaining, 0.5) // Short, percussive
+                baseDurationValue = min(remaining, 0.5) // Short, percussive
             } else if instrument == .piano {
-                return min(remaining, 0.25) // Very short stabs
+                baseDurationValue = min(remaining, 0.25) // Very short stabs
             }
-            return min(remaining, 1.0)
+            baseDurationValue = min(remaining, 1.0)
             
         case .ambient:
             // Everything sustained
-            return remaining
+            baseDurationValue = remaining
         }
+
+        let scaled = baseDurationValue * durationScale
+        return min(remaining, max(0.25, scaled))
     }
 
     private static func bassHitDuration(style: StudioStyle) -> Double {
@@ -1636,27 +2092,35 @@ struct StudioGenerator {
         return (value / step).rounded() * step
     }
 
-    private static func simpleIntervals(for quality: ChordQuality) -> [Int] {
+    private static func simpleIntervals(
+        for quality: ChordQuality,
+        omitThird: Bool = false
+    ) -> [Int] {
         // Use the intervals property from ChordQuality directly
         // But for backward compatibility with the pattern generation, only use triads
+        let intervals: [Int]
         switch quality {
-        case .major: return [0, 4, 7]
-        case .minor: return [0, 3, 7]
-        case .diminished: return [0, 3, 6]
-        case .augmented: return [0, 4, 8]
-        case .dominant7: return [0, 4, 7]
-        case .major7: return [0, 4, 7]
-        case .minor7: return [0, 3, 7]
-        case .minorMajor7: return [0, 3, 7]
-        case .diminished7: return [0, 3, 6]
-        case .halfDiminished7: return [0, 3, 6]
-        case .augmented7: return [0, 4, 8]
-        case .sus2: return [0, 2, 7]
-        case .sus4: return [0, 5, 7]
-        case .dominant9: return [0, 4, 7]
-        case .major9: return [0, 4, 7]
-        case .minor9: return [0, 3, 7]
+        case .major: intervals = [0, 4, 7]
+        case .minor: intervals = [0, 3, 7]
+        case .diminished: intervals = [0, 3, 6]
+        case .augmented: intervals = [0, 4, 8]
+        case .dominant7: intervals = [0, 4, 7]
+        case .major7: intervals = [0, 4, 7]
+        case .minor7: intervals = [0, 3, 7]
+        case .minorMajor7: intervals = [0, 3, 7]
+        case .diminished7: intervals = [0, 3, 6]
+        case .halfDiminished7: intervals = [0, 3, 6]
+        case .augmented7: intervals = [0, 4, 8]
+        case .sus2: intervals = [0, 2, 7]
+        case .sus4: intervals = [0, 5, 7]
+        case .dominant9: intervals = [0, 4, 7]
+        case .major9: intervals = [0, 4, 7]
+        case .minor9: intervals = [0, 3, 7]
         }
+        if omitThird {
+            return intervals.filter { $0 != 3 && $0 != 4 && $0 != 5 }
+        }
+        return intervals
     }
 
     private static func extensionInterval(for ext: String) -> Int? {
