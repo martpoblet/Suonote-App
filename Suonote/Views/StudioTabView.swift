@@ -115,7 +115,8 @@ struct StudioTabView: View {
                         StudioTrackList(
                             tracks: sortedTracks,
                             selectedTrackId: $selectedTrackId,
-                            onTrackChange: { needsRebuild = true },
+                            onTrackStructureChange: { needsRebuild = true },
+                            onMixChange: applyMixState,
                             onDelete: deleteTrack,
                             onOpenEditor: { track in
                                 selectedTrackId = track.id
@@ -169,6 +170,7 @@ struct StudioTabView: View {
                 selectedTrackId = sortedTracks.first?.id
             }
             playback.prepare(project: project)
+            playback.updateProject(project)
             lastProjectSignature = projectStudioSignature
             let timeline = StudioGenerator.timeline(for: project)
             lastChordIds = Set(timeline.chords.map { $0.chord.id })
@@ -362,7 +364,13 @@ struct StudioTabView: View {
             style: style,
             drumPreset: drumPreset,
             variant: track.variant,
-            octaveShift: track.octaveShift
+            octaveShift: track.octaveShift,
+            intensity: track.regenerateIntensity,
+            complexity: track.regenerateComplexity,
+            naturalness: track.regenerateNaturalness,
+            arpeggioEnabled: track.regenerateArpeggioEnabled,
+            arpeggioRate: track.regenerateArpeggioRate,
+            arpeggioPattern: track.regenerateArpeggioPattern
         )
         for note in notes {
             note.track = track
@@ -428,6 +436,8 @@ struct StudioTabView: View {
         if needsRebuild {
             playback.rebuildSequence(project: project)
             needsRebuild = false
+        } else {
+            playback.updateProject(project)
         }
         playback.play()
     }
@@ -447,6 +457,11 @@ struct StudioTabView: View {
         }
         needsRebuild = true
         playback.prepare(project: project)
+        playback.updateProject(project)
+    }
+
+    private func applyMixState() {
+        playback.applyMixState(project: project)
     }
 
     private func syncStudioIfNeeded() {
@@ -718,13 +733,19 @@ struct StudioTimelineView: View {
     let onPause: () -> Void
     let onStop: () -> Void
     let onSeek: (Double) -> Void
+    @State private var isScrubbing = false
+    @State private var scrubBeat: Double = 0
 
     private var maxBeats: Double {
         Double(max(1, totalBars * beatsPerBar))
     }
 
+    private var displayedBeat: Double {
+        isScrubbing ? scrubBeat : currentBeat
+    }
+
     private var currentBarIndex: Int {
-        Int(currentBeat / Double(beatsPerBar))
+        Int(displayedBeat / Double(beatsPerBar))
     }
 
     private var currentSection: StudioTimelineSegment? {
@@ -736,7 +757,7 @@ struct StudioTimelineView: View {
 
     private var timeLabel: String {
         let bar = max(1, currentBarIndex + 1)
-        let beat = max(1, Int(currentBeat.truncatingRemainder(dividingBy: Double(beatsPerBar))) + 1)
+        let beat = max(1, Int(displayedBeat.truncatingRemainder(dividingBy: Double(beatsPerBar))) + 1)
         return "Bar \(bar) · Beat \(beat)"
     }
 
@@ -791,7 +812,7 @@ struct StudioTimelineView: View {
 
             GeometryReader { geo in
                 let barWidth = geo.size.width / CGFloat(max(1, totalBars))
-                let progressX = CGFloat(currentBeat / Double(beatsPerBar)) * barWidth
+                let progressX = CGFloat(displayedBeat / Double(beatsPerBar)) * barWidth
 
                 ZStack(alignment: .leading) {
                     Capsule()
@@ -839,7 +860,14 @@ struct StudioTimelineView: View {
                         .onChanged { value in
                             let clampedX = max(0, min(value.location.x, geo.size.width))
                             let beat = Double(clampedX / barWidth) * Double(beatsPerBar)
-                            onSeek(min(beat, maxBeats))
+                            scrubBeat = min(beat, maxBeats)
+                            isScrubbing = true
+                        }
+                        .onEnded { _ in
+                            if isScrubbing {
+                                onSeek(scrubBeat)
+                            }
+                            isScrubbing = false
                         }
                 )
             }
@@ -875,6 +903,10 @@ struct StudioTrackEditorView: View {
     @State private var showingRegenerateOptions = false
     @State private var regenerateIntensity: Double = 0.5
     @State private var regenerateComplexity: Double = 0.5
+    @State private var regenerateNaturalness: Double = 0.0
+    @State private var regenerateArpeggioEnabled = false
+    @State private var regenerateArpeggioRate = "1/8"
+    @State private var regenerateArpeggioPattern = "Up"
 
     private var accentColor: Color {
         track.instrument.color
@@ -938,8 +970,15 @@ struct StudioTrackEditorView: View {
         .sheet(isPresented: $showingRegenerateOptions) {
             RegenerateOptionsView(
                 trackName: track.name,
+                instrument: track.instrument,
+                variant: track.variant,
+                style: style,
                 intensity: $regenerateIntensity,
                 complexity: $regenerateComplexity,
+                naturalness: $regenerateNaturalness,
+                arpeggioEnabled: $regenerateArpeggioEnabled,
+                arpeggioRate: $regenerateArpeggioRate,
+                arpeggioPattern: $regenerateArpeggioPattern,
                 onRegenerate: executeRegenerate,
                 onCancel: {
                     showingRegenerateOptions = false
@@ -1191,6 +1230,10 @@ struct StudioTrackEditorView: View {
         guard canRegenerate else { return }
         regenerateIntensity = track.regenerateIntensity
         regenerateComplexity = track.regenerateComplexity
+        regenerateNaturalness = track.regenerateNaturalness
+        regenerateArpeggioEnabled = track.regenerateArpeggioEnabled
+        regenerateArpeggioRate = track.regenerateArpeggioRate
+        regenerateArpeggioPattern = normalizedArpeggioPattern(track.regenerateArpeggioPattern)
         showingRegenerateOptions = true
     }
 
@@ -1210,7 +1253,11 @@ struct StudioTrackEditorView: View {
             variant: track.variant,
             octaveShift: track.octaveShift,
             intensity: regenerateIntensity,
-            complexity: regenerateComplexity
+            complexity: regenerateComplexity,
+            naturalness: regenerateNaturalness,
+            arpeggioEnabled: regenerateArpeggioEnabled,
+            arpeggioRate: regenerateArpeggioRate,
+            arpeggioPattern: regenerateArpeggioPattern
         )
 
         for note in newNotes {
@@ -1221,11 +1268,26 @@ struct StudioTrackEditorView: View {
 
         track.regenerateIntensity = regenerateIntensity
         track.regenerateComplexity = regenerateComplexity
+        track.regenerateNaturalness = regenerateNaturalness
+        track.regenerateArpeggioEnabled = regenerateArpeggioEnabled
+        track.regenerateArpeggioRate = regenerateArpeggioRate
+        track.regenerateArpeggioPattern = normalizedArpeggioPattern(regenerateArpeggioPattern)
         project.updatedAt = Date()
         try? modelContext.save()
         onNotesChanged()
         onStop()
         showingRegenerateOptions = false
+    }
+
+    private func normalizedArpeggioPattern(_ raw: String) -> String {
+        switch raw.lowercased() {
+        case "down":
+            return "Down"
+        case "updown":
+            return "UpDown"
+        default:
+            return "Up"
+        }
     }
 
     private var playbackHud: some View {
@@ -1265,7 +1327,7 @@ struct StudioTrackEditorHint: View {
                 )
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Tap a track to edit")
+                Text("Select a track, then tap Edit")
                     .font(DesignSystem.Typography.callout)
                     .foregroundStyle(DesignSystem.Colors.textPrimary)
                 Text("Open the full-screen editor to write notes and grooves.")
@@ -1324,7 +1386,8 @@ private struct StudioInfoChip: View {
 struct StudioTrackList: View {
     let tracks: [StudioTrack]
     @Binding var selectedTrackId: UUID?
-    let onTrackChange: () -> Void
+    let onTrackStructureChange: () -> Void
+    let onMixChange: () -> Void
     let onDelete: (StudioTrack) -> Void
     let onOpenEditor: (StudioTrack) -> Void
 
@@ -1347,7 +1410,8 @@ struct StudioTrackList: View {
                             onSelect: {
                                 selectedTrackId = track.id
                             },
-                            onTrackChange: onTrackChange,
+                            onTrackStructureChange: onTrackStructureChange,
+                            onMixChange: onMixChange,
                             onDelete: {
                                 onDelete(track)
                             },
@@ -1364,7 +1428,8 @@ struct StudioTrackRow: View {
     @Bindable var track: StudioTrack
     let isSelected: Bool
     let onSelect: () -> Void
-    let onTrackChange: () -> Void
+    let onTrackStructureChange: () -> Void
+    let onMixChange: () -> Void
     let onDelete: () -> Void
     let onOpenEditor: () -> Void
 
@@ -1387,7 +1452,7 @@ struct StudioTrackRow: View {
                             ForEach(track.instrument.variants, id: \.self) { variant in
                                 Button {
                                     track.variant = variant
-                                    onTrackChange()
+                                    onTrackStructureChange()
                                 } label: {
                                     HStack {
                                         Text(variant.displayName)
@@ -1418,7 +1483,7 @@ struct StudioTrackRow: View {
 
                 Button {
                     track.isMuted.toggle()
-                    onTrackChange()
+                    onMixChange()
                 } label: {
                     Text("M")
                         .font(.caption)
@@ -1437,7 +1502,7 @@ struct StudioTrackRow: View {
 
                 Button {
                     track.isSolo.toggle()
-                    onTrackChange()
+                    onMixChange()
                 } label: {
                     Text("S")
                         .font(.caption)
@@ -1446,6 +1511,24 @@ struct StudioTrackRow: View {
                         .background(
                             Circle()
                                 .fill(track.isSolo ? track.instrument.color : DesignSystem.Colors.surfaceSecondary)
+                                .overlay(
+                                    Circle()
+                                        .stroke(DesignSystem.Colors.border, lineWidth: 1)
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    onOpenEditor()
+                } label: {
+                    Image(systemName: "square.and.pencil")
+                        .font(.caption)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
+                        .frame(width: 26, height: 26)
+                        .background(
+                            Circle()
+                                .fill(DesignSystem.Colors.surfaceSecondary)
                                 .overlay(
                                     Circle()
                                         .stroke(DesignSystem.Colors.border, lineWidth: 1)
@@ -1467,7 +1550,6 @@ struct StudioTrackRow: View {
         .contentShape(Rectangle())
         .onTapGesture {
             onSelect()
-            onOpenEditor()
         }
         .contextMenu {
             Button(role: .destructive) {
@@ -1543,7 +1625,7 @@ struct StudioNoteEditor: View {
     private let cellWidth: CGFloat = 28
     private let cellHeight: CGFloat = 26
     private let durationOptions: [Double] = [0.25, 0.5, 1, 2, 4]
-    private let octaveRange = -2...2
+    private let octaveRange = -4...4
 
     private var totalSteps: Int {
         max(1, totalBars * beatsPerBar * stepsPerBeat)
@@ -2435,18 +2517,30 @@ struct AddTrackMenuView: View {
 
 struct RegenerateOptionsView: View {
     let trackName: String
+    let instrument: StudioInstrument
+    let variant: InstrumentVariant?
+    let style: StudioStyle?
     @Binding var intensity: Double
     @Binding var complexity: Double
+    @Binding var naturalness: Double
+    @Binding var arpeggioEnabled: Bool
+    @Binding var arpeggioRate: String
+    @Binding var arpeggioPattern: String
     let onRegenerate: () -> Void
     let onCancel: () -> Void
     
+    private let arpeggioRates = ["1/4", "1/8", "1/16"]
+    private let arpeggioPatterns = ["Up", "Down", "UpDown"]
+    
     var body: some View {
         NavigationView {
-            VStack(spacing: 24) {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Regenerating: \(trackName)")
-                        .font(DesignSystem.Typography.headline)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
+            ScrollView {
+                VStack(spacing: 24) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Regenerating: \(trackName)")
+                            .font(DesignSystem.Typography.headline)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
+                    }
                     
                     // Intensity Slider
                     VStack(alignment: .leading, spacing: 8) {
@@ -2511,6 +2605,114 @@ struct RegenerateOptionsView: View {
                             .font(DesignSystem.Typography.caption2)
                             .foregroundStyle(DesignSystem.Colors.textTertiary)
                     }
+
+                    // Naturalness Slider
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Image(systemName: "tuningfork")
+                                .foregroundStyle(DesignSystem.Colors.warning)
+                            Text("Naturalness")
+                                .font(.subheadline)
+                                .foregroundStyle(DesignSystem.Colors.textPrimary)
+                            Spacer()
+                            Text("\(Int(naturalness * 100))%")
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        }
+                        
+                        Slider(value: $naturalness, in: 0...1)
+                            .tint(DesignSystem.Colors.warning)
+                        
+                        HStack {
+                            Text("Tight")
+                                .font(DesignSystem.Typography.caption2)
+                                .foregroundStyle(DesignSystem.Colors.textSecondary)
+                            Spacer()
+                            Text("Loose")
+                                .font(DesignSystem.Typography.caption2)
+                                .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        }
+                        
+                        Text("Adds subtle timing and velocity variation")
+                            .font(DesignSystem.Typography.caption2)
+                            .foregroundStyle(DesignSystem.Colors.textTertiary)
+                    }
+
+                    // Arpeggio Options
+                    if supportsArpeggio {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Toggle(isOn: $arpeggioEnabled) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "arrow.up.right.and.arrow.down.left")
+                                        .foregroundStyle(DesignSystem.Colors.info)
+                                    Text("Arpeggiate")
+                                        .font(.subheadline)
+                                        .foregroundStyle(DesignSystem.Colors.textPrimary)
+                                }
+                            }
+                            .tint(DesignSystem.Colors.info)
+                            
+                            if arpeggioEnabled {
+                                HStack(spacing: 12) {
+                                    Menu {
+                                        ForEach(arpeggioRates, id: \.self) { rate in
+                                            Button(rate) {
+                                                arpeggioRate = rate
+                                            }
+                                        }
+                                    } label: {
+                                        HStack(spacing: 6) {
+                                            Text("Rate \(arpeggioRate)")
+                                                .font(DesignSystem.Typography.caption)
+                                            Image(systemName: "chevron.down")
+                                                .font(DesignSystem.Typography.caption2)
+                                        }
+                                        .foregroundStyle(DesignSystem.Colors.textPrimary)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(
+                                            Capsule()
+                                                .fill(DesignSystem.Colors.surfaceSecondary)
+                                                .overlay(
+                                                    Capsule()
+                                                        .stroke(DesignSystem.Colors.border, lineWidth: 1)
+                                                )
+                                        )
+                                    }
+                                    
+                                    Menu {
+                                        ForEach(arpeggioPatterns, id: \.self) { pattern in
+                                            Button(pattern) {
+                                                arpeggioPattern = pattern
+                                            }
+                                        }
+                                    } label: {
+                                        HStack(spacing: 6) {
+                                            Text(arpeggioPattern)
+                                                .font(DesignSystem.Typography.caption)
+                                            Image(systemName: "chevron.down")
+                                                .font(DesignSystem.Typography.caption2)
+                                        }
+                                        .foregroundStyle(DesignSystem.Colors.textPrimary)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(
+                                            Capsule()
+                                                .fill(DesignSystem.Colors.surfaceSecondary)
+                                                .overlay(
+                                                    Capsule()
+                                                        .stroke(DesignSystem.Colors.border, lineWidth: 1)
+                                                )
+                                        )
+                                    }
+                                }
+                                
+                                Text("Spreads chord notes in time")
+                                    .font(DesignSystem.Typography.caption2)
+                                    .foregroundStyle(DesignSystem.Colors.textTertiary)
+                            }
+                        }
+                    }
                 }
                 .padding(20)
                 .background(
@@ -2518,7 +2720,7 @@ struct RegenerateOptionsView: View {
                         .fill(DesignSystem.Colors.surfaceSecondary)
                 )
                 
-                Spacer()
+                Spacer(minLength: 12)
                 
                 // Buttons
                 HStack(spacing: 12) {
@@ -2537,7 +2739,15 @@ struct RegenerateOptionsView: View {
             )
             .navigationTitle("Regenerate Options")
             .navigationBarTitleDisplayMode(.inline)
-                    }
-        .presentationDetents([.height(480)])
+        }
+        .presentationDetents([.height(680)])
+    }
+
+    private var supportsArpeggio: Bool {
+        StudioGenerator.supportsArpeggio(
+            instrument: instrument,
+            variant: variant,
+            style: style
+        )
     }
 }

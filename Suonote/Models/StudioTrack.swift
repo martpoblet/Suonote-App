@@ -424,6 +424,10 @@ final class StudioTrack {
     var pan: Float = 0.0
     var regenerateIntensity: Double = 0.5
     var regenerateComplexity: Double = 0.5
+    var regenerateNaturalness: Double = 0.0
+    var regenerateArpeggioEnabled: Bool = false
+    private var _regenerateArpeggioRate: String = "1/8"
+    private var _regenerateArpeggioPattern: String = "Up"
     var createdAt: Date = Date()
     var audioRecordingId: UUID? = nil
     var audioStartBeat: Double = 0
@@ -478,6 +482,10 @@ final class StudioTrack {
         self.pan = 0.0
         self.regenerateIntensity = 0.5
         self.regenerateComplexity = 0.5
+        self.regenerateNaturalness = 0.0
+        self.regenerateArpeggioEnabled = false
+        self._regenerateArpeggioRate = "1/8"
+        self._regenerateArpeggioPattern = "Up"
         self.createdAt = Date()
         self.audioRecordingId = audioRecordingId
         self.audioStartBeat = audioStartBeat
@@ -492,6 +500,16 @@ final class StudioTrack {
                 note.track = self
             }
         }
+    }
+
+    var regenerateArpeggioRate: String {
+        get { _regenerateArpeggioRate }
+        set { _regenerateArpeggioRate = newValue }
+    }
+
+    var regenerateArpeggioPattern: String {
+        get { _regenerateArpeggioPattern }
+        set { _regenerateArpeggioPattern = newValue }
     }
 }
 

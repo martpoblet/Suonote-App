@@ -1,136 +1,65 @@
-# Suonote — SoundFonts Setup
+# Suonote - Arachno Lite Setup
 
-This guide lists **all required SF2 files**, exact filenames, and folders. Please download each file from the URL, then place it in the matching folder **with the exact filename**.
+Este proyecto ahora usa un solo SoundFont:
 
-## Folder structure
-Create (already prepared):
-```
-SoundFonts/
-  Piano/
-  Drums/
-  Synth/
-  Guitar/
-  Bass/
-  Strings/
-  Brass/
-  Woodwinds/
-  Organ/
-  Mallets/
-```
+- Archivo esperado: `SoundFonts/Arachno/Arachno_Lite.sf2`
 
----
+## Condicion de permiso (resumen)
 
-## Piano (3)
-1) Upright Piano (small)
-- File: `SoundFonts/Piano/Upright_Piano_KW_Small.sf2`
-- URL: https://freepats.zenvoid.org/Piano/acoustic-grand-piano.html
+Segun la respuesta de Maxime Abbey:
 
-2) FM Synth Piano #1 (electric)
-- File: `SoundFonts/Piano/FM_Synth_Piano_1.sf2`
-- URL: https://freepats.zenvoid.org/ElectricPiano/synthesized-piano.html
+- Se permite distribuir una version lite si solo quitas instrumentos/samples que no usas.
+- No se deben alterar los instrumentos que si conservas (sin resamplear, sin bajar de 48 kHz, sin quitar capas internas).
+- Debe haber credito correcto en app y App Store.
+- Debes avisarle cuando la app salga para que pueda promocionarla en Arachnosoft.
 
-3) FM Synth Piano #2 (electric bright)
-- File: `SoundFonts/Piano/FM_Synth_Piano_2.sf2`
-- URL: https://freepats.zenvoid.org/ElectricPiano/synthesized-piano.html
+## Como construir el Arachno Lite
 
----
+Herramienta sugerida: Polyphone.
 
-## Drums (2)
-1) Acoustic Drum Kit (AcousticKitM.B.2)
-- File: `SoundFonts/Drums/AcousticKitM.B.2.sf2`
-- URL: https://www.polyphone.io/en/soundfonts/unpitched-percussion/544-acoustic-kit-m-b
-- License: “give credit” (attribution required)
+1. Abre el SF2 original de Arachno.
+2. Haz una copia de trabajo (no modifiques el original).
+3. Elimina solo presets/instrumentos que no necesitas.
+4. Mantiene intactos los presets que conservas (sin editar samples/layers).
+5. Exporta como `Arachno_Lite.sf2`.
+6. Verifica tamano final (< 50 MB).
 
-2) Synth Percussion (electronic)
-- File: `SoundFonts/Drums/Synth_Percussion.sf2`
-- URL: https://freepats.zenvoid.org/Percussion/electric-percussion.html
+## Presets GM recomendados (configuracion actual del proyecto)
 
----
+- Drums: bank 128 program 0 (Studio), bank 128 program 24 (Electronic), bank 128 program 25 (TR-808/909)
+- Piano: bank 0 program 0 (Grand), bank 0 program 1 (Bright), bank 0 program 4 (Electric)
+- Synth: bank 0 program 87 (Lead), bank 0 program 89 (Pad Warm)
+- Guitar: bank 0 program 24 (Nylon), bank 0 program 25 (Steel), bank 0 program 27 (Clean Electric), bank 0 program 29 (Overdrive)
+- Bass: bank 0 program 33 (Finger), bank 0 program 38 (Synth Bass)
+- Strings: bank 0 program 48 (String Ensemble), bank 0 program 50 (Synth Strings 1), bank 0 program 51 (Synth Strings 2)
+- Brass: bank 0 program 62 (Synth Brass 1), bank 0 program 63 (Synth Brass 2)
+- Woodwinds: bank 0 program 71 (Clarinet), bank 0 program 66 (Tenor Sax), bank 0 program 73 (Flute)
+- Organ: bank 0 program 16 (Drawbar), bank 0 program 19 (Church)
+- Mallets: bank 0 program 13 (Xylophone), bank 0 program 14 (Tubular Bells)
 
-## Synth (1)
-1) Synth Bass + Lead
-- File: `SoundFonts/Synth/Synth_Bass_Lead.sf2`
-- URL: https://freepats.zenvoid.org/Synthesizer/synth-lead.html
+Total: 26 presets.
 
----
+## Estrategia para llegar a < 50 MB
 
-## Guitar (2)
-1) Spanish Classical (Nylon)
-- File: `SoundFonts/Guitar/Spanish_Classical.sf2`
-- URL: https://freepats.zenvoid.org/Guitar/acoustic-guitar.html
+1. Fase A: deja exactamente los 20 presets de arriba.
+2. Fase B: limpia instrumentos/samples no usados.
+3. Si aun supera 50 MB, reduce en este orden (manteniendo 2 por familia hasta donde se pueda):
+   - Quitar `Strings 2` (51) y dejar solo `Strings 1` (50).
+   - Quitar `Brass 2` (63) y dejar solo `Brass 1` (62).
+   - Quitar `Pad Warm` (89) y dejar solo `Lead` (87).
+   - Quitar `Tubular Bells` (14) y dejar solo `Xylophone` (13).
+4. Reexportar y medir tamano en cada iteracion.
 
-2) Clean Electric Guitar #1 (small)
-- File: `SoundFonts/Guitar/Clean_Electric_Guitar_1.sf2`
-- URL: https://freepats.zenvoid.org/ElectricGuitar/clean-electric-guitar.html
+## Credito obligatorio sugerido
 
----
+Texto in-app:
 
-## Bass (1)
-1) Electric Bass (Finger)
-- File: `SoundFonts/Bass/Electric_Bass_Finger.sf2`
-- URL: https://freepats.zenvoid.org/ElectricGuitar/clean-electric-bass.html
+`Arachno SoundFont (Lite subset) by Maxime Abbey (Arachnosoft). Used with permission.`
 
----
+Texto para App Store (descripcion):
 
-## Strings (2)
-1) Synth Strings #1
-- File: `SoundFonts/Strings/Synth_Strings_1.sf2`
-- URL: https://freepats.zenvoid.org/Synthesizer/synth-strings.html
+`Includes a Lite subset of Arachno SoundFont by Maxime Abbey (Arachnosoft), used with permission.`
 
-2) Synth Strings #2
-- File: `SoundFonts/Strings/Synth_Strings_2.sf2`
-- URL: https://freepats.zenvoid.org/Synthesizer/synth-strings.html
+URL oficial:
 
----
-
-## Brass (2)
-1) Synth Brass #1
-- File: `SoundFonts/Brass/Synth_Brass_1.sf2`
-- URL: https://freepats.zenvoid.org/Synthesizer/synth-brass.html
-
-2) Synth Brass #2
-- File: `SoundFonts/Brass/Synth_Brass_2.sf2`
-- URL: https://freepats.zenvoid.org/Synthesizer/synth-brass.html
-
----
-
-## Woodwinds (3)
-1) Clarinet
-- File: `SoundFonts/Woodwinds/Clarinet.sf2`
-- URL: https://freepats.zenvoid.org/Reed/clarinet.html
-
-2) Tenor Sax (small)
-- File: `SoundFonts/Woodwinds/Tenor_Sax.sf2`
-- URL: https://freepats.zenvoid.org/Reed/saxophone.html
-
-3) Ocarina
-- File: `SoundFonts/Woodwinds/Ocarina.sf2`
-- URL: https://freepats.zenvoid.org/Wind/ocarina.html
-
----
-
-## Organ (1)
-1) Pipe Organ
-- File: `SoundFonts/Organ/Pipe_Organ.sf2`
-- URL: https://freepats.zenvoid.org/Organ/pipe-organ.html
-
----
-
-## Mallets (3)
-1) Xylophone
-- File: `SoundFonts/Mallets/Xylophone.sf2`
-- URL: https://freepats.zenvoid.org/ChromaticPercussion/xylophone.html
-
-2) Tubular Bells (small)
-- File: `SoundFonts/Mallets/Tubular_Bells.sf2`
-- URL: https://freepats.zenvoid.org/ChromaticPercussion/tubular-bells.html
-
-3) Kalimba
-- File: `SoundFonts/Mallets/Kalimba.sf2`
-- URL: https://freepats.zenvoid.org/Ethnic/kalimba.html
-
----
-
-## Notes
-- Ensure the **exact filenames** above. The app loads by exact path.
-- After adding files, include them in **Xcode → Build Phases → Copy Bundle Resources**.
+`https://www.arachnosoft.com/main/soundfont.php`

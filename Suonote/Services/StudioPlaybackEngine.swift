@@ -10,18 +10,47 @@ final class StudioPlaybackEngine: ObservableObject {
     @Published private(set) var currentBeat: Double = 0
     @Published private(set) var totalBeats: Double = 0
 
+    private struct BeatClock {
+        var bpm: Double
+        var timeBottom: Int
+
+        // Sequencer uses quarter-note beats; UI uses timeBottom as the beat unit.
+        var beatScale: Double { 4.0 / Double(timeBottom) }
+        var uiBeatSeconds: Double { (60.0 / bpm) * beatScale }
+
+        func uiBeatToSequencerBeat(_ uiBeat: Double) -> Double { uiBeat * beatScale }
+        func sequencerBeatToUiBeat(_ beat: Double) -> Double { beat / beatScale }
+    }
+
+    private struct AudioTrackInfo {
+        let url: URL
+        let startBeat: Double
+        let file: AVAudioFile
+        let format: AVAudioFormat
+        let sampleRate: Double
+        let length: AVAudioFramePosition
+    }
+
+    private struct TrackMixState {
+        var volume: Float
+        var pan: Float
+        var isMuted: Bool
+        var isSolo: Bool
+    }
+
     private var engine = AVAudioEngine()
     private var sequencer: AVAudioSequencer?
     private var samplerNodes: [UUID: AVAudioUnitSampler] = [:]
     private var audioNodes: [UUID: AVAudioPlayerNode] = [:]
     private var mixerNodes: [UUID: AVAudioMixerNode] = [:]
-    private var audioTrackInfo: [UUID: (url: URL, startBeat: Double)] = [:]
+    private var audioTrackInfo: [UUID: AudioTrackInfo] = [:]
+    private var trackMixState: [UUID: TrackMixState] = [:]
     private var bpm: Double = 120
     private var beatScale: Double = 1.0
-    private var gridBeatInterval: Double = 0.5
+    private var beatClock = BeatClock(bpm: 120, timeBottom: 4)
     private var playheadTimer: Timer?
     private var customBankStatus: CustomBankStatus = .unknown
-    private var drumMelodicChannels: Set<UUID> = []
+    private var drumBankMode: [UUID: Bool] = [:] // true = melodic bank, false = percussion bank
 
     private enum CustomBankStatus {
         case unknown
@@ -30,9 +59,7 @@ final class StudioPlaybackEngine: ObservableObject {
     }
 
     func prepare(project: Project) {
-        bpm = project.quarterNoteBpm()
-        beatScale = 4.0 / Double(project.timeBottom)
-        gridBeatInterval = project.gridBeatInterval()
+        updateBeatClock(for: project)
         totalBeats = timelineBeats(for: project)
         if sequencer == nil {
             rebuildSequence(project: project)
@@ -43,11 +70,9 @@ final class StudioPlaybackEngine: ObservableObject {
         stop(resetPosition: false)
         sequencer = nil
         teardownEngine()
-        drumMelodicChannels.removeAll()
+        drumBankMode.removeAll()
 
-        bpm = project.quarterNoteBpm()
-        beatScale = 4.0 / Double(project.timeBottom)
-        gridBeatInterval = project.gridBeatInterval()
+        updateBeatClock(for: project)
         totalBeats = timelineBeats(for: project)
         currentBeat = min(currentBeat, totalBeats)
 
@@ -59,9 +84,9 @@ final class StudioPlaybackEngine: ObservableObject {
             return
         }
 
-        let activeTracks = resolvedTracks(from: project)
-        attachSamplers(for: activeTracks)
-        attachAudioNodes(for: activeTracks, project: project)
+        let allTracks = resolvedTracks(from: project)
+        attachSamplers(for: allTracks)
+        attachAudioNodes(for: allTracks, project: project)
         connectOutputIfNeeded(outputFormat: outputFormat)
         engine.prepare()
         do {
@@ -72,7 +97,8 @@ final class StudioPlaybackEngine: ObservableObject {
         }
 
         sequencer = AVAudioSequencer(audioEngine: engine)
-        buildSequence(for: activeTracks)
+        buildSequence(for: allTracks)
+        applyMixState(project: project)
     }
 
     func play() {
@@ -87,7 +113,7 @@ final class StudioPlaybackEngine: ObservableObject {
         }
 
         scheduleAudioTracks(startBeat: currentBeat)
-        sequencer.currentPositionInBeats = currentBeat * beatScale
+        sequencer.currentPositionInBeats = beatClock.uiBeatToSequencerBeat(currentBeat)
 
         do {
             try sequencer.start()
@@ -110,8 +136,8 @@ final class StudioPlaybackEngine: ObservableObject {
         isPlaying = false
         stopPlayheadTimer()
 
-        let position = sequencer?.currentPositionInBeats ?? (currentBeat * beatScale)
-        currentBeat = resetPosition ? 0 : (position / beatScale)
+        let position = sequencer?.currentPositionInBeats ?? beatClock.uiBeatToSequencerBeat(currentBeat)
+        currentBeat = resetPosition ? 0 : beatClock.sequencerBeatToUiBeat(position)
         if resetPosition {
             sequencer?.currentPositionInBeats = 0
         }
@@ -120,7 +146,7 @@ final class StudioPlaybackEngine: ObservableObject {
     func seek(to beat: Double) {
         let clamped = max(0, min(beat, totalBeats))
         currentBeat = clamped
-        sequencer?.currentPositionInBeats = clamped * beatScale
+        sequencer?.currentPositionInBeats = beatClock.uiBeatToSequencerBeat(clamped)
 
         if isPlaying {
             stop(resetPosition: false)
@@ -129,15 +155,34 @@ final class StudioPlaybackEngine: ObservableObject {
     }
     
     func updateTrackMix(trackId: UUID, volume: Float, pan: Float) {
-        guard let mixer = mixerNodes[trackId] else { return }
-        mixer.outputVolume = volume
-        mixer.pan = pan
+        guard var mixState = trackMixState[trackId] else { return }
+        mixState.volume = volume
+        mixState.pan = pan
+        trackMixState[trackId] = mixState
+        applyMixStateFromCache()
+    }
+
+    func applyMixState(project: Project) {
+        for track in project.studioTracks {
+            let state = TrackMixState(
+                volume: track.volume,
+                pan: track.pan,
+                isMuted: track.isMuted,
+                isSolo: track.isSolo
+            )
+            trackMixState[track.id] = state
+        }
+        applyMixStateFromCache()
+    }
+
+    func updateProject(_ project: Project) {
+        updateBeatClock(for: project)
+        totalBeats = timelineBeats(for: project)
+        applyMixState(project: project)
     }
 
     private func resolvedTracks(from project: Project) -> [StudioTrack] {
-        let solos = project.studioTracks.filter { $0.isSolo }
-        let active = solos.isEmpty ? project.studioTracks.filter { !$0.isMuted } : solos
-        return active.sorted { $0.orderIndex < $1.orderIndex }
+        project.studioTracks.sorted { $0.orderIndex < $1.orderIndex }
     }
 
     private func configureAudioSession() {
@@ -151,15 +196,20 @@ final class StudioPlaybackEngine: ObservableObject {
     }
 
     private func teardownEngine() {
+        sequencer?.stop()
+        for node in audioNodes.values {
+            node.stop()
+        }
         engine.stop()
-        engine.reset()
         samplerNodes.values.forEach { engine.detach($0) }
         audioNodes.values.forEach { engine.detach($0) }
         mixerNodes.values.forEach { engine.detach($0) }
+        engine.reset()
         samplerNodes.removeAll()
         audioNodes.removeAll()
         mixerNodes.removeAll()
         audioTrackInfo.removeAll()
+        trackMixState.removeAll()
         stopPlayheadTimer()
     }
 
@@ -187,6 +237,12 @@ final class StudioPlaybackEngine: ObservableObject {
             
             samplerNodes[track.id] = sampler
             mixerNodes[track.id] = mixer
+            trackMixState[track.id] = TrackMixState(
+                volume: track.volume,
+                pan: track.pan,
+                isMuted: track.isMuted,
+                isSolo: track.isSolo
+            )
             loadInstrument(for: track, sampler: sampler)
         }
     }
@@ -208,13 +264,26 @@ final class StudioPlaybackEngine: ObservableObject {
             
             audioNodes[track.id] = node
             mixerNodes[track.id] = mixer
+            trackMixState[track.id] = TrackMixState(
+                volume: track.volume,
+                pan: track.pan,
+                isMuted: track.isMuted,
+                isSolo: track.isSolo
+            )
 
             if let recordingId = track.audioRecordingId,
                let recording = project.recordings.first(where: { $0.id == recordingId }) {
                 if let url = FileManagerUtils.existingRecordingURL(for: recording.fileName) {
-                    audioTrackInfo[track.id] = (url, track.audioStartBeat)
                     if let file = try? AVAudioFile(forReading: url) {
                         inputFormat = file.processingFormat
+                        audioTrackInfo[track.id] = AudioTrackInfo(
+                            url: url,
+                            startBeat: track.audioStartBeat,
+                            file: file,
+                            format: file.processingFormat,
+                            sampleRate: file.processingFormat.sampleRate,
+                            length: file.length
+                        )
                     }
                 } else {
                     print("Recording file not found for: \(recording.fileName)")
@@ -237,9 +306,7 @@ final class StudioPlaybackEngine: ObservableObject {
             addNotes(track.notes, to: musicTrack, channel: midiChannel(for: track))
         }
 
-        if bpm > 0 {
-            sequencer.rate = Float(bpm / 120.0)
-        }
+        configureTempoTrack(for: sequencer)
         sequencer.prepareToPlay()
     }
 
@@ -259,38 +326,37 @@ final class StudioPlaybackEngine: ObservableObject {
     }
 
     private func scheduleAudioTracks(startBeat: Double) {
-        let beatDuration = gridBeatInterval
+        // UI beats are timeBottom-based; convert to seconds using the project's BPM + meter.
+        let uiBeatSeconds = beatClock.uiBeatSeconds
 
         for (trackId, node) in audioNodes {
             guard let info = audioTrackInfo[trackId] else { continue }
-            let url = info.url
+            let offsetSeconds = (startBeat - info.startBeat) * uiBeatSeconds
+            let sampleRate = info.sampleRate
+            node.stop()
 
-            do {
-                let file = try AVAudioFile(forReading: url)
-                let offsetSeconds = (startBeat - info.startBeat) * beatDuration
-                let sampleRate = file.processingFormat.sampleRate
-                node.stop()
-                if offsetSeconds >= 0 {
-                    let startFrame = AVAudioFramePosition(offsetSeconds * sampleRate)
-                    let remainingFrames = max(0, file.length - startFrame)
-                    if remainingFrames > 0 {
-                        node.scheduleSegment(
-                            file,
-                            startingFrame: startFrame,
-                            frameCount: AVAudioFrameCount(remainingFrames),
-                            at: nil
-                        )
-                        node.play()
-                    }
-                } else {
-                    let delay = abs(offsetSeconds)
-                    node.scheduleFile(file, at: nil)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                        node.play()
-                    }
-                }
-            } catch {
-                print("Failed to load audio file: \(error)")
+            if offsetSeconds >= 0 {
+                let startFrame = AVAudioFramePosition(offsetSeconds * sampleRate)
+                let remainingFrames = max(0, info.length - startFrame)
+                guard remainingFrames > 0 else { continue }
+                let startTime = hostTime(after: 0)
+                node.scheduleSegment(
+                    info.file,
+                    startingFrame: startFrame,
+                    frameCount: AVAudioFrameCount(remainingFrames),
+                    at: startTime
+                )
+                play(node, at: startTime)
+            } else {
+                let delay = abs(offsetSeconds)
+                let startTime = hostTime(after: delay)
+                node.scheduleSegment(
+                    info.file,
+                    startingFrame: 0,
+                    frameCount: AVAudioFrameCount(info.length),
+                    at: startTime
+                )
+                play(node, at: startTime)
             }
         }
     }
@@ -313,7 +379,7 @@ final class StudioPlaybackEngine: ObservableObject {
 
     @objc private func handlePlayheadTick() {
         guard let sequencer else { return }
-        let position = sequencer.currentPositionInBeats / beatScale
+        let position = beatClock.sequencerBeatToUiBeat(sequencer.currentPositionInBeats)
         currentBeat = position
         if totalBeats > 0, position >= totalBeats {
             stop(resetPosition: true)
@@ -338,16 +404,16 @@ final class StudioPlaybackEngine: ObservableObject {
             if attemptLoad(
                 sampler,
                 url: url,
-                program: 0,
+                program: fallbackProgram,
                 bankMSB: primaryBankMSB,
                 bankLSB: UInt8(kAUSampler_DefaultBankLSB),
                 logFailure: logFailure
             ) {
                 if track.instrument == .drums {
                     if primaryBankMSB == UInt8(kAUSampler_DefaultMelodicBankMSB) {
-                        drumMelodicChannels.insert(track.id)
+                        drumBankMode[track.id] = true
                     } else {
-                        drumMelodicChannels.remove(track.id)
+                        drumBankMode[track.id] = false
                     }
                 }
                 customBankStatus = .available(url)
@@ -360,22 +426,24 @@ final class StudioPlaybackEngine: ObservableObject {
                 if attemptLoad(
                     sampler,
                     url: url,
-                    program: 0,
+                    program: fallbackProgram,
                     bankMSB: fallbackBankMSB,
                     bankLSB: UInt8(kAUSampler_DefaultBankLSB),
                     logFailure: logFailure
                 ) {
                     if fallbackBankMSB == UInt8(kAUSampler_DefaultMelodicBankMSB) {
-                        drumMelodicChannels.insert(track.id)
+                        drumBankMode[track.id] = true
                     } else {
-                        drumMelodicChannels.remove(track.id)
+                        drumBankMode[track.id] = false
                     }
                     customBankStatus = .available(url)
                     return
                 }
             }
             if track.instrument == .drums {
+                #if DEBUG
                 print("❌ Drum soundfont failed to load: \(url.lastPathComponent)")
+                #endif
             }
             if case .unknown = customBankStatus {
                 customBankStatus = .unavailable
@@ -396,7 +464,8 @@ final class StudioPlaybackEngine: ObservableObject {
 
     private func midiChannel(for track: StudioTrack) -> UInt8 {
         guard track.instrument == .drums else { return 0 }
-        return drumMelodicChannels.contains(track.id) ? 0 : 9
+        let usesMelodicBank = drumBankMode[track.id] ?? false
+        return usesMelodicBank ? 0 : 9
     }
 
     private func programNumber(for instrument: StudioInstrument) -> UInt8 {
@@ -422,22 +491,6 @@ final class StudioPlaybackEngine: ObservableObject {
         case .drums, .audio:
             return 0
         }
-    }
-
-    private func generalSoundFontURL() -> URL? {
-        nil
-    }
-
-    private func resolvedProgram(
-        for track: StudioTrack,
-        customBankURL: URL?,
-        fallbackProgram: UInt8
-    ) -> UInt8 {
-        fallbackProgram
-    }
-
-    private func resolvedCustomBankURL() -> URL? {
-        nil
     }
 
     private func attemptLoad(
@@ -487,5 +540,48 @@ final class StudioPlaybackEngine: ObservableObject {
             .compactMap { $0.sectionTemplate?.bars }
             .reduce(0, +)
         return Double(max(1, bars * project.timeTop))
+    }
+
+    private func updateBeatClock(for project: Project) {
+        bpm = project.quarterNoteBpm()
+        beatClock = BeatClock(bpm: bpm, timeBottom: project.timeBottom)
+        beatScale = beatClock.beatScale
+    }
+
+    private func configureTempoTrack(for sequencer: AVAudioSequencer) {
+        guard bpm > 0 else { return }
+        let tempoTrack = sequencer.tempoTrack
+        if tempoTrack.lengthInBeats > 0 {
+            tempoTrack.clearEvents(in: AVMakeBeatRange(0, AVMusicTimeStampEndOfTrack))
+        }
+        let tempoEvent = AVExtendedTempoEvent(tempo: bpm)
+        tempoTrack.addEvent(tempoEvent, at: 0)
+        sequencer.rate = 1
+    }
+
+    private func applyMixStateFromCache() {
+        let soloed = trackMixState.values.contains { $0.isSolo }
+        for (trackId, mixState) in trackMixState {
+            guard let mixer = mixerNodes[trackId] else { continue }
+            let effectiveMuted = mixState.isMuted || (soloed && !mixState.isSolo)
+            // Apply mute/solo live without rebuilding.
+            mixer.outputVolume = effectiveMuted ? 0 : mixState.volume
+            mixer.pan = mixState.pan
+        }
+    }
+
+    private func hostTime(after delaySeconds: Double) -> AVAudioTime? {
+        guard let nodeTime = engine.outputNode.lastRenderTime else { return nil }
+        let hostTime = nodeTime.hostTime + AVAudioTime.hostTime(forSeconds: delaySeconds)
+        // Host-time scheduling keeps audio start sample-accurate.
+        return AVAudioTime(hostTime: hostTime)
+    }
+
+    private func play(_ node: AVAudioPlayerNode, at time: AVAudioTime?) {
+        if let time {
+            node.play(at: time)
+        } else {
+            node.play()
+        }
     }
 }

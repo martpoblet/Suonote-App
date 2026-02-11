@@ -1007,7 +1007,7 @@ struct SwipeActionRow<Content: View>: View {
                     Image(systemName: item.systemImage)
                         .font(DesignSystem.Typography.callout)
                         .fontWeight(.semibold)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
+                        .foregroundStyle(.white)
                         .frame(width: buttonSize, height: buttonSize)
                         .background(Circle().fill(item.tint))
                 }
@@ -1034,7 +1034,7 @@ struct SwipeActionRow<Content: View>: View {
                     Image(systemName: item.systemImage)
                         .font(DesignSystem.Typography.callout)
                         .fontWeight(.semibold)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
+                        .foregroundStyle(.white)
                         .frame(width: buttonSize, height: buttonSize)
                         .background(Circle().fill(item.tint))
                 }

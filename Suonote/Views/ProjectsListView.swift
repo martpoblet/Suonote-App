@@ -12,6 +12,7 @@ struct ProjectsListView: View {
     @State private var scrollOffset: CGFloat = 0
     @State private var projectToDelete: Project?
     @State private var showDeleteConfirmation = false
+    @State private var showingSoundFontCredits = false
     
     var filteredProjects: [Project] {
         var projects = allProjects
@@ -128,6 +129,9 @@ struct ProjectsListView: View {
         .sheet(isPresented: $showingCreateSheet) {
             CreateProjectView()
         }
+        .sheet(isPresented: $showingSoundFontCredits) {
+            SoundFontCreditsView()
+        }
         .alert("Delete Project?", isPresented: $showDeleteConfirmation, presenting: projectToDelete) { project in
             Button("Cancel", role: .cancel) {}
             Button("Delete", role: .destructive) {
@@ -140,8 +144,19 @@ struct ProjectsListView: View {
     
     private var customHeader: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-            AppLogoView(height: 24)
-                .padding(.bottom, 2)
+            HStack {
+                AppLogoView(height: 24)
+                    .padding(.bottom, 2)
+                Spacer()
+                Button {
+                    showingSoundFontCredits = true
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(DesignSystem.Typography.body)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                }
+                .accessibilityLabel("SoundFont Credits")
+            }
 
             Text("Your Ideas")
                 .font(DesignSystem.Typography.xxl)

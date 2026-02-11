@@ -1,5 +1,8 @@
 import SwiftUI
 import SwiftData
+#if os(iOS)
+import UIKit
+#endif
 
 struct StudioDrumEditor: View {
     @Bindable var track: StudioTrack
@@ -11,6 +14,8 @@ struct StudioDrumEditor: View {
 
     @Environment(\.modelContext) private var modelContext
     @State private var copiedBarIndex: Int?
+    @State private var cachedNotesByPitch: [Int: [Int: StudioNote]] = [:]
+    @State private var cachedNotesSignature: Int = 0
 
     private let baseCellWidth: CGFloat = 26
     private let cellHeight: CGFloat = 26
@@ -40,13 +45,7 @@ struct StudioDrumEditor: View {
     }
 
     private var notesByPitch: [Int: [Int: StudioNote]] {
-        var map: [Int: [Int: StudioNote]] = [:]
-        for note in track.notes {
-            let step = stepIndex(for: note)
-            guard step >= 0 && step < totalSteps else { continue }
-            map[note.pitch, default: [:]][step] = note
-        }
-        return map
+        cachedNotesByPitch
     }
 
     private var drumLanes: [DrumLane] {
@@ -230,6 +229,13 @@ struct StudioDrumEditor: View {
             if let copiedBarIndex, copiedBarIndex >= newValue {
                 self.copiedBarIndex = nil
             }
+            refreshNotesCacheIfNeeded()
+        }
+        .onChange(of: track.notes.count) { _, _ in
+            refreshNotesCacheIfNeeded()
+        }
+        .onAppear {
+            refreshNotesCacheIfNeeded()
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -334,7 +340,7 @@ struct StudioDrumEditor: View {
     }
 
     private func stepIndex(for note: StudioNote) -> Int {
-        Int((note.startBeat / stepLength).rounded())
+        Int(floor(note.startBeat / stepLength + 1e-6))
     }
 
     private func gridWidth(for cellWidth: CGFloat) -> CGFloat {
@@ -368,7 +374,7 @@ struct StudioDrumEditor: View {
     private func cycleVelocity(lane: DrumLane, step: Int) {
         if let note = noteAt(pitch: lane.pitch, step: step) {
             note.velocity = nextVelocity(for: note.velocity, profile: lane.velocity)
-            onNotesChanged()
+            notesDidChange()
         } else {
             addNote(
                 pitch: lane.pitch,
@@ -394,7 +400,7 @@ struct StudioDrumEditor: View {
         newNote.track = track
         track.notes.append(newNote)
         modelContext.insert(newNote)
-        onNotesChanged()
+        notesDidChange()
     }
 
     private func removeOverlappingNotes(pitch: Int, step: Int) {
@@ -417,7 +423,7 @@ struct StudioDrumEditor: View {
             track.notes.remove(at: index)
         }
         modelContext.delete(note)
-        onNotesChanged()
+        notesDidChange()
     }
 
     private func clearPattern() {
@@ -447,7 +453,7 @@ struct StudioDrumEditor: View {
             track.notes.append(note)
             modelContext.insert(note)
         }
-        onNotesChanged()
+        notesDidChange()
     }
 
     private func nextVelocity(for current: Int, profile: DrumVelocityProfile) -> Int {
@@ -498,7 +504,7 @@ struct StudioDrumEditor: View {
         }
 
         if notify {
-            onNotesChanged()
+            notesDidChange()
         }
     }
 
@@ -507,7 +513,7 @@ struct StudioDrumEditor: View {
         for bar in 0..<totalBars where bar != sourceBar {
             duplicateBar(from: sourceBar, to: bar, notify: false)
         }
-        onNotesChanged()
+        notesDidChange()
     }
 
     private func removeNotes(in range: Range<Double>) {
@@ -520,6 +526,40 @@ struct StudioDrumEditor: View {
             modelContext.delete(note)
         }
         track.notes.removeAll { ids.contains($0.id) }
+    }
+
+    private func notesDidChange() {
+        refreshNotesCacheIfNeeded()
+        onNotesChanged()
+    }
+
+    private func refreshNotesCacheIfNeeded() {
+        let signature = notesSignature()
+        guard signature != cachedNotesSignature else { return }
+        cachedNotesSignature = signature
+        cachedNotesByPitch = buildNotesByPitch()
+    }
+
+    private func notesSignature() -> Int {
+        var hasher = Hasher()
+        for note in track.notes {
+            hasher.combine(note.id)
+            hasher.combine(note.startBeat)
+            hasher.combine(note.duration)
+            hasher.combine(note.pitch)
+            hasher.combine(note.velocity)
+        }
+        return hasher.finalize()
+    }
+
+    private func buildNotesByPitch() -> [Int: [Int: StudioNote]] {
+        var map: [Int: [Int: StudioNote]] = [:]
+        for note in track.notes {
+            let step = stepIndex(for: note)
+            guard step >= 0 && step < totalSteps else { continue }
+            map[note.pitch, default: [:]][step] = note
+        }
+        return map
     }
 }
 
@@ -537,7 +577,7 @@ struct DrumLane: Identifiable {
     let velocity: DrumVelocityProfile
 
     init(name: String, pitch: Int, color: Color, velocity: DrumVelocityProfile) {
-        self.id = name
+        self.id = "\(name)-\(pitch)"
         self.name = name
         self.pitch = pitch
         self.color = color
@@ -697,6 +737,15 @@ struct DrumLaneRow: View {
         HStack(spacing: cellSpacing) {
             ForEach(0..<totalSteps, id: \.self) { step in
                 let note = notesByStep[step]
+                let gesture = LongPressGesture(minimumDuration: 0.3)
+                    .onEnded { _ in
+                        onAccent(step)
+                        DrumHaptics.impact(.medium)
+                    }
+                    .exclusively(before: TapGesture().onEnded {
+                        onToggle(step)
+                        DrumHaptics.impact(.light)
+                    })
                 DrumStepCell(
                     isActive: note != nil,
                     velocity: note?.velocity ?? 0,
@@ -706,12 +755,7 @@ struct DrumLaneRow: View {
                 )
                 .frame(width: cellWidth, height: cellHeight)
                 .contentShape(Rectangle())
-                .onTapGesture {
-                    onToggle(step)
-                }
-                .onLongPressGesture(minimumDuration: 0.3) {
-                    onAccent(step)
-                }
+                .gesture(gesture)
             }
         }
     }
@@ -770,5 +814,13 @@ struct DrumVelocityLegend: View {
                 .frame(width: 16, height: 12)
             Text(title)
         }
+    }
+}
+
+private enum DrumHaptics {
+    static func impact(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
+        #if os(iOS)
+        UIImpactFeedbackGenerator(style: style).impactOccurred()
+        #endif
     }
 }

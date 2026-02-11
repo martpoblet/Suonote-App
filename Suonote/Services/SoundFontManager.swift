@@ -2,71 +2,30 @@ import Foundation
 
 enum SoundFontManager {
     static let folderName = "SoundFonts"
-
-    private static let variantFileMap: [InstrumentVariant: String] = [
-        // Piano
-        .acousticPiano: "Piano/Upright_Piano_KW_Small",
-        .electricPiano: "Piano/FM_Synth_Piano_1",
-        .electricPiano2: "Piano/FM_Synth_Piano_2",
-
-        // Drums
-        .standardDrumKit: "Drums/AcousticKitM.B.2",
-        .electronicDrumKit: "Drums/Synth_Percussion",
-
-        // Synth
-        .leadBass: "Synth/Synth_Bass_Lead",
-
-        // Guitar
-        .acousticNylonGuitar: "Guitar/Spanish_Classical",
-        .cleanGuitar: "Guitar/Clean_Electric_Guitar_1",
-
-        // Bass
-        .fingerBass: "Bass/Electric_Bass_Finger",
-
-        // Strings
-        .synthStrings1: "Strings/Synth_Strings_1",
-        .synthStrings2: "Strings/Synth_Strings_2",
-
-        // Brass
-        .synthBrass1: "Brass/Synth_Brass_1",
-        .synthBrass2: "Brass/Synth_Brass_2",
-
-        // Woodwinds
-        .clarinet: "Woodwinds/Clarinet",
-        .tenorSax: "Woodwinds/Tenor_Sax",
-        .ocarina: "Woodwinds/Ocarina",
-
-        // Organ
-        .churchOrgan: "Organ/Pipe_Organ",
-
-        // Mallets
-        .xylophone: "Mallets/Xylophone",
-        .tubularBells: "Mallets/Tubular_Bells",
-        .kalimba: "Mallets/Kalimba"
-    ]
+    private static let arachnoLiteFilePath = "Arachno/Arachno_Lite"
 
     static func supportedVariants(for instrument: StudioInstrument) -> [InstrumentVariant] {
         switch instrument {
         case .piano:
-            return [.acousticPiano, .electricPiano, .electricPiano2]
+            return [.acousticPiano, .brightPiano, .electricPiano]
         case .drums:
-            return [.standardDrumKit, .electronicDrumKit]
+            return [.standardDrumKit, .electronicDrumKit, .tr808DrumKit]
         case .synth:
-            return [.leadBass]
+            return [.leadBass, .padWarm]
         case .guitar:
-            return [.acousticNylonGuitar, .cleanGuitar]
+            return [.acousticNylonGuitar, .acousticSteelGuitar, .cleanGuitar, .overdriveGuitar]
         case .bass:
-            return [.fingerBass]
+            return [.fingerBass, .synthBass]
         case .strings:
-            return [.synthStrings1, .synthStrings2]
+            return [.stringEnsemble, .synthStrings1, .synthStrings2]
         case .brass:
             return [.synthBrass1, .synthBrass2]
         case .woodwinds:
-            return [.clarinet, .tenorSax, .ocarina]
+            return [.clarinet, .tenorSax, .flute]
         case .organ:
-            return [.churchOrgan]
+            return [.drawbarOrgan, .churchOrgan]
         case .mallets:
-            return [.xylophone, .tubularBells, .kalimba]
+            return [.xylophone, .tubularBells]
         case .audio:
             return []
         }
@@ -85,12 +44,11 @@ enum SoundFontManager {
     }
 
     static func soundFontURL(for instrument: StudioInstrument, variant: InstrumentVariant?) -> URL? {
-        guard let resolved = resolvedVariant(for: instrument, variant: variant),
-              let filePath = variantFileMap[resolved] else {
+        guard resolvedVariant(for: instrument, variant: variant) != nil else {
             return nil
         }
-        let components = filePath.split(separator: "/").map(String.init)
-        let fileName = components.last ?? filePath
+        let components = arachnoLiteFilePath.split(separator: "/").map(String.init)
+        let fileName = components.last ?? arachnoLiteFilePath
         let subfolder = components.dropLast().joined(separator: "/")
         let subdirectory = subfolder.isEmpty ? folderName : "\(folderName)/\(subfolder)"
         let searchPaths = [
@@ -104,7 +62,10 @@ enum SoundFontManager {
 #if DEBUG
         if url == nil {
             let attempts = searchPaths.compactMap { path in
-                path == nil ? "\(fileName).sf2" : "\(path)/\(fileName).sf2"
+                if let path {
+                    return "\(path)/\(fileName).sf2"
+                }
+                return "\(fileName).sf2"
             }.joined(separator: " | ")
             print("❌ Missing SoundFont in bundle. Tried: \(attempts)")
         }
@@ -113,13 +74,7 @@ enum SoundFontManager {
     }
 
     static func usesPercussionBank(for variant: InstrumentVariant?) -> Bool {
-        let resolved = resolvedVariant(for: .drums, variant: variant)
-        switch resolved {
-        case .standardDrumKit:
-            return true
-        default:
-            return false
-        }
+        (variant ?? .standardDrumKit).isDrumKit
     }
 
     struct DrumPitchMap {
@@ -137,71 +92,20 @@ enum SoundFontManager {
         let perc: Int
     }
 
-    static func drumPitchMap(for variant: InstrumentVariant?) -> DrumPitchMap {
-        let resolved = resolvedVariant(for: .drums, variant: variant)
-        if usesPercussionBank(for: resolved) {
-            return DrumPitchMap(
-                kick: 36,
-                snare: 38,
-                hatClosed: 42,
-                hatOpen: 46,
-                clap: 39,
-                rim: 37,
-                tomLow: 45,
-                tomMid: 47,
-                tomHigh: 50,
-                ride: 51,
-                crash: 49,
-                perc: 56
-            )
-        }
-        if resolved == .standardDrumKit {
-            return DrumPitchMap(
-                kick: 36,
-                snare: 38,
-                hatClosed: 42,
-                hatOpen: 46,
-                clap: 39,
-                rim: 37,
-                tomLow: 45,
-                tomMid: 47,
-                tomHigh: 50,
-                ride: 51,
-                crash: 49,
-                perc: 56
-            )
-        }
-        switch resolved {
-        case .electronicDrumKit:
-            return DrumPitchMap(
-                kick: 60,
-                snare: 62,
-                hatClosed: 64,
-                hatOpen: 67,
-                clap: 69,
-                rim: 63,
-                tomLow: 65,
-                tomMid: 66,
-                tomHigh: 68,
-                ride: 71,
-                crash: 72,
-                perc: 73
-            )
-        default:
-            return DrumPitchMap(
-                kick: 60,
-                snare: 62,
-                hatClosed: 64,
-                hatOpen: 67,
-                clap: 69,
-                rim: 63,
-                tomLow: 65,
-                tomMid: 66,
-                tomHigh: 68,
-                ride: 71,
-                crash: 72,
-                perc: 73
-            )
-        }
+    static func drumPitchMap(for _: InstrumentVariant?) -> DrumPitchMap {
+        return DrumPitchMap(
+            kick: 36,
+            snare: 38,
+            hatClosed: 42,
+            hatOpen: 46,
+            clap: 39,
+            rim: 37,
+            tomLow: 45,
+            tomMid: 47,
+            tomHigh: 50,
+            ride: 51,
+            crash: 49,
+            perc: 56
+        )
     }
 }

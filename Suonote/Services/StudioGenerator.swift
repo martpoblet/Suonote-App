@@ -59,7 +59,11 @@ struct StudioGenerator {
                 keyRoot: project.keyRoot,
                 diatonicMap: diatonicMap,
                 intensity: track.regenerateIntensity,
-                complexity: track.regenerateComplexity
+                complexity: track.regenerateComplexity,
+                naturalness: track.regenerateNaturalness,
+                arpeggioEnabled: track.regenerateArpeggioEnabled,
+                arpeggioRate: track.regenerateArpeggioRate,
+                arpeggioPattern: track.regenerateArpeggioPattern
             )
             for note in notes {
                 note.track = track
@@ -119,7 +123,11 @@ struct StudioGenerator {
                 keyRoot: project.keyRoot,
                 diatonicMap: diatonicMap,
                 intensity: track.regenerateIntensity,
-                complexity: track.regenerateComplexity
+                complexity: track.regenerateComplexity,
+                naturalness: track.regenerateNaturalness,
+                arpeggioEnabled: track.regenerateArpeggioEnabled,
+                arpeggioRate: track.regenerateArpeggioRate,
+                arpeggioPattern: track.regenerateArpeggioPattern
             )
             for note in notes {
                 note.track = track
@@ -167,7 +175,15 @@ struct StudioGenerator {
                     intensity: track.regenerateIntensity,
                     complexity: track.regenerateComplexity
                 )
-                let newNotes = drumNotes.filter { $0.startBeat >= previousTotalBeats }
+                let naturalDrums = applyNaturalness(
+                    to: drumNotes,
+                    totalBars: timeline.totalBars,
+                    beatsPerBar: beatsPerBar,
+                    timeBottom: timeBottom,
+                    instrument: .drums,
+                    naturalness: track.regenerateNaturalness
+                )
+                let newNotes = naturalDrums.filter { $0.startBeat >= previousTotalBeats }
                 didAppend = appendNotes(newNotes, to: track, modelContext: modelContext) || didAppend
                 continue
             }
@@ -186,7 +202,11 @@ struct StudioGenerator {
                 keyRoot: project.keyRoot,
                 diatonicMap: diatonicMap,
                 intensity: track.regenerateIntensity,
-                complexity: track.regenerateComplexity
+                complexity: track.regenerateComplexity,
+                naturalness: track.regenerateNaturalness,
+                arpeggioEnabled: track.regenerateArpeggioEnabled,
+                arpeggioRate: track.regenerateArpeggioRate,
+                arpeggioPattern: track.regenerateArpeggioPattern
             )
             let newNotes = notes.filter { note in
                 newChordRanges.contains { range in
@@ -238,7 +258,11 @@ struct StudioGenerator {
                 keyRoot: project.keyRoot,
                 diatonicMap: diatonicMap,
                 intensity: track.regenerateIntensity,
-                complexity: track.regenerateComplexity
+                complexity: track.regenerateComplexity,
+                naturalness: track.regenerateNaturalness,
+                arpeggioEnabled: track.regenerateArpeggioEnabled,
+                arpeggioRate: track.regenerateArpeggioRate,
+                arpeggioPattern: track.regenerateArpeggioPattern
             )
             didChange = appendNotes(notes, to: track, modelContext: modelContext) || didChange
         }
@@ -258,7 +282,11 @@ struct StudioGenerator {
         variant: InstrumentVariant? = nil,
         octaveShift: Int = 0,
         intensity: Double = 0.5,
-        complexity: Double = 0.5
+        complexity: Double = 0.5,
+        naturalness: Double = 0.0,
+        arpeggioEnabled: Bool = false,
+        arpeggioRate: String = "1/8",
+        arpeggioPattern: String = "up"
     ) -> [StudioNote] {
         let timeline = buildTimeline(for: project)
         let diatonicMap = diatonicQualityMap(forKey: project.keyRoot, mode: project.keyMode)
@@ -285,7 +313,11 @@ struct StudioGenerator {
             keyRoot: project.keyRoot,
             diatonicMap: diatonicMap,
             intensity: intensity,
-            complexity: complexity
+            complexity: complexity,
+            naturalness: naturalness,
+            arpeggioEnabled: arpeggioEnabled,
+            arpeggioRate: arpeggioRate,
+            arpeggioPattern: arpeggioPattern
         )
     }
 
@@ -436,11 +468,16 @@ struct StudioGenerator {
         keyRoot: String,
         diatonicMap: [String: ChordQuality],
         intensity: Double = 0.5,
-        complexity: Double = 0.5
+        complexity: Double = 0.5,
+        naturalness: Double = 0.0,
+        arpeggioEnabled: Bool = false,
+        arpeggioRate: String = "1/8",
+        arpeggioPattern: String = "up"
     ) -> [StudioNote] {
+        let generated: [StudioNote]
         switch instrument {
         case .drums:
-            return drumNotes(
+            generated = drumNotes(
                 totalBars: totalBars,
                 beatsPerBar: beatsPerBar,
                 timeBottom: timeBottom,
@@ -455,7 +492,7 @@ struct StudioGenerator {
                 complexity: complexity
             )
         case .bass:
-            return bassNotes(
+            generated = bassNotes(
                 chords: chords,
                 instrument: instrument,
                 totalBars: totalBars,
@@ -469,7 +506,7 @@ struct StudioGenerator {
                 complexity: complexity
             )
         case .guitar, .synth, .piano, .strings, .brass, .woodwinds, .organ, .mallets:
-            return chordPadNotes(
+            generated = chordPadNotes(
                 chords: chords,
                 instrument: instrument,
                 totalBars: totalBars,
@@ -481,11 +518,27 @@ struct StudioGenerator {
                 keyRoot: keyRoot,
                 diatonicMap: diatonicMap,
                 intensity: intensity,
-                complexity: complexity
+                complexity: complexity,
+                arpeggioEnabled: arpeggioEnabled,
+                arpeggioRate: arpeggioRate,
+                arpeggioPattern: arpeggioPattern
             )
         case .audio:
-            return []
+            generated = []
         }
+
+        let humanized = applyNaturalness(
+            to: generated,
+            totalBars: totalBars,
+            beatsPerBar: beatsPerBar,
+            timeBottom: timeBottom,
+            instrument: instrument,
+            naturalness: naturalness
+        )
+        if instrument != .drums && instrument != .audio {
+            return dedupeAndClampNotes(humanized)
+        }
+        return humanized
     }
 
     private static func chordPadNotes(
@@ -500,7 +553,10 @@ struct StudioGenerator {
         keyRoot: String,
         diatonicMap: [String: ChordQuality],
         intensity: Double = 0.5,
-        complexity: Double = 0.5
+        complexity: Double = 0.5,
+        arpeggioEnabled: Bool = false,
+        arpeggioRate: String = "1/8",
+        arpeggioPattern: String = "up"
     ) -> [StudioNote] {
         let voicingProfile = chordVoicingProfile(
             for: instrument,
@@ -595,20 +651,59 @@ struct StudioGenerator {
                 )
                 let duration = min(hitDuration, max(0.25, baseDuration - offset))
                 let startBeat = span.startBeat + offset
-                for pitch in pitches {
-                    notes.append(
-                        StudioNote(
-                            startBeat: startBeat,
-                            duration: duration,
-                            pitch: pitch,
-                            velocity: velocity
-                        )
+                if arpeggioEnabled, pitches.count > 1 {
+                    let orderedPitches = arpeggioOrder(
+                        pitches: pitches,
+                        pattern: arpeggioPattern
                     )
+                    let step = arpeggioRateBeats(
+                        arpeggioRate,
+                        timeBottom: timeBottom
+                    )
+                    let spread = step * Double(max(0, orderedPitches.count - 1))
+                    if spread <= max(0.0, baseDuration - offset - 0.05) {
+                        for (index, pitch) in orderedPitches.enumerated() {
+                            let arpOffset = step * Double(index)
+                            let arpStart = startBeat + arpOffset
+                            let arpDuration = min(duration, max(0.05, baseDuration - offset - arpOffset))
+                            notes.append(
+                                StudioNote(
+                                    startBeat: arpStart,
+                                    duration: arpDuration,
+                                    pitch: pitch,
+                                    velocity: velocity
+                                )
+                            )
+                        }
+                    } else {
+                        for pitch in pitches {
+                            notes.append(
+                                StudioNote(
+                                    startBeat: startBeat,
+                                    duration: duration,
+                                    pitch: pitch,
+                                    velocity: velocity
+                                )
+                            )
+                        }
+                    }
+                } else {
+                    for pitch in pitches {
+                        notes.append(
+                            StudioNote(
+                                startBeat: startBeat,
+                                duration: duration,
+                                pitch: pitch,
+                                velocity: velocity
+                            )
+                        )
+                    }
                 }
             }
         }
 
-        return notes
+        // Avoid overlapping note-ons for the same pitch when density/intensity increases.
+        return dedupeAndClampNotes(notes)
     }
 
     private static func bassNotes(
@@ -734,7 +829,116 @@ struct StudioGenerator {
             }
         }
 
-        return notes
+        // Prevent overlapping bass notes on the same pitch.
+        return dedupeAndClampNotes(notes)
+    }
+
+    private static func dedupeAndClampNotes(
+        _ notes: [StudioNote],
+        minimumDuration: Double = 0.05
+    ) -> [StudioNote] {
+        let epsilon = 0.0001
+        var byPitch: [Int: [StudioNote]] = [:]
+        for note in notes {
+            byPitch[note.pitch, default: []].append(note)
+        }
+
+        var result: [StudioNote] = []
+        for (_, pitchNotes) in byPitch {
+            let ordered = pitchNotes.sorted { lhs, rhs in
+                if abs(lhs.startBeat - rhs.startBeat) > epsilon {
+                    return lhs.startBeat < rhs.startBeat
+                }
+                if lhs.duration != rhs.duration {
+                    return lhs.duration > rhs.duration
+                }
+                return lhs.velocity > rhs.velocity
+            }
+
+            var lastStart: Double? = nil
+            for index in ordered.indices {
+                let note = ordered[index]
+                if let lastStart, abs(note.startBeat - lastStart) < epsilon {
+                    continue
+                }
+
+                var duration = max(minimumDuration, note.duration)
+                if index + 1 < ordered.count {
+                    let nextStart = ordered[index + 1].startBeat
+                    if nextStart > note.startBeat + epsilon {
+                        duration = min(duration, max(minimumDuration, nextStart - note.startBeat))
+                    }
+                }
+
+                let clamped = StudioNote(
+                    startBeat: note.startBeat,
+                    duration: duration,
+                    pitch: note.pitch,
+                    velocity: note.velocity
+                )
+                result.append(clamped)
+                lastStart = note.startBeat
+            }
+        }
+
+        return result.sorted { $0.startBeat < $1.startBeat }
+    }
+
+    private static func applyNaturalness(
+        to notes: [StudioNote],
+        totalBars: Int,
+        beatsPerBar: Int,
+        timeBottom: Int,
+        instrument: StudioInstrument,
+        naturalness: Double
+    ) -> [StudioNote] {
+        let clamped = max(0.0, min(1.0, naturalness))
+        guard clamped > 0, !notes.isEmpty else { return notes }
+        let timelineBeats = Double(totalBars * beatsPerBar)
+        let baseOffset = 0.12 * (4.0 / Double(timeBottom))
+        let timingMax = (instrument == .drums ? baseOffset * 0.4 : baseOffset) * clamped
+        let velocityMax = Int(round(12.0 * clamped))
+
+        var adjusted: [StudioNote] = []
+        adjusted.reserveCapacity(notes.count)
+        for note in notes {
+            let timingDelta = Double.random(in: -timingMax...timingMax)
+            let newStart = min(max(0, note.startBeat + timingDelta), max(0.0, timelineBeats - 0.05))
+            let maxDuration = max(0.05, timelineBeats - newStart)
+            let newDuration = min(note.duration, maxDuration)
+            let velocityDelta = Int.random(in: -velocityMax...velocityMax)
+            let newVelocity = min(127, max(1, note.velocity + velocityDelta))
+            adjusted.append(
+                StudioNote(
+                    startBeat: newStart,
+                    duration: newDuration,
+                    pitch: note.pitch,
+                    velocity: newVelocity
+                )
+            )
+        }
+        return adjusted
+    }
+
+    private static func arpeggioRateBeats(_ rate: String, timeBottom: Int) -> Double {
+        let trimmed = rate.trimmingCharacters(in: .whitespacesAndNewlines)
+        let parts = trimmed.split(separator: "/")
+        guard parts.count == 2, let denom = Double(parts[1]) else { return 0.5 }
+        return Double(timeBottom) / denom
+    }
+
+    private static func arpeggioOrder(pitches: [Int], pattern: String) -> [Int] {
+        let ordered = pitches.sorted()
+        switch pattern.lowercased() {
+        case "down":
+            return Array(ordered.reversed())
+        case "updown":
+            guard ordered.count > 2 else { return ordered }
+            let down = ordered.dropFirst().dropLast().reversed()
+            return ordered + Array(down)
+        default:
+            return ordered
+        }
     }
 
     private static func drumNotes(
@@ -870,9 +1074,9 @@ struct StudioGenerator {
         var kickVelocityBase = style == .rock ? 118 : 112
         var snareVelocityBase = style == .rock ? 108 : 102
         var hatVelocityBase = style == .ambient ? 62 : 72
-        var clapVelocityBase = style == .edm ? 98 : 90
-        var rimVelocityBase = style == .hiphop ? 92 : 84
-        var tomVelocityBase = style == .rock ? 108 : 96
+        let clapVelocityBase = style == .edm ? 98 : 90
+        let rimVelocityBase = style == .hiphop ? 92 : 84
+        let tomVelocityBase = style == .rock ? 108 : 96
         var rideVelocityBase = style == .jazz ? 76 : 72
         var crashVelocityBase = style == .rock ? 114 : 106
         var percVelocityBase = isLatinPreset ? 96 : 88
@@ -1367,8 +1571,21 @@ struct StudioGenerator {
     ) -> ClosedRange<Int> {
         let base = baseInstrumentRange(for: instrument)
         let styleShift = styleRegisterShift(for: instrument, style: style)
-        let semitoneShift = styleShift + (octaveShift * 12)
+        let semitoneShift = styleShift + ((octaveShift - 2) * 12)
         return shiftRange(base, by: semitoneShift)
+    }
+
+    static func supportsArpeggio(
+        instrument: StudioInstrument,
+        variant: InstrumentVariant?,
+        style: StudioStyle?
+    ) -> Bool {
+        guard instrument != .drums && instrument != .audio && instrument != .bass else { return false }
+        guard let style else { return true }
+        let profile = chordVoicingProfile(for: instrument, variant: variant, style: style)
+        if profile.monophonic { return false }
+        if let maxNotes = profile.maxNotes, maxNotes <= 1 { return false }
+        return true
     }
 
     private static func baseInstrumentRange(for instrument: StudioInstrument) -> ClosedRange<Int> {
@@ -1603,6 +1820,8 @@ struct StudioGenerator {
             profile.preferOpenVoicing = true
         case .brass:
             profile.maxNotes = 3
+        case .woodwinds:
+            profile.maxNotes = 1
         case .organ:
             profile.maxNotes = 4
             profile.preferOpenVoicing = true
@@ -1976,7 +2195,7 @@ struct StudioGenerator {
         let remaining = max(0.25, baseDuration - offset)
         let shortHit = timeBottom == 8 ? 1.0 : 0.5
 
-        let baseDurationValue: Double
+        var baseDurationValue = remaining
         switch style {
         case .lofi:
             // All sustained
