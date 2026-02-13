@@ -13,6 +13,7 @@ struct ProjectsListView: View {
     @State private var projectToDelete: Project?
     @State private var showDeleteConfirmation = false
     @State private var showingSoundFontCredits = false
+    @State private var deepLinkedProject: Project?
     
     var filteredProjects: [Project] {
         var projects = allProjects
@@ -140,6 +141,18 @@ struct ProjectsListView: View {
         } message: { project in
             Text("Are you sure you want to delete '\(project.title)'? This action cannot be undone.")
         }
+        .navigationDestination(item: $deepLinkedProject) { project in
+            ProjectDetailView(project: project)
+        }
+        .onOpenURL { url in
+            guard url.scheme == "suonote",
+                  url.host == "project",
+                  let idString = url.pathComponents.dropFirst().first,
+                  let projectId = UUID(uuidString: idString) else { return }
+            if let project = allProjects.first(where: { $0.id == projectId }) {
+                deepLinkedProject = project
+            }
+        }
             }
     
     private var customHeader: some View {
@@ -204,9 +217,9 @@ struct ProjectsListView: View {
                 ForEach(ProjectStatus.allCases, id: \.self) { status in
                     ModernFilterChip(
                         title: status.rawValue,
-                        icon: statusIcon(for: status),
+                        icon: status.icon,
                         isSelected: selectedStatus == status,
-                        color: statusColor(for: status)
+                        color: status.swiftUIColor
                     ) {
                         withAnimation(DesignSystem.Animations.smoothSpring) {
                             selectedStatus = selectedStatus == status ? nil : status
@@ -248,26 +261,6 @@ struct ProjectsListView: View {
             actionTitle: allProjects.isEmpty ? "Create Project" : nil
         ) {
             showingCreateSheet = true
-        }
-    }
-    
-    private func statusIcon(for status: ProjectStatus) -> String {
-        switch status {
-        case .idea: return "lightbulb.fill"
-        case .inProgress: return "hammer.fill"
-        case .polished: return "sparkles"
-        case .finished: return "checkmark.seal.fill"
-        case .archived: return "archivebox.fill"
-        }
-    }
-    
-    private func statusColor(for status: ProjectStatus) -> Color {
-        switch status {
-        case .idea: return DesignSystem.Colors.info
-        case .inProgress: return DesignSystem.Colors.warning
-        case .polished: return DesignSystem.Colors.primary
-        case .finished: return DesignSystem.Colors.success
-        case .archived: return DesignSystem.Colors.secondary
         }
     }
     
@@ -441,7 +434,7 @@ struct ModernProjectCard: View {
 
                     AppChip(
                         text: project.status.rawValue,
-                        icon: statusIcon(for: project.status),
+                        icon: project.status.icon,
                         tint: statusColor,
                         font: DesignSystem.Typography.caption2
                     )
@@ -513,16 +506,6 @@ struct ModernProjectCard: View {
         case .polished: return DesignSystem.Colors.primary
         case .finished: return DesignSystem.Colors.success
         case .archived: return DesignSystem.Colors.secondary
-        }
-    }
-
-    private func statusIcon(for status: ProjectStatus) -> String {
-        switch status {
-        case .idea: return "lightbulb.fill"
-        case .inProgress: return "hammer.fill"
-        case .polished: return "sparkles"
-        case .finished: return "checkmark.seal.fill"
-        case .archived: return "archivebox.fill"
         }
     }
 }

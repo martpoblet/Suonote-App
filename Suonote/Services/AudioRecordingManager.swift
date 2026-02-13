@@ -7,6 +7,7 @@ import UIKit
 class AudioRecordingManager: NSObject, ObservableObject {
     @Published var isRecording = false
     @Published var currentlyPlayingRecording: Recording?
+    @Published var currentMeterLevel: Float = 0
     
     private var audioRecorder: AVAudioRecorder?
     private var audioPlayer: AVAudioPlayer?
@@ -18,6 +19,7 @@ class AudioRecordingManager: NSObject, ObservableObject {
     private var countInBars = 1
     private var clickEnabled = true
     private var currentRecordingType: RecordingType = .voice
+    private var meterTimer: Timer?
     
     func setup(project: Project) {
         self.project = project
@@ -45,6 +47,7 @@ class AudioRecordingManager: NSObject, ObservableObject {
         do {
             audioRecorder = try AVAudioRecorder(url: url, settings: settings)
             audioRecorder?.delegate = self
+            audioRecorder?.isMeteringEnabled = true
             audioRecorder?.prepareToRecord()
             
             if clickEnabled {
@@ -60,6 +63,7 @@ class AudioRecordingManager: NSObject, ObservableObject {
                 self.audioRecorder?.record()
                 self.isRecording = true
                 self.recordingStartTime = Date()
+                self.startMeterTimer()
             }
             
         } catch {
@@ -73,6 +77,7 @@ class AudioRecordingManager: NSObject, ObservableObject {
         recorder.stop()
         isRecording = false
         stopMetronome()
+        stopMeterTimer()
         
         let duration = Date().timeIntervalSince(recordingStartTime ?? Date())
         
@@ -158,6 +163,26 @@ class AudioRecordingManager: NSObject, ObservableObject {
     
     private func playClickSound(isAccent: Bool) {
         MetronomeClickPlayer.shared.play(accent: isAccent)
+    }
+
+    private func startMeterTimer() {
+        meterTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+            guard let self = self, let recorder = self.audioRecorder, recorder.isRecording else { return }
+            recorder.updateMeters()
+            let dBLevel = recorder.averagePower(forChannel: 0)
+            // Convert dB (-160...0) to normalized 0...1
+            let minDb: Float = -60
+            let normalized = max(0, (dBLevel - minDb) / (-minDb))
+            DispatchQueue.main.async {
+                self.currentMeterLevel = normalized
+            }
+        }
+    }
+    
+    private func stopMeterTimer() {
+        meterTimer?.invalidate()
+        meterTimer = nil
+        currentMeterLevel = 0
     }
 
     private func configureAudioSession(

@@ -1599,11 +1599,11 @@ struct StudioGenerator {
         case .bass:
             return 28...52  // E1 to E3
         case .strings:
-            return 48...88  // C3 to E6
+            return 48...79  // C3 to G5 (SoundFont sweet spot)
         case .brass:
-            return 46...82  // Bb2 to A5
+            return 48...76  // C3 to E5 (avoids harsh upper register)
         case .woodwinds:
-            return 55...91  // G3 to F#6
+            return 52...84  // E3 to C6 (tighter, realistic range)
         case .organ:
             return 40...84  // E2 to C6
         case .mallets:
@@ -1987,9 +1987,15 @@ struct StudioGenerator {
         case .overdriveGuitar, .distortionGuitar:
             return 8
         case .brassSection, .synthBrass1, .synthBrass2:
-            return style == .rock ? 6 : 2
+            return style == .rock ? 4 : -4
         case .tremoloStrings, .stringEnsemble, .slowStrings:
-            return -2
+            return -8
+        case .synthStrings1, .synthStrings2:
+            return -4
+        case .clarinet:
+            return -6
+        case .flute, .piccolo:
+            return -4
         case .vibraphone, .marimba:
             return -4
         default:
@@ -2319,11 +2325,13 @@ struct StudioGenerator {
         // But for backward compatibility with the pattern generation, only use triads
         let intervals: [Int]
         switch quality {
-        case .major: intervals = [0, 4, 7]
-        case .minor: intervals = [0, 3, 7]
+        case .major, .sixth: intervals = [0, 4, 7]
+        case .minor, .minorSixth: intervals = [0, 3, 7]
         case .diminished: intervals = [0, 3, 6]
         case .augmented: intervals = [0, 4, 8]
-        case .dominant7: intervals = [0, 4, 7]
+        case .power: intervals = [0, 7]
+        case .dominant7, .dominant7sus4, .dominant7sharp9, .dominant7flat9, .dominant7sharp11, .altered:
+            intervals = [0, 4, 7]
         case .major7: intervals = [0, 4, 7]
         case .minor7: intervals = [0, 3, 7]
         case .minorMajor7: intervals = [0, 3, 7]
@@ -2332,9 +2340,12 @@ struct StudioGenerator {
         case .augmented7: intervals = [0, 4, 8]
         case .sus2: intervals = [0, 2, 7]
         case .sus4: intervals = [0, 5, 7]
-        case .dominant9: intervals = [0, 4, 7]
-        case .major9: intervals = [0, 4, 7]
+        case .dominant9, .major9, .add9: intervals = [0, 4, 7]
         case .minor9: intervals = [0, 3, 7]
+        case .dominant11, .major11, .add11: intervals = [0, 4, 7]
+        case .minor11: intervals = [0, 3, 7]
+        case .dominant13, .major13: intervals = [0, 4, 7]
+        case .minor13: intervals = [0, 3, 7]
         }
         if omitThird {
             return intervals.filter { $0 != 3 && $0 != 4 && $0 != 5 }

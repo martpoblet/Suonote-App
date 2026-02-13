@@ -5,15 +5,46 @@ import SwiftData
 final class SectionTemplate {
     var id: UUID = UUID()
     var name: String = "New Section"
-    var bars: Int = 4  // Keep for backward compatibility, but will be calculated dynamically
+    var bars: Int = 4
     var patternPreset: PatternPreset = PatternPreset.simple
     var lyricsText: String = ""
     var notesText: String = ""
-    var colorHex: String? = "#6B7B6B"  // Color personalizado para la sección (opcional para migración)
+    var colorHex: String? = "#6B7B6B"
+    
+    // Per-section overrides (nil = inherit from project)
+    var sectionKeyRoot: String? = nil
+    var sectionKeyModeRaw: String? = nil
+    var sectionBpm: Int? = nil
     
     var chordEventsStore: [ChordEvent]? = []
     
     var projectStore: Project?
+    
+    /// Effective key root for this section (own or inherited from project)
+    var effectiveKeyRoot: String {
+        sectionKeyRoot ?? project?.keyRoot ?? "C"
+    }
+    
+    /// Effective key mode for this section
+    var effectiveKeyMode: KeyMode {
+        if let raw = sectionKeyModeRaw { return KeyMode(rawValue: raw) ?? .major }
+        return project?.keyMode ?? .major
+    }
+    
+    /// Effective BPM for this section
+    var effectiveBpm: Int {
+        sectionBpm ?? project?.bpm ?? 120
+    }
+    
+    /// Whether this section has a key change from the project
+    var hasKeyChange: Bool {
+        sectionKeyRoot != nil || sectionKeyModeRaw != nil
+    }
+    
+    /// Whether this section has a tempo change from the project
+    var hasTempoChange: Bool {
+        sectionBpm != nil
+    }
     
     // Computed property: Color from hex string
     var color: Color {

@@ -9,6 +9,11 @@ final class StudioPlaybackEngine: ObservableObject {
     @Published private(set) var isPlaying = false
     @Published private(set) var currentBeat: Double = 0
     @Published private(set) var totalBeats: Double = 0
+    
+    // Loop/Cycle playback (P-06)
+    @Published var isLooping: Bool = false
+    @Published var loopStartBeat: Double = 0
+    @Published var loopEndBeat: Double? = nil  // nil = loop entire arrangement
 
     private struct BeatClock {
         var bpm: Double
@@ -43,6 +48,8 @@ final class StudioPlaybackEngine: ObservableObject {
     private var samplerNodes: [UUID: AVAudioUnitSampler] = [:]
     private var audioNodes: [UUID: AVAudioPlayerNode] = [:]
     private var mixerNodes: [UUID: AVAudioMixerNode] = [:]
+    private var reverbNodes: [UUID: AVAudioUnitReverb] = [:]
+    private var delayNodes: [UUID: AVAudioUnitDelay] = [:]
     private var audioTrackInfo: [UUID: AudioTrackInfo] = [:]
     private var trackMixState: [UUID: TrackMixState] = [:]
     private var bpm: Double = 120
@@ -100,6 +107,39 @@ final class StudioPlaybackEngine: ObservableObject {
         buildSequence(for: allTracks)
         applyMixState(project: project)
     }
+    
+    /// Incremental rebuild: only update MIDI sequence data without tearing down engine (A-06)
+    /// Falls back to full rebuild if engine topology changed
+    func rebuildSequenceIncremental(project: Project) {
+        let allTracks = resolvedTracks(from: project)
+        let currentSamplerIds = Set(samplerNodes.keys)
+        let currentAudioIds = Set(audioNodes.keys)
+        let newMidiIds = Set(allTracks.filter { $0.audioRecordingId == nil }.map { $0.id })
+        let newAudioIds = Set(allTracks.filter { $0.audioRecordingId != nil }.map { $0.id })
+        
+        // If track topology changed, do full rebuild
+        guard currentSamplerIds == newMidiIds && currentAudioIds == newAudioIds else {
+            rebuildSequence(project: project)
+            return
+        }
+        
+        // Just rebuild the MIDI sequence in-place
+        let wasPlaying = isPlaying
+        let savedBeat = currentBeat
+        
+        stop(resetPosition: false)
+        updateBeatClock(for: project)
+        totalBeats = timelineBeats(for: project)
+        
+        sequencer = AVAudioSequencer(audioEngine: engine)
+        buildSequence(for: allTracks)
+        applyMixState(project: project)
+        
+        currentBeat = min(savedBeat, totalBeats)
+        sequencer?.currentPositionInBeats = beatClock.uiBeatToSequencerBeat(currentBeat)
+        
+        if wasPlaying { play() }
+    }
 
     func play() {
         guard let sequencer else { return }
@@ -155,10 +195,14 @@ final class StudioPlaybackEngine: ObservableObject {
     }
     
     func updateTrackMix(trackId: UUID, volume: Float, pan: Float) {
-        guard var mixState = trackMixState[trackId] else { return }
-        mixState.volume = volume
-        mixState.pan = pan
-        trackMixState[trackId] = mixState
+        if var mixState = trackMixState[trackId] {
+            mixState.volume = volume
+            mixState.pan = pan
+            trackMixState[trackId] = mixState
+        } else {
+            // Engine not yet built — seed the state so the next rebuild picks it up
+            trackMixState[trackId] = TrackMixState(volume: volume, pan: pan, isMuted: false, isSolo: false)
+        }
         applyMixStateFromCache()
     }
 
@@ -171,8 +215,26 @@ final class StudioPlaybackEngine: ObservableObject {
                 isSolo: track.isSolo
             )
             trackMixState[track.id] = state
+            // Update effects
+            if let reverb = reverbNodes[track.id] {
+                reverb.wetDryMix = track.reverbEnabled ? track.reverbMix * 100 : 0
+            }
+            if let delay = delayNodes[track.id] {
+                delay.wetDryMix = track.delayEnabled ? track.delayMix * 100 : 0
+                delay.delayTime = TimeInterval(track.delayTime)
+            }
         }
         applyMixStateFromCache()
+    }
+
+    func updateTrackEffects(trackId: UUID, reverbEnabled: Bool, reverbMix: Float, delayEnabled: Bool, delayTime: Float, delayMix: Float) {
+        if let reverb = reverbNodes[trackId] {
+            reverb.wetDryMix = reverbEnabled ? reverbMix * 100 : 0
+        }
+        if let delay = delayNodes[trackId] {
+            delay.wetDryMix = delayEnabled ? delayMix * 100 : 0
+            delay.delayTime = TimeInterval(delayTime)
+        }
     }
 
     func updateProject(_ project: Project) {
@@ -203,10 +265,14 @@ final class StudioPlaybackEngine: ObservableObject {
         engine.stop()
         samplerNodes.values.forEach { engine.detach($0) }
         audioNodes.values.forEach { engine.detach($0) }
+        reverbNodes.values.forEach { engine.detach($0) }
+        delayNodes.values.forEach { engine.detach($0) }
         mixerNodes.values.forEach { engine.detach($0) }
         engine.reset()
         samplerNodes.removeAll()
         audioNodes.removeAll()
+        reverbNodes.removeAll()
+        delayNodes.removeAll()
         mixerNodes.removeAll()
         audioTrackInfo.removeAll()
         trackMixState.removeAll()
@@ -223,13 +289,25 @@ final class StudioPlaybackEngine: ObservableObject {
         for track in tracks where !track.instrument.isAudio {
             let sampler = AVAudioUnitSampler()
             let mixer = AVAudioMixerNode()
+            let reverb = AVAudioUnitReverb()
+            let delay = AVAudioUnitDelay()
             
             engine.attach(sampler)
+            engine.attach(reverb)
+            engine.attach(delay)
             engine.attach(mixer)
             
-            // Connect: sampler -> mixer -> main
-            engine.connect(sampler, to: mixer, format: nil)
+            // Chain: sampler -> reverb -> delay -> mixer -> main
+            engine.connect(sampler, to: reverb, format: nil)
+            engine.connect(reverb, to: delay, format: nil)
+            engine.connect(delay, to: mixer, format: nil)
             engine.connect(mixer, to: engine.mainMixerNode, format: nil)
+            
+            // Configure effects from track settings
+            reverb.wetDryMix = track.reverbEnabled ? track.reverbMix * 100 : 0
+            delay.wetDryMix = track.delayEnabled ? track.delayMix * 100 : 0
+            delay.delayTime = TimeInterval(track.delayTime)
+            delay.feedback = 30
             
             // Apply volume and pan
             mixer.outputVolume = track.volume
@@ -237,6 +315,8 @@ final class StudioPlaybackEngine: ObservableObject {
             
             samplerNodes[track.id] = sampler
             mixerNodes[track.id] = mixer
+            reverbNodes[track.id] = reverb
+            delayNodes[track.id] = delay
             trackMixState[track.id] = TrackMixState(
                 volume: track.volume,
                 pan: track.pan,
@@ -361,6 +441,12 @@ final class StudioPlaybackEngine: ObservableObject {
         }
     }
 
+    /// Re-attach playhead timer if playing but timer was lost (e.g. view reappeared)
+    func ensurePlayheadTimer() {
+        guard isPlaying, playheadTimer == nil else { return }
+        startPlayheadTimer()
+    }
+
     private func startPlayheadTimer() {
         stopPlayheadTimer()
         playheadTimer = Timer.scheduledTimer(
@@ -381,6 +467,16 @@ final class StudioPlaybackEngine: ObservableObject {
         guard let sequencer else { return }
         let position = beatClock.sequencerBeatToUiBeat(sequencer.currentPositionInBeats)
         currentBeat = position
+        
+        // Loop/Cycle support (P-06)
+        if isLooping {
+            let end = loopEndBeat ?? totalBeats
+            if end > 0, position >= end {
+                seek(to: loopStartBeat)
+                return
+            }
+        }
+        
         if totalBeats > 0, position >= totalBeats {
             stop(resetPosition: true)
         }

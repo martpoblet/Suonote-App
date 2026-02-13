@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import WidgetKit
 
 // MARK: - Project Detail View
 /// Vista principal del proyecto que contiene las 3 tabs principales:
@@ -80,8 +81,8 @@ struct ProjectDetailView: View {
                     } label: {
                         AppChip(
                             text: project.status.rawValue,
-                            icon: statusIcon(for: project.status),
-                            tint: statusColor(for: project.status),
+                            icon: project.status.icon,
+                            tint: project.status.swiftUIColor,
                             font: DesignSystem.Typography.caption2
                         )
                     }
@@ -112,7 +113,28 @@ struct ProjectDetailView: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.light, for: .navigationBar)
         .preferredColorScheme(.light)
+        .onAppear {
+            updateWidgetData()
+        }
+        .onChange(of: project.updatedAt) { _, _ in
+            updateWidgetData()
+        }
         
+    }
+
+    // MARK: - Helper Methods
+    
+    private func updateWidgetData() {
+        guard let defaults = UserDefaults(suiteName: "group.MartinCode.Suonote.shared") else { return }
+        defaults.set(project.id.uuidString, forKey: "widget_projectId")
+        defaults.set(project.title, forKey: "widget_projectName")
+        defaults.set(project.keyRoot, forKey: "widget_keyRoot")
+        defaults.set(project.keyMode.rawValue == "minor" ? "Minor" : "Major", forKey: "widget_keyMode")
+        defaults.set(project.bpm, forKey: "widget_bpm")
+        let sectionCount = project.arrangementItems.filter { $0.sectionTemplate != nil }.count
+        defaults.set(sectionCount, forKey: "widget_sectionCount")
+        defaults.set(project.updatedAt, forKey: "widget_lastEdited")
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     @ViewBuilder
@@ -130,28 +152,6 @@ struct ProjectDetailView: View {
     }
 
     // MARK: - Helper Methods
-    
-    /// Retorna el ícono SF Symbol para cada estado
-    private func statusIcon(for status: ProjectStatus) -> String {
-        switch status {
-        case .idea: return "lightbulb.fill"
-        case .inProgress: return "hammer.fill"
-        case .polished: return "sparkles"
-        case .finished: return "checkmark.seal.fill"
-        case .archived: return "archivebox.fill"
-        }
-    }
-    
-    /// Retorna el color asociado a cada estado del proyecto
-    private func statusColor(for status: ProjectStatus) -> Color {
-        switch status {
-        case .idea: return DesignSystem.Colors.info
-        case .inProgress: return DesignSystem.Colors.warning
-        case .polished: return DesignSystem.Colors.primary
-        case .finished: return DesignSystem.Colors.success
-        case .archived: return DesignSystem.Colors.secondary
-        }
-    }
     
 }
 
@@ -305,7 +305,7 @@ struct EditProjectSheet: View {
                                     tempStatus = status
                                 } label: {
                                     HStack(spacing: 8) {
-                                        Image(systemName: statusIconFor(status))
+                                        Image(systemName: status.icon)
                                             .font(DesignSystem.Typography.caption)
                                         Text(status.rawValue)
                                             .font(.subheadline)
@@ -315,10 +315,10 @@ struct EditProjectSheet: View {
                                     .frame(height: 44)
                                     .background(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .fill(tempStatus == status ? statusColorFor(status).opacity(0.3) : DesignSystem.Colors.surfaceSecondary)
+                                            .fill(tempStatus == status ? status.swiftUIColor.opacity(0.3) : DesignSystem.Colors.surfaceSecondary)
                                             .overlay(
                                                 RoundedRectangle(cornerRadius: 12)
-                                                    .stroke(tempStatus == status ? statusColorFor(status) : DesignSystem.Colors.border, lineWidth: tempStatus == status ? 2 : 1)
+                                                    .stroke(tempStatus == status ? status.swiftUIColor : DesignSystem.Colors.border, lineWidth: tempStatus == status ? 2 : 1)
                                             )
                                     )
                                 }
@@ -569,25 +569,7 @@ struct EditProjectSheet: View {
         dismiss()
     }
     
-    private func statusIconFor(_ status: ProjectStatus) -> String {
-        switch status {
-        case .idea: return "lightbulb.fill"
-        case .inProgress: return "hammer.fill"
-        case .polished: return "sparkles"
-        case .finished: return "checkmark.seal.fill"
-        case .archived: return "archivebox.fill"
-        }
-    }
-    
-    private func statusColorFor(_ status: ProjectStatus) -> Color {
-        switch status {
-        case .idea: return DesignSystem.Colors.info
-        case .inProgress: return DesignSystem.Colors.warning
-        case .polished: return DesignSystem.Colors.primary
-        case .finished: return DesignSystem.Colors.success
-        case .archived: return DesignSystem.Colors.secondary
-        }
-    }
+
 }
 
 // MARK: - Flow Layout for Tags
@@ -613,9 +595,9 @@ struct StatusPickerSheet: View {
                             updateStatus(to: status)
                         } label: {
                             HStack(spacing: 16) {
-                                Image(systemName: statusIcon(for: status))
+                                Image(systemName: status.icon)
                                     .font(DesignSystem.Typography.title3)
-                                    .foregroundStyle(statusColor(for: status))
+                                    .foregroundStyle(status.swiftUIColor)
                                     .frame(width: 32)
                                 
                                 VStack(alignment: .leading, spacing: 4) {
@@ -632,16 +614,16 @@ struct StatusPickerSheet: View {
                                 
                                 if project.status == status {
                                     Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(statusColor(for: status))
+                                        .foregroundStyle(status.swiftUIColor)
                                 }
                             }
                             .padding(16)
                             .background(
                                 RoundedRectangle(cornerRadius: 16)
-                                    .fill(project.status == status ? statusColor(for: status).opacity(0.15) : DesignSystem.Colors.surfaceSecondary)
+                                    .fill(project.status == status ? status.swiftUIColor.opacity(0.15) : DesignSystem.Colors.surfaceSecondary)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 16)
-                                            .stroke(project.status == status ? statusColor(for: status) : DesignSystem.Colors.border, 
+                                            .stroke(project.status == status ? status.swiftUIColor : DesignSystem.Colors.border, 
                                                    lineWidth: project.status == status ? 2 : 1)
                                     )
                             )
@@ -679,25 +661,7 @@ struct StatusPickerSheet: View {
         }
     }
     
-    private func statusIcon(for status: ProjectStatus) -> String {
-        switch status {
-        case .idea: return "lightbulb.fill"
-        case .inProgress: return "hammer.fill"
-        case .polished: return "sparkles"
-        case .finished: return "checkmark.seal.fill"
-        case .archived: return "archivebox.fill"
-        }
-    }
-    
-    private func statusColor(for status: ProjectStatus) -> Color {
-        switch status {
-        case .idea: return DesignSystem.Colors.info
-        case .inProgress: return DesignSystem.Colors.warning
-        case .polished: return DesignSystem.Colors.primary
-        case .finished: return DesignSystem.Colors.success
-        case .archived: return DesignSystem.Colors.secondary
-        }
-    }
+
     
     private func statusDescription(for status: ProjectStatus) -> String {
         switch status {

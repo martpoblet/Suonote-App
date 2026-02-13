@@ -448,10 +448,10 @@ struct ActiveRecordingView: View {
         // Time timer
         timeTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
             self.elapsedTime += 0.1
-            // Simulate audio levels
+            // Use real audio levels from the recorder
             if self.audioLevels.count > 0 {
                 self.audioLevels.removeFirst()
-                self.audioLevels.append(Float.random(in: 0.2...1.0))
+                self.audioLevels.append(self.audioManager.currentMeterLevel)
             }
         }
     }

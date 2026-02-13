@@ -38,6 +38,14 @@ struct StudioTabView: View {
         Set(project.studioTracks.filter { !$0.instrument.isAudio }.map(\.instrument))
     }
 
+    private var existingRecordingIds: Set<UUID> {
+        Set(project.studioTracks.compactMap { $0.audioRecordingId })
+    }
+
+    private var availableRecordings: [Recording] {
+        project.recordings.filter { !existingRecordingIds.contains($0.id) }
+    }
+
     private var availableInstruments: [StudioInstrument] {
         StudioInstrument.allCases.filter { !$0.isAudio }
     }
@@ -117,6 +125,7 @@ struct StudioTabView: View {
                             selectedTrackId: $selectedTrackId,
                             onTrackStructureChange: { needsRebuild = true },
                             onMixChange: applyMixState,
+                            onEffectsChange: applyEffects,
                             onDelete: deleteTrack,
                             onOpenEditor: { track in
                                 selectedTrackId = track.id
@@ -171,6 +180,10 @@ struct StudioTabView: View {
             }
             playback.prepare(project: project)
             playback.updateProject(project)
+            // Restart playhead timer if still playing (e.g. returning from another tab)
+            if playback.isPlaying {
+                playback.ensurePlayheadTimer()
+            }
             lastProjectSignature = projectStudioSignature
             let timeline = StudioGenerator.timeline(for: project)
             lastChordIds = Set(timeline.chords.map { $0.chord.id })
@@ -219,7 +232,7 @@ struct StudioTabView: View {
         }
         .sheet(isPresented: $showingRecordingPicker) {
             StudioRecordingPicker(
-                recordings: project.recordings,
+                recordings: availableRecordings,
                 onPick: { recording in
                     addAudioTrack(from: recording)
                 }
@@ -236,7 +249,7 @@ struct StudioTabView: View {
         }
         .sheet(isPresented: $showingAddTrackMenu) {
             AddTrackMenuView(
-                hasRecordings: !project.recordings.isEmpty,
+                hasRecordings: !availableRecordings.isEmpty,
                 onAddInstrument: {
                     showingAddTrackMenu = false
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -265,6 +278,7 @@ struct StudioTabView: View {
         }
         .fullScreenCover(item: $editingTrack, onDismiss: {
             editingTrack = nil
+            applyMixState()
         }) { track in
             StudioTrackEditorView(
                 project: project,
@@ -462,6 +476,19 @@ struct StudioTabView: View {
 
     private func applyMixState() {
         playback.applyMixState(project: project)
+    }
+
+    private func applyEffects() {
+        for track in project.studioTracks {
+            playback.updateTrackEffects(
+                trackId: track.id,
+                reverbEnabled: track.reverbEnabled,
+                reverbMix: track.reverbMix,
+                delayEnabled: track.delayEnabled,
+                delayTime: track.delayTime,
+                delayMix: track.delayMix
+            )
+        }
     }
 
     private func syncStudioIfNeeded() {
@@ -1110,6 +1137,11 @@ struct StudioTrackEditorView: View {
                     range: -1...1
                 )
             }
+
+            // Effects section (non-audio instruments only)
+            if !track.instrument.isAudio {
+                trackEffectsSection
+            }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1224,6 +1256,99 @@ struct StudioTrackEditorView: View {
 
     private func updateTrackMix() {
         playback.updateTrackMix(trackId: track.id, volume: track.volume, pan: track.pan)
+    }
+
+    private func updateTrackEffects() {
+        playback.updateTrackEffects(
+            trackId: track.id,
+            reverbEnabled: track.reverbEnabled,
+            reverbMix: track.reverbMix,
+            delayEnabled: track.delayEnabled,
+            delayTime: track.delayTime,
+            delayMix: track.delayMix
+        )
+    }
+
+    private var trackEffectsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Effects")
+                .font(DesignSystem.Typography.caption)
+                .foregroundStyle(DesignSystem.Colors.textSecondary)
+
+            // Reverb
+            VStack(spacing: 4) {
+                Toggle(isOn: $track.reverbEnabled) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "waveform.path.ecg")
+                            .font(.caption2)
+                            .foregroundStyle(accentColor)
+                        Text("Reverb")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
+                    }
+                }
+                .toggleStyle(SwitchToggleStyle(tint: accentColor))
+                .onChange(of: track.reverbEnabled) { _, _ in updateTrackEffects() }
+
+                if track.reverbEnabled {
+                    HStack(spacing: 6) {
+                        Text("Mix")
+                            .font(.caption2)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        Slider(value: $track.reverbMix, in: 0...1)
+                            .tint(accentColor)
+                            .onChange(of: track.reverbMix) { _, _ in updateTrackEffects() }
+                        Text("\(Int(track.reverbMix * 100))%")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
+                            .frame(width: 36, alignment: .trailing)
+                    }
+                }
+            }
+
+            // Delay
+            VStack(spacing: 4) {
+                Toggle(isOn: $track.delayEnabled) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.caption2)
+                            .foregroundStyle(accentColor)
+                        Text("Delay")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
+                    }
+                }
+                .toggleStyle(SwitchToggleStyle(tint: accentColor))
+                .onChange(of: track.delayEnabled) { _, _ in updateTrackEffects() }
+
+                if track.delayEnabled {
+                    HStack(spacing: 6) {
+                        Text("Time")
+                            .font(.caption2)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        Slider(value: $track.delayTime, in: 0.05...1.0)
+                            .tint(accentColor)
+                            .onChange(of: track.delayTime) { _, _ in updateTrackEffects() }
+                        Text("\(String(format: "%.2f", track.delayTime))s")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
+                            .frame(width: 42, alignment: .trailing)
+                    }
+                    HStack(spacing: 6) {
+                        Text("Mix")
+                            .font(.caption2)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        Slider(value: $track.delayMix, in: 0...1)
+                            .tint(accentColor)
+                            .onChange(of: track.delayMix) { _, _ in updateTrackEffects() }
+                        Text("\(Int(track.delayMix * 100))%")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
+                            .frame(width: 36, alignment: .trailing)
+                    }
+                }
+            }
+        }
     }
 
     private func openRegenerateOptions() {
@@ -1388,6 +1513,7 @@ struct StudioTrackList: View {
     @Binding var selectedTrackId: UUID?
     let onTrackStructureChange: () -> Void
     let onMixChange: () -> Void
+    let onEffectsChange: () -> Void
     let onDelete: (StudioTrack) -> Void
     let onOpenEditor: (StudioTrack) -> Void
 
@@ -1412,6 +1538,7 @@ struct StudioTrackList: View {
                             },
                             onTrackStructureChange: onTrackStructureChange,
                             onMixChange: onMixChange,
+                            onEffectsChange: onEffectsChange,
                             onDelete: {
                                 onDelete(track)
                             },
@@ -1430,8 +1557,57 @@ struct StudioTrackRow: View {
     let onSelect: () -> Void
     let onTrackStructureChange: () -> Void
     let onMixChange: () -> Void
+    let onEffectsChange: () -> Void
     let onDelete: () -> Void
     let onOpenEditor: () -> Void
+    @State private var isExpanded: Bool = false
+
+    private var panLabel: String {
+        if track.pan < -0.05 {
+            return "L\(Int(abs(track.pan) * 100))"
+        } else if track.pan > 0.05 {
+            return "R\(Int(track.pan * 100))"
+        } else {
+            return "C"
+        }
+    }
+
+    private var effectTogglesView: some View {
+        let color = track.instrument.color
+        return HStack(spacing: 12) {
+            Button {
+                track.reverbEnabled.toggle()
+                onEffectsChange()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "waveform.path.ecg").font(.caption2)
+                    Text("Reverb").font(.caption2)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(track.reverbEnabled ? color.opacity(0.3) : DesignSystem.Colors.surface))
+                .overlay(Capsule().strokeBorder(track.reverbEnabled ? color : DesignSystem.Colors.border, lineWidth: 1))
+            }
+            .foregroundStyle(track.reverbEnabled ? color : DesignSystem.Colors.textSecondary)
+
+            Button {
+                track.delayEnabled.toggle()
+                onEffectsChange()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.triangle.2.circlepath").font(.caption2)
+                    Text("Delay").font(.caption2)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(track.delayEnabled ? color.opacity(0.3) : DesignSystem.Colors.surface))
+                .overlay(Capsule().strokeBorder(track.delayEnabled ? color : DesignSystem.Colors.border, lineWidth: 1))
+            }
+            .foregroundStyle(track.delayEnabled ? color : DesignSystem.Colors.textSecondary)
+
+            Spacer()
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1538,6 +1714,55 @@ struct StudioTrackRow: View {
                 .buttonStyle(.plain)
             }
             .padding(12)
+
+            // Expandable volume & pan controls
+            if isExpanded {
+                VStack(spacing: 8) {
+                    Divider().overlay(DesignSystem.Colors.border)
+
+                    // Volume
+                    HStack(spacing: 8) {
+                        Image(systemName: "speaker.wave.2.fill")
+                            .font(.caption2)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
+                            .frame(width: 16)
+                        Slider(value: $track.volume, in: 0...1)
+                            .tint(track.instrument.color)
+                            .onChange(of: track.volume) { _, _ in
+                                onMixChange()
+                            }
+                        Text("\(Int(track.volume * 100))%")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
+                            .frame(width: 36, alignment: .trailing)
+                    }
+
+                    // Pan
+                    HStack(spacing: 8) {
+                        Image(systemName: "l.joystick.fill")
+                            .font(.caption2)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
+                            .frame(width: 16)
+                        Slider(value: $track.pan, in: -1...1)
+                            .tint(track.instrument.color)
+                            .onChange(of: track.pan) { _, _ in
+                                onMixChange()
+                            }
+                        Text(panLabel)
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
+                            .frame(width: 36, alignment: .trailing)
+                    }
+
+                    // Quick effect toggles
+                    if !track.instrument.isAudio {
+                        effectTogglesView
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 10)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
         .background(
             RoundedRectangle(cornerRadius: 14)
@@ -1550,6 +1775,9 @@ struct StudioTrackRow: View {
         .contentShape(Rectangle())
         .onTapGesture {
             onSelect()
+            withAnimation(.easeInOut(duration: 0.25)) {
+                isExpanded.toggle()
+            }
         }
         .contextMenu {
             Button(role: .destructive) {

@@ -9,19 +9,29 @@ struct ChordPaletteView: View {
     let beatOffset: Int
     
     @State private var selectedTab = 0
+    @State private var chordPreview = ChordPreviewPlayer()
     
     let notes = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
     
-    var inKeyChords: [String] {
-        let majorScale = ["C", "D", "E", "F", "G", "A", "B"]
-        let minorScale = ["A", "B", "C", "D", "E", "F", "G"]
+    /// Diatonic chords with correct qualities for the project key
+    var inKeyChords: [(root: String, quality: ChordQuality)] {
+        let normalizedRoot = MusicTheory.normalize(project.keyRoot)
+        guard let rootIndex = MusicTheory.noteIndex(normalizedRoot) else { return [] }
         
-        let rootIndex = notes.firstIndex(of: project.keyRoot) ?? 0
-        let scale = project.keyMode == .major ? majorScale : minorScale
+        let intervals: [Int]
+        let qualities: [ChordQuality]
         
-        return scale.enumerated().map { index, _ in
-            let noteIndex = (rootIndex + [0, 2, 4, 5, 7, 9, 11][index % 7]) % 12
-            return notes[noteIndex]
+        if project.keyMode == .major {
+            intervals = [0, 2, 4, 5, 7, 9, 11]
+            qualities = [.major, .minor, .minor, .major, .major, .minor, .diminished]
+        } else {
+            intervals = [0, 2, 3, 5, 7, 8, 10]
+            qualities = [.minor, .diminished, .major, .minor, .minor, .major, .major]
+        }
+        
+        return zip(intervals, qualities).map { (interval, quality) in
+            let note = notes[(rootIndex + interval) % 12]
+            return (root: note, quality: quality)
         }
     }
     
@@ -39,9 +49,9 @@ struct ChordPaletteView: View {
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 80))], spacing: 12) {
                         if selectedTab == 0 {
-                            ForEach(inKeyChords, id: \.self) { root in
-                                chordButton(root: root, quality: .major)
-                                chordButton(root: root, quality: .minor)
+                            ForEach(inKeyChords.indices, id: \.self) { i in
+                                let chord = inKeyChords[i]
+                                chordButton(root: chord.root, quality: chord.quality)
                             }
                         } else if selectedTab == 1 {
                             ForEach(notes, id: \.self) { root in
@@ -83,6 +93,7 @@ struct ChordPaletteView: View {
     
     private func chordButton(root: String, quality: ChordQuality) -> some View {
         Button {
+            chordPreview.playChord(root: root, quality: quality)
             addChord(root: root, quality: quality)
             dismiss()
         } label: {
@@ -94,6 +105,7 @@ struct ChordPaletteView: View {
                 .foregroundStyle(DesignSystem.Colors.textPrimary)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
         }
+        .chordAccessibility(root: root, quality: quality)
     }
     
     private func addChord(root: String, quality: ChordQuality) {

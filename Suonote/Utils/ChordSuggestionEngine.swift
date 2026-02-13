@@ -5,6 +5,43 @@ import Foundation
 enum MusicTheory {
     static let chromaticScale = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
     
+    /// Maps flat note names to their sharp equivalents for lookup
+    static let flatToSharp: [String: String] = [
+        "Db": "C#", "Eb": "D#", "Fb": "E", "Gb": "F#",
+        "Ab": "G#", "Bb": "A#", "Cb": "B"
+    ]
+    
+    /// Maps sharp note names to their preferred flat equivalents for display
+    static let sharpToFlat: [String: String] = [
+        "C#": "Db", "D#": "Eb", "F#": "Gb", "G#": "Ab", "A#": "Bb"
+    ]
+    
+    /// Keys that conventionally use flats
+    static let flatKeys: Set<String> = ["F", "Bb", "Eb", "Ab", "Db", "Gb",
+                                         "Dm", "Gm", "Cm", "Fm", "Bbm", "Ebm"]
+    
+    /// Normalize any note name (flat or sharp) to its chromatic scale index
+    static func noteIndex(_ note: String) -> Int? {
+        if let idx = chromaticScale.firstIndex(of: note) { return idx }
+        if let sharp = flatToSharp[note] { return chromaticScale.firstIndex(of: sharp) }
+        return nil
+    }
+    
+    /// Normalize a note name to its sharp equivalent for internal use
+    static func normalize(_ note: String) -> String {
+        flatToSharp[note] ?? note
+    }
+    
+    /// Get the display name for a note in a given key context (sharp or flat)
+    static func displayName(for note: String, inKey root: String, mode: KeyMode? = nil) -> String {
+        let keyId = root + (mode == .minor ? "m" : "")
+        if flatKeys.contains(keyId) || flatKeys.contains(root) {
+            let normalized = normalize(note)
+            return sharpToFlat[normalized] ?? normalized
+        }
+        return normalize(note)
+    }
+    
     // Intervals in semitones
     enum Interval: Int {
         case unison = 0
@@ -61,17 +98,8 @@ class ChordSuggestionEngine {
     // MARK: - Scale Degrees
     
     private static func scaleDegreesForKey(root: String, mode: KeyMode) -> [String] {
-        guard let rootIndex = MusicTheory.chromaticScale.firstIndex(of: root) else { return [] }
-        
-        let intervals: [Int]
-        switch mode {
-        case .major:
-            intervals = MusicTheory.ScaleFormula.major
-        case .minor:
-            intervals = MusicTheory.ScaleFormula.naturalMinor
-        }
-        
-        return intervals.map { offset in
+        guard let rootIndex = MusicTheory.noteIndex(root) else { return [] }
+        return mode.intervals.map { offset in
             MusicTheory.chromaticScale[(rootIndex + offset) % 12]
         }
     }
@@ -79,14 +107,14 @@ class ChordSuggestionEngine {
     // MARK: - Note Utilities
     
     static func transpose(note: String, semitones: Int) -> String {
-        guard let index = MusicTheory.chromaticScale.firstIndex(of: note) else { return note }
+        guard let index = MusicTheory.noteIndex(note) else { return note }
         let newIndex = (index + semitones + 12) % 12
         return MusicTheory.chromaticScale[newIndex]
     }
     
     static func intervalBetween(from: String, to: String) -> Int {
-        guard let fromIndex = MusicTheory.chromaticScale.firstIndex(of: from),
-              let toIndex = MusicTheory.chromaticScale.firstIndex(of: to) else { return 0 }
+        guard let fromIndex = MusicTheory.noteIndex(from),
+              let toIndex = MusicTheory.noteIndex(to) else { return 0 }
         return (toIndex - fromIndex + 12) % 12
     }
     
@@ -96,55 +124,82 @@ class ChordSuggestionEngine {
         let scaleDegrees = scaleDegreesForKey(root: root, mode: mode)
         var chords: [ChordSuggestion] = []
         
-        if mode == .major {
-            // Major key: I, ii, iii, IV, V, vi, vii°
-            let qualities: [ChordQuality] = [.major, .minor, .minor, .major, .major, .minor, .diminished]
-            let romanNumerals = ["I", "ii", "iii", "IV", "V", "vi", "vii°"]
-            let functionNames = ["Tonic", "Supertonic", "Mediant", "Subdominant", "Dominant", "Submediant", "Leading Tone"]
+        // Diatonic triad qualities by mode (for 7-note scales)
+        let qualitiesForMode: [ChordQuality]
+        let romanForMode: [String]
+        let functionsForMode: [String]
+        
+        switch mode {
+        case .major:
+            qualitiesForMode = [.major, .minor, .minor, .major, .major, .minor, .diminished]
+            romanForMode = ["I", "ii", "iii", "IV", "V", "vi", "vii°"]
+            functionsForMode = ["Tonic", "Supertonic", "Mediant", "Subdominant", "Dominant", "Submediant", "Leading Tone"]
+        case .minor, .aeolian:
+            qualitiesForMode = [.minor, .diminished, .major, .minor, .minor, .major, .major]
+            romanForMode = ["i", "ii°", "III", "iv", "v", "VI", "VII"]
+            functionsForMode = ["Tonic", "Supertonic", "Relative Major", "Subdominant", "Dominant", "Submediant", "Subtonic"]
+        case .dorian:
+            qualitiesForMode = [.minor, .minor, .major, .major, .minor, .diminished, .major]
+            romanForMode = ["i", "ii", "III", "IV", "v", "vi°", "VII"]
+            functionsForMode = ["Tonic", "Supertonic", "Mediant", "Subdominant", "Dominant", "Submediant", "Subtonic"]
+        case .phrygian:
+            qualitiesForMode = [.minor, .major, .major, .minor, .diminished, .major, .minor]
+            romanForMode = ["i", "II", "III", "iv", "v°", "VI", "vii"]
+            functionsForMode = ["Tonic", "Neapolitan", "Mediant", "Subdominant", "Dominant", "Submediant", "Subtonic"]
+        case .lydian:
+            qualitiesForMode = [.major, .major, .minor, .diminished, .major, .minor, .minor]
+            romanForMode = ["I", "II", "iii", "iv°", "V", "vi", "vii"]
+            functionsForMode = ["Tonic", "Supertonic", "Mediant", "Subdominant", "Dominant", "Submediant", "Subtonic"]
+        case .mixolydian:
+            qualitiesForMode = [.major, .minor, .diminished, .major, .minor, .minor, .major]
+            romanForMode = ["I", "ii", "iii°", "IV", "v", "vi", "VII"]
+            functionsForMode = ["Tonic", "Supertonic", "Mediant", "Subdominant", "Dominant", "Submediant", "Subtonic"]
+        case .locrian:
+            qualitiesForMode = [.diminished, .major, .minor, .minor, .major, .major, .minor]
+            romanForMode = ["i°", "II", "iii", "iv", "V", "VI", "vii"]
+            functionsForMode = ["Tonic", "Supertonic", "Mediant", "Subdominant", "Dominant", "Submediant", "Subtonic"]
+        case .harmonicMinor:
+            qualitiesForMode = [.minor, .diminished, .augmented, .minor, .major, .major, .diminished]
+            romanForMode = ["i", "ii°", "III+", "iv", "V", "VI", "vii°"]
+            functionsForMode = ["Tonic", "Supertonic", "Mediant", "Subdominant", "Dominant", "Submediant", "Leading Tone"]
+        case .melodicMinor:
+            qualitiesForMode = [.minor, .minor, .augmented, .major, .major, .diminished, .diminished]
+            romanForMode = ["i", "ii", "III+", "IV", "V", "vi°", "vii°"]
+            functionsForMode = ["Tonic", "Supertonic", "Mediant", "Subdominant", "Dominant", "Submediant", "Leading Tone"]
+        case .pentatonicMajor:
+            qualitiesForMode = [.major, .minor, .minor, .major, .minor]
+            romanForMode = ["I", "ii", "iii", "V", "vi"]
+            functionsForMode = ["Tonic", "Supertonic", "Mediant", "Dominant", "Submediant"]
+        case .pentatonicMinor:
+            qualitiesForMode = [.minor, .major, .minor, .minor, .major]
+            romanForMode = ["i", "III", "iv", "v", "VII"]
+            functionsForMode = ["Tonic", "Mediant", "Subdominant", "Dominant", "Subtonic"]
+        case .blues:
+            qualitiesForMode = [.minor, .major, .minor, .minor, .minor, .major]
+            romanForMode = ["i", "III", "iv", "♯iv/♭v", "v", "VII"]
+            functionsForMode = ["Tonic", "Mediant", "Subdominant", "Blue Note", "Dominant", "Subtonic"]
+        }
+        
+        for (index, degree) in scaleDegrees.enumerated() {
+            guard index < qualitiesForMode.count else { break }
+            let confidence: Double = {
+                switch index {
+                case 0: return 1.0
+                case 3, 4: return mode == .major ? 1.0 : 0.9
+                case 5: return 0.9
+                case 1: return 0.8
+                default: return 0.7
+                }
+            }()
             
-            for (index, degree) in scaleDegrees.enumerated() {
-                let confidence: Double = {
-                    switch index {
-                    case 0, 3, 4: return 1.0  // I, IV, V - primary chords
-                    case 5: return 0.9        // vi - very common
-                    case 1: return 0.8        // ii - common pre-dominant
-                    default: return 0.7
-                    }
-                }()
-                
-                chords.append(ChordSuggestion(
-                    root: degree,
-                    quality: qualities[index],
-                    extensions: [],
-                    reason: "\(romanNumerals[index]) - \(functionNames[index])",
-                    confidence: confidence,
-                    romanNumeral: romanNumerals[index]
-                ))
-            }
-        } else {
-            // Minor key: i, ii°, III, iv, v, VI, VII
-            let qualities: [ChordQuality] = [.minor, .diminished, .major, .minor, .minor, .major, .major]
-            let romanNumerals = ["i", "ii°", "III", "iv", "v", "VI", "VII"]
-            let functionNames = ["Tonic", "Supertonic", "Relative Major", "Subdominant", "Dominant", "Submediant", "Subtonic"]
-            
-            for (index, degree) in scaleDegrees.enumerated() {
-                let confidence: Double = {
-                    switch index {
-                    case 0, 3, 4: return 1.0  // i, iv, v
-                    case 5, 6: return 0.9     // VI, VII - common in minor
-                    default: return 0.7
-                    }
-                }()
-                
-                chords.append(ChordSuggestion(
-                    root: degree,
-                    quality: qualities[index],
-                    extensions: [],
-                    reason: "\(romanNumerals[index]) - \(functionNames[index])",
-                    confidence: confidence,
-                    romanNumeral: romanNumerals[index]
-                ))
-            }
+            chords.append(ChordSuggestion(
+                root: degree,
+                quality: qualitiesForMode[index],
+                extensions: [],
+                reason: "\(romanForMode[index]) - \(functionsForMode[index])",
+                confidence: confidence,
+                romanNumeral: romanForMode[index]
+            ))
         }
         
         return chords
@@ -161,16 +216,25 @@ class ChordSuggestionEngine {
             let seventh: ChordQuality
             let reason: String
             
-            switch (mode, index) {
-            case (.major, 0), (.major, 3):  // I and IV in major
-                seventh = .major7
-                reason = "Major 7th chord"
-            case (.major, 4):  // V in major
-                seventh = .dominant7
-                reason = "Dominant 7th"
-            case (_, _) where chord.quality == .minor:  // Any minor chord
+            switch chord.quality {
+            case .major:
+                // Tonic major chords get maj7, dominant gets dom7
+                if index == 0 || index == 3 {
+                    seventh = .major7
+                    reason = "Major 7th chord"
+                } else {
+                    seventh = .dominant7
+                    reason = "Dominant 7th"
+                }
+            case .minor:
                 seventh = .minor7
                 reason = "Minor 7th chord"
+            case .diminished:
+                seventh = .halfDiminished7
+                reason = "Half-diminished 7th"
+            case .augmented:
+                seventh = .augmented7
+                reason = "Augmented 7th"
             default:
                 seventh = .dominant7
                 reason = "7th chord"
@@ -568,9 +632,12 @@ class ChordSuggestionEngine {
 private extension ChordSuggestionEngine {
     static func baseQuality(for quality: ChordQuality) -> ChordQuality {
         switch quality {
-        case .major, .major7, .major9, .dominant7, .dominant9, .sus2, .sus4, .augmented, .augmented7:
+        case .major, .major7, .major9, .major11, .major13, .dominant7, .dominant9,
+             .dominant11, .dominant13, .dominant7sus4, .dominant7sharp9, .dominant7flat9,
+             .dominant7sharp11, .altered, .sus2, .sus4, .augmented, .augmented7,
+             .sixth, .add9, .add11, .power:
             return .major
-        case .minor, .minor7, .minor9, .minorMajor7:
+        case .minor, .minor7, .minor9, .minor11, .minor13, .minorMajor7, .minorSixth:
             return .minor
         case .diminished, .diminished7, .halfDiminished7:
             return .diminished
@@ -634,6 +701,73 @@ private extension ChordSuggestionEngine {
         let extensionKey = suggestion.extensions.joined(separator: "-")
         return "\(suggestion.root)|\(suggestion.quality.rawValue)|\(extensionKey)"
     }
+    
+    // MARK: - Voice Leading (M-10)
+    
+    /// Calculate optimal voicing of a chord to minimize movement from previous voicing
+    /// Returns MIDI note numbers for smooth voice leading
+    static func optimalVoicing(
+        root: String,
+        quality: ChordQuality,
+        previousVoicing: [Int]?,
+        baseOctave: Int = 4
+    ) -> [Int] {
+        guard let rootIdx = MusicTheory.noteIndex(root) else { return [] }
+        let baseMidi = 12 * (baseOctave + 1) + rootIdx
+        
+        // Default voicing: root in given octave
+        let voicing = quality.intervals.map { baseMidi + $0 }
+        
+        guard let prev = previousVoicing, !prev.isEmpty else {
+            return voicing
+        }
+        
+        // Try inversions to minimize total voice movement
+        let noteCount = voicing.count
+        var bestVoicing = voicing
+        var bestCost = voiceLeadingCost(from: prev, to: voicing)
+        
+        // Try each inversion (shift notes up by octave)
+        for inversion in 1..<noteCount {
+            var candidate = voicing
+            for i in 0..<inversion {
+                candidate[i] += 12
+            }
+            candidate.sort()
+            
+            let cost = voiceLeadingCost(from: prev, to: candidate)
+            if cost < bestCost {
+                bestCost = cost
+                bestVoicing = candidate
+            }
+        }
+        
+        // Also try dropping root an octave
+        var dropped = bestVoicing
+        if let minNote = dropped.first {
+            dropped[0] = minNote - 12
+            let dropCost = voiceLeadingCost(from: prev, to: dropped)
+            if dropCost < bestCost {
+                bestVoicing = dropped
+            }
+        }
+        
+        return bestVoicing
+    }
+    
+    /// Calculate the total semitone movement between two voicings
+    private static func voiceLeadingCost(from: [Int], to: [Int]) -> Int {
+        let minCount = min(from.count, to.count)
+        guard minCount > 0 else { return 100 }
+        
+        var cost = 0
+        for i in 0..<minCount {
+            cost += abs(from[i] - to[i])
+        }
+        // Penalty for differing voice count
+        cost += abs(from.count - to.count) * 6
+        return cost
+    }
 }
 
 // MARK: - Supporting Types
@@ -651,5 +785,107 @@ struct ProgressionAnalysis {
     
     var romanNumeralString: String {
         romanNumerals.joined(separator: " - ")
+    }
+}
+
+// MARK: - Genre-Based Suggestions (M-09)
+
+enum MusicGenre: String, CaseIterable {
+    case pop = "Pop"
+    case rock = "Rock"
+    case jazz = "Jazz"
+    case blues = "Blues"
+    case folk = "Folk"
+    case rnb = "R&B/Soul"
+    case latin = "Latin"
+    case gospel = "Gospel"
+    case edm = "EDM"
+    case country = "Country"
+    
+    /// Common chord progressions for this genre (as scale degree intervals from root)
+    var typicalProgressions: [[(interval: Int, quality: ChordQuality)]] {
+        switch self {
+        case .pop:
+            return [
+                [(0, .major), (7, .major), (9, .minor), (5, .major)],           // I-V-vi-IV
+                [(0, .major), (5, .major), (7, .major), (5, .major)],           // I-IV-V-IV
+                [(9, .minor), (5, .major), (0, .major), (7, .major)],           // vi-IV-I-V
+            ]
+        case .rock:
+            return [
+                [(0, .major), (5, .major), (7, .major), (5, .major)],           // I-IV-V-IV
+                [(0, .major), (10, .major), (5, .major), (0, .major)],          // I-bVII-IV-I
+                [(0, .power), (5, .power), (7, .power), (5, .power)],           // Power chords
+            ]
+        case .jazz:
+            return [
+                [(0, .major7), (9, .minor7), (2, .minor7), (7, .dominant7)],    // Imaj7-vi7-ii7-V7
+                [(2, .minor7), (7, .dominant7), (0, .major7), (0, .major7)],    // ii-V-I
+                [(0, .major7), (5, .major7), (2, .minor7), (7, .dominant7)],    // I-IV-ii-V
+            ]
+        case .blues:
+            return [
+                [(0, .dominant7), (5, .dominant7), (0, .dominant7), (7, .dominant7)], // 12-bar blues
+                [(0, .dominant7), (0, .dominant7), (5, .dominant7), (0, .dominant7)],
+            ]
+        case .folk:
+            return [
+                [(0, .major), (7, .major), (0, .major), (5, .major)],           // I-V-I-IV
+                [(0, .major), (2, .minor), (5, .major), (0, .major)],           // I-ii-IV-I
+            ]
+        case .rnb:
+            return [
+                [(0, .major7), (2, .minor7), (7, .dominant7), (0, .major7)],    // Imaj7-ii7-V7-I
+                [(9, .minor7), (2, .minor7), (7, .dominant7), (0, .major7)],    // vi7-ii7-V7-I
+            ]
+        case .latin:
+            return [
+                [(0, .major), (5, .major), (7, .major), (0, .major)],           // I-IV-V-I
+                [(0, .minor), (5, .minor), (7, .dominant7), (0, .minor)],       // i-iv-V7-i
+            ]
+        case .gospel:
+            return [
+                [(0, .major7), (5, .major7), (7, .dominant7), (0, .major7)],    // I-IV-V-I with 7ths
+                [(0, .major), (2, .minor7), (7, .dominant7), (0, .major)],      // I-ii7-V7-I
+            ]
+        case .edm:
+            return [
+                [(0, .minor), (5, .minor), (10, .major), (7, .major)],          // i-iv-bVII-V
+                [(9, .minor), (5, .major), (0, .major), (7, .major)],           // vi-IV-I-V
+            ]
+        case .country:
+            return [
+                [(0, .major), (5, .major), (7, .major), (0, .major)],           // I-IV-V-I
+                [(0, .major), (7, .major), (5, .major), (0, .major)],           // I-V-IV-I
+            ]
+        }
+    }
+    
+    /// Generate chord suggestions for a given key using this genre's patterns
+    func suggestions(keyRoot: String) -> [ChordSuggestion] {
+        guard let rootIdx = MusicTheory.noteIndex(keyRoot) else { return [] }
+        var result: [ChordSuggestion] = []
+        
+        for (progIdx, progression) in typicalProgressions.enumerated() {
+            for (chordIdx, chord) in progression.enumerated() {
+                let noteIdx = (rootIdx + chord.interval) % 12
+                let note = MusicTheory.chromaticScale[noteIdx]
+                result.append(ChordSuggestion(
+                    root: note,
+                    quality: chord.quality,
+                    extensions: [],
+                    reason: "\(rawValue) pattern \(progIdx + 1), beat \(chordIdx + 1)",
+                    confidence: progIdx == 0 ? 0.9 : 0.7,
+                    romanNumeral: ""
+                ))
+            }
+        }
+        
+        // Deduplicate by root+quality
+        var seen = Set<String>()
+        return result.filter { s in
+            let key = "\(s.root)\(s.quality.rawValue)"
+            return seen.insert(key).inserted
+        }
     }
 }

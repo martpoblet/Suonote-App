@@ -4,6 +4,7 @@ import AVFoundation
 
 struct RecordingsTabView: View {
     @Bindable var project: Project
+    @Environment(\.modelContext) private var modelContext
     @StateObject private var audioManager = AudioRecordingManager()
     @StateObject private var effectsProcessor = AudioEffectsProcessor()
     @State private var showingRecordingScreen = false
@@ -407,9 +408,15 @@ struct RecordingsTabView: View {
     }
     
     private func deleteRecording(_ recording: Recording) {
+        // Delete the audio file
+        let url = FileManagerUtils.recordingURL(for: recording.fileName)
+        try? FileManager.default.removeItem(at: url)
+        
         if let index = project.recordings.firstIndex(where: { $0.id == recording.id }) {
-            project.recordings.remove(at: index)
+            let removed = project.recordings.remove(at: index)
+            modelContext.delete(removed)
         }
+        project.updatedAt = Date()
     }
     
     private func togglePlayback(for recording: Recording) {
@@ -512,25 +519,29 @@ struct ModernTakeCard: View {
     var body: some View {
         HStack(spacing: 16) {
             // Play button with type indicator
-            ZStack {
-                Circle()
-                    .fill(isPlaying ? DesignSystem.Colors.success : recording.recordingType.color.opacity(0.4))
-                    .frame(width: 56, height: 56)
-                
-                if isPlaying {
-                    Image(systemName: "pause.fill")
-                        .font(DesignSystem.Typography.title3)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                } else {
-                    Image(systemName: "play.fill")
-                        .font(DesignSystem.Typography.title3)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        .offset(x: 2)
+            Button {
+                onPlay()
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(isPlaying ? DesignSystem.Colors.success : recording.recordingType.color.opacity(0.4))
+                        .frame(width: 56, height: 56)
+                    
+                    if isPlaying {
+                        Image(systemName: "pause.fill")
+                            .font(DesignSystem.Typography.title3)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
+                    } else {
+                        Image(systemName: "play.fill")
+                            .font(DesignSystem.Typography.title3)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
+                            .offset(x: 2)
+                    }
                 }
             }
-            .onTapGesture {
-                onPlay()
-            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(isPlaying ? "Pause" : "Play")
+            .accessibilityHint("Double tap to \(isPlaying ? "pause" : "play") this recording")
         
             // Info section
             VStack(alignment: .leading, spacing: 6) {

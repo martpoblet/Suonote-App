@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import SwiftUI
 
 @Model
 final class Project {
@@ -44,14 +45,14 @@ final class Project {
         timeTop: Int = 4,
         timeBottom: Int = 4
     ) {
-        self.title = title
+        self.title = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "New Idea" : title
         self.status = status
-        self.tags = tags
-        self.keyRoot = keyRoot
+        self.tags = Array(Set(tags)) // Deduplicate
+        self.keyRoot = MusicTheory.normalize(keyRoot)
         self.keyMode = keyMode
-        self.bpm = bpm
-        self.timeTop = timeTop
-        self.timeBottom = timeBottom
+        self.bpm = max(20, min(300, bpm))
+        self.timeTop = max(1, min(12, timeTop))
+        self.timeBottom = [2, 4, 8, 16].contains(timeBottom) ? timeBottom : 4
         self.createdAt = Date()
         self.updatedAt = Date()
         self.sectionTemplatesStore = []
@@ -121,6 +122,45 @@ final class Project {
         }
         set {
             studioStyleRaw = newValue?.rawValue
+        }
+    }
+    
+    // MARK: - Studio Snapshot (A-05)
+    
+    /// Encapsulates all studioLast* fields for cleaner access
+    struct StudioSnapshot: Equatable {
+        var chordIds: String?
+        var totalBars: Int
+        var chordSignature: String?
+        var bpm: Int
+        var timeTop: Int
+        var timeBottom: Int
+        var keyRoot: String?
+        var keyModeRaw: String?
+    }
+    
+    var studioSnapshot: StudioSnapshot {
+        get {
+            StudioSnapshot(
+                chordIds: studioLastChordIds,
+                totalBars: studioLastTotalBars,
+                chordSignature: studioLastChordSignature,
+                bpm: studioLastBpm,
+                timeTop: studioLastTimeTop,
+                timeBottom: studioLastTimeBottom,
+                keyRoot: studioLastKeyRoot,
+                keyModeRaw: studioLastKeyModeRaw
+            )
+        }
+        set {
+            studioLastChordIds = newValue.chordIds
+            studioLastTotalBars = newValue.totalBars
+            studioLastChordSignature = newValue.chordSignature
+            studioLastBpm = newValue.bpm
+            studioLastTimeTop = newValue.timeTop
+            studioLastTimeBottom = newValue.timeBottom
+            studioLastKeyRoot = newValue.keyRoot
+            studioLastKeyModeRaw = newValue.keyModeRaw
         }
     }
 }
@@ -254,9 +294,79 @@ enum ProjectStatus: String, Codable, CaseIterable {
         case .archived: return "gray"
         }
     }
+    
+    var swiftUIColor: Color {
+        switch self {
+        case .idea: return DesignSystem.Colors.info
+        case .inProgress: return DesignSystem.Colors.warning
+        case .polished: return DesignSystem.Colors.primary
+        case .finished: return DesignSystem.Colors.success
+        case .archived: return DesignSystem.Colors.secondary
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .idea: return "lightbulb.fill"
+        case .inProgress: return "hammer.fill"
+        case .polished: return "sparkles"
+        case .finished: return "checkmark.seal.fill"
+        case .archived: return "archivebox.fill"
+        }
+    }
 }
 
 enum KeyMode: String, Codable, CaseIterable {
     case major = "Major"
     case minor = "Minor"
+    case dorian = "Dorian"
+    case phrygian = "Phrygian"
+    case lydian = "Lydian"
+    case mixolydian = "Mixolydian"
+    case aeolian = "Aeolian"
+    case locrian = "Locrian"
+    case harmonicMinor = "Harmonic Minor"
+    case melodicMinor = "Melodic Minor"
+    case pentatonicMajor = "Pentatonic Major"
+    case pentatonicMinor = "Pentatonic Minor"
+    case blues = "Blues"
+    
+    var intervals: [Int] {
+        switch self {
+        case .major: return [0, 2, 4, 5, 7, 9, 11]
+        case .minor, .aeolian: return [0, 2, 3, 5, 7, 8, 10]
+        case .dorian: return [0, 2, 3, 5, 7, 9, 10]
+        case .phrygian: return [0, 1, 3, 5, 7, 8, 10]
+        case .lydian: return [0, 2, 4, 6, 7, 9, 11]
+        case .mixolydian: return [0, 2, 4, 5, 7, 9, 10]
+        case .locrian: return [0, 1, 3, 5, 6, 8, 10]
+        case .harmonicMinor: return [0, 2, 3, 5, 7, 8, 11]
+        case .melodicMinor: return [0, 2, 3, 5, 7, 9, 11]
+        case .pentatonicMajor: return [0, 2, 4, 7, 9]
+        case .pentatonicMinor: return [0, 3, 5, 7, 10]
+        case .blues: return [0, 3, 5, 6, 7, 10]
+        }
+    }
+    
+    /// Whether this mode is fundamentally minor-sounding
+    var isMinor: Bool {
+        switch self {
+        case .minor, .aeolian, .dorian, .phrygian, .locrian,
+             .harmonicMinor, .melodicMinor, .pentatonicMinor, .blues:
+            return true
+        default:
+            return false
+        }
+    }
+    
+    /// The common/basic modes for the mode picker
+    static var commonModes: [KeyMode] {
+        [.major, .minor, .dorian, .mixolydian, .pentatonicMajor, .pentatonicMinor, .blues]
+    }
+    
+    /// All 7-note modes (excludes pentatonic/blues)
+    static var heptatonicModes: [KeyMode] {
+        [.major, .minor, .dorian, .phrygian, .lydian, .mixolydian, .aeolian, .locrian,
+         .harmonicMinor, .melodicMinor]
+    }
 }

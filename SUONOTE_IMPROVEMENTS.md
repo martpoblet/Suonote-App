@@ -460,11 +460,6 @@ Compartir un proyecto con otro usuario para:
 - "Hey Siri, graba una idea en Suonote"
 - Shortcuts para crear proyecto, empezar grabación
 
-### 📱 F-08: Apple Watch companion
-- Tap tempo desde la muñeca
-- Control de metrónomo
-- Grabar ideas de voz rápidas
-
 ### 📱 F-09: Integración con AirDrop/Files
 - Importar/exportar proyectos completos
 - Arrastrar archivos de audio desde Files app
@@ -573,7 +568,7 @@ El `ChordSuggestionEngine` es rule-based. Entrenar un modelo de ML con:
 | 2 | S-02: Soporte AUv3 | Pro |
 | 3 | S-03: AI para sugerencias | IA |
 | 4 | S-04: macOS | Plataforma |
-| 5 | F-06/F-07/F-08: Widget, Siri, Watch | Ecosystem |
+| 5 | F-06/F-07: Widget, Siri | Ecosystem |
 
 ---
 

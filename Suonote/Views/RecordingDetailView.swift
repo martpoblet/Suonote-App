@@ -9,7 +9,7 @@ struct RecordingDetailView: View {
     @State private var showingTypePicker = false
     @State private var editingName = false
     @State private var tempName = ""
-    @State private var waveformHeights: [CGFloat] = (0..<50).map { _ in CGFloat.random(in: 20...80) }
+    @State private var waveformHeights: [CGFloat] = []
     
     let sections: [SectionTemplate]
     let onUpdate: () -> Void
@@ -61,7 +61,13 @@ struct RecordingDetailView: View {
         .onAppear {
             tempName = recording.name
             loadEffectsFromRecording()
+            loadWaveform()
         }
+    }
+    
+    private func loadWaveform() {
+        let samples = FileManagerUtils.extractWaveform(from: recording.fileName, samples: 50)
+        waveformHeights = samples.map { max(10, $0 * 80) }
     }
     
     private var waveformHeader: some View {

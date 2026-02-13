@@ -4,6 +4,8 @@ import SwiftData
 @main
 struct SuonoteApp: App {
 
+    @State private var showMigrationAlert = false
+
     init() {
         UIView.appearance().overrideUserInterfaceStyle = .light
         // Verificar fuentes al inicio
@@ -79,14 +81,15 @@ struct SuonoteApp: App {
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
-            // Migration failed - delete old store and try again
-            print("⚠️ Migration failed, deleting old database...")
+            print("⚠️ Migration failed: \(error.localizedDescription)")
             
-            // Delete the old store
+            // Delete the old store as last resort
             let url = URL.applicationSupportDirectory.appending(path: "default.store")
             try? FileManager.default.removeItem(at: url)
             
-            // Try creating container again
+            // Mark that migration happened for user notification
+            UserDefaults.standard.set(true, forKey: "didResetDatabase")
+            
             do {
                 let container = try ModelContainer(for: schema, configurations: [modelConfiguration])
                 print("✅ New database created successfully")
@@ -100,6 +103,17 @@ struct SuonoteApp: App {
     var body: some Scene {
         WindowGroup {
             SplashContainerView()
+                .alert("Database Reset", isPresented: $showMigrationAlert) {
+                    Button("OK", role: .cancel) { }
+                } message: {
+                    Text("The app database was reset due to a data format change. Your projects stored in iCloud will sync back automatically.")
+                }
+                .onAppear {
+                    if UserDefaults.standard.bool(forKey: "didResetDatabase") {
+                        showMigrationAlert = true
+                        UserDefaults.standard.set(false, forKey: "didResetDatabase")
+                    }
+                }
         }
         .modelContainer(sharedModelContainer)
     }

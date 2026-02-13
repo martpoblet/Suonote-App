@@ -229,4 +229,100 @@ struct TempoUtils {
         let secondsPerBeat = 60.0 / Double(bpm)
         return secondsPerBeat * Double(timeSignatureTop)
     }
+    
+    // MARK: - Roman Numeral Analysis (M-04)
+    
+    /// Returns the Roman numeral for a chord in a given key/mode
+    static func romanNumeral(root: String, quality: ChordQuality, keyRoot: String, mode: KeyMode) -> String {
+        let interval = ChordSuggestionEngine.intervalBetween(from: keyRoot, to: root)
+        let scaleIntervals = mode.intervals
+        
+        guard let degreeIndex = scaleIntervals.firstIndex(of: interval) else {
+            // Chromatic / non-diatonic chord
+            let semitoneToRoman = ["I", "♭II", "II", "♭III", "III", "IV", "♯IV/♭V", "V", "♭VI", "VI", "♭VII", "VII"]
+            let base = semitoneToRoman[interval % 12]
+            return quality.isMinor ? base.lowercased() : base
+        }
+        
+        let romanNumerals = ["I", "II", "III", "IV", "V", "VI", "VII"]
+        let base = romanNumerals[degreeIndex]
+        let numeral = quality.isMinor ? base.lowercased() : base
+        
+        switch quality {
+        case .diminished, .diminished7: return numeral + "°"
+        case .halfDiminished7: return numeral + "ø"
+        case .augmented, .augmented7: return numeral + "+"
+        case .dominant7: return numeral + "7"
+        case .major7: return numeral + "Δ7"
+        case .minor7: return numeral + "7"
+        case .sus2: return numeral + "sus2"
+        case .sus4: return numeral + "sus4"
+        default: return numeral
+        }
+    }
+    
+    // MARK: - Nashville Number System (M-06)
+    
+    /// Returns the Nashville number for a chord in a given key
+    static func nashvilleNumber(root: String, quality: ChordQuality, keyRoot: String) -> String {
+        let interval = ChordSuggestionEngine.intervalBetween(from: keyRoot, to: root)
+        let majorIntervals = [0, 2, 4, 5, 7, 9, 11]
+        
+        guard let degreeIndex = majorIntervals.firstIndex(of: interval) else {
+            let flatDegrees = [1: "♭2", 3: "♭3", 6: "♭5", 8: "♭6", 10: "♭7"]
+            let num = flatDegrees[interval] ?? "\(interval)"
+            return quality.isMinor ? "-\(num)" : num
+        }
+        
+        let number = "\(degreeIndex + 1)"
+        var suffix = ""
+        if quality.isMinor { suffix = "-" }
+        if quality == .diminished || quality == .diminished7 { suffix = "°" }
+        if quality == .augmented { suffix = "+" }
+        if quality == .dominant7 { suffix += "7" }
+        if quality == .major7 { suffix += "Δ" }
+        
+        return suffix.isEmpty ? number : "\(number)\(suffix)"
+    }
+    
+    // MARK: - Auto Key Detection (M-05)
+    
+    /// Detect the most likely key/mode from a list of chord roots and qualities
+    static func detectKey(chords: [(root: String, quality: ChordQuality)]) -> (root: String, mode: KeyMode, confidence: Double)? {
+        guard !chords.isEmpty else { return nil }
+        
+        let roots = MusicTheory.chromaticScale
+        let modes: [KeyMode] = [.major, .minor, .dorian, .mixolydian]
+        
+        var bestMatch: (root: String, mode: KeyMode, score: Double) = ("C", .major, 0)
+        
+        for root in roots {
+            let rootIdx = MusicTheory.noteIndex(root)
+            guard let ri = rootIdx else { continue }
+            
+            for mode in modes {
+                let scaleNotes = Set(mode.intervals.map { (ri + $0) % 12 })
+                var score = 0.0
+                
+                for chord in chords {
+                    guard let chordIdx = MusicTheory.noteIndex(chord.root) else { continue }
+                    if scaleNotes.contains(chordIdx) {
+                        score += 1.0
+                        // Bonus for tonic chord
+                        if chordIdx == ri { score += 0.5 }
+                        // Bonus for V chord
+                        if (chordIdx - ri + 12) % 12 == 7 { score += 0.3 }
+                    }
+                }
+                
+                if score > bestMatch.score {
+                    bestMatch = (root, mode, score)
+                }
+            }
+        }
+        
+        let maxScore = Double(chords.count) * 1.8
+        let confidence = min(bestMatch.score / maxScore, 1.0)
+        return (bestMatch.root, bestMatch.mode, confidence)
+    }
 }

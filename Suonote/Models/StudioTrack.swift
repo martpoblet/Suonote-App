@@ -432,6 +432,13 @@ final class StudioTrack {
     var audioRecordingId: UUID? = nil
     var audioStartBeat: Double = 0
 
+    // Per-track effects
+    var reverbEnabled: Bool = false
+    var reverbMix: Float = 0.3
+    var delayEnabled: Bool = false
+    var delayTime: Float = 0.25
+    var delayMix: Float = 0.2
+
     var notesStore: [StudioNote]? = []
     var project: Project?
 

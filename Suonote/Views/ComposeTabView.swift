@@ -2946,7 +2946,7 @@ struct SuggestionChip: View {
                     .fill(accentColor.opacity(0.2))
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(accentColor.opacity(suggestion.confidence), lineWidth: 1.5)
+                            .strokeBorder(accentColor.opacity(0.5), lineWidth: 1, antialiased: true)
                     )
             )
         }
