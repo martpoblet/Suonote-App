@@ -4,7 +4,6 @@ import SwiftData
 struct LyricsTabView: View {
     @Bindable var project: Project
     @State private var selectedSection: SectionTemplate?
-    @State private var showingEditor = false
     
     var uniqueSections: [SectionTemplate] {
         var seen = Set<UUID>()
@@ -17,7 +16,8 @@ struct LyricsTabView: View {
     }
     
     var body: some View {
-        NavigationStack {
+        ZStack {
+            // List view
             VStack(spacing: 0) {
                 if uniqueSections.isEmpty {
                     emptyStateView
@@ -29,8 +29,9 @@ struct LyricsTabView: View {
                                     section: section,
                                     usageCount: usageCount(for: section)
                                 ) {
-                                    selectedSection = section
-                                    showingEditor = true
+                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                        selectedSection = section
+                                    }
                                 }
                             }
                         }
@@ -40,12 +41,16 @@ struct LyricsTabView: View {
                     }
                 }
             }
-            .navigationBarHidden(true)
-            .navigationDestination(isPresented: $showingEditor) {
-                if let section = selectedSection {
-                    ImmersiveLyricsEditor(section: section)
-                        .navigationBarBackButtonHidden(true)
+            
+            // Editor overlay
+            if let section = selectedSection {
+                ImmersiveLyricsEditor(section: section) {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        selectedSection = nil
+                    }
                 }
+                .transition(.move(edge: .trailing))
+                .zIndex(1)
             }
         }
     }
@@ -139,102 +144,103 @@ struct LyricsSectionCard: View {
 // MARK: - Immersive Lyrics Editor
 
 struct ImmersiveLyricsEditor: View {
-    @Environment(\.dismiss) private var dismiss
     @Bindable var section: SectionTemplate
+    var onDismiss: () -> Void
     @FocusState private var isTextEditorFocused: Bool
+    @GestureState private var dragOffset: CGFloat = 0
     
     var body: some View {
-        ZStack {
-            // Background
-            DesignSystem.Colors.background
-                .ignoresSafeArea()
-            
-            VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Button {
-                        dismiss()
-                    } label: {
-                        HStack(spacing: DesignSystem.Spacing.xxs) {
-                            Image(systemName: "chevron.left")
-                            Text("Back")
-                        }
-                        .font(DesignSystem.Typography.body)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    }
-                    .animatedPress()
-                    
-                    Spacer()
-                    
+        VStack(spacing: 0) {
+            // Header
+            ZStack {
+                // Center: dot + section name
+                HStack(spacing: DesignSystem.Spacing.xs) {
+                    SectionColorDot(section.color, size: 10)
                     Text(section.name)
-                        .font(DesignSystem.Typography.body)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    
-                    Spacer()
-                    
-                    // Placeholder for symmetry
-                    HStack(spacing: DesignSystem.Spacing.xxs) {
-                        Image(systemName: "chevron.left")
-                        Text("Back")
-                    }
-                    .opacity(0)
-                }
-                .padding(.horizontal, DesignSystem.Spacing.xl)
-                .padding(.vertical, DesignSystem.Spacing.md)
-                
-                // Text Editor
-                ZStack(alignment: .topLeading) {
-                    if section.lyricsText.isEmpty {
-                        VStack(spacing: DesignSystem.Spacing.md) {
-                            Image(systemName: "text.quote")
-                                .font(DesignSystem.Typography.jumbo)
-                                .foregroundStyle(DesignSystem.Colors.textPrimary)
-
-                            Text("Start writing your lyrics..")
-                                .font(DesignSystem.Typography.title3)
-                                .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
-                    
-                    TextEditor(text: $section.lyricsText)
                         .font(DesignSystem.Typography.title3)
                         .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        .scrollContentBackground(.hidden)
-                        .focused($isTextEditorFocused)
-                        .padding(.horizontal, DesignSystem.Spacing.xl)
-                        .padding(.vertical, DesignSystem.Spacing.lg)
                 }
-                .frame(maxHeight: .infinity)
                 
-                // Toolbar
-                HStack(spacing: DesignSystem.Spacing.lg) {
-                    Text("\(section.lyricsText.count) characters")
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                    
-                    Spacer()
-                    
+                // Leading: back chevron
+                HStack {
                     Button {
                         isTextEditorFocused = false
-                        dismiss()
+                        onDismiss()
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(DesignSystem.Colors.primaryDark)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    Spacer()
+                }
+            }
+            .padding(.horizontal, DesignSystem.Spacing.md)
+            .padding(.vertical, DesignSystem.Spacing.xs)
+            
+            // Text Editor
+            ZStack(alignment: .topLeading) {
+                if section.lyricsText.isEmpty {
+                    VStack(spacing: DesignSystem.Spacing.md) {
+                        Image(systemName: "text.quote")
+                            .font(DesignSystem.Typography.jumbo)
+                            .foregroundStyle(DesignSystem.Colors.textTertiary)
+
+                        Text("Start writing your lyrics..")
+                            .font(DesignSystem.Typography.title3)
+                            .foregroundStyle(DesignSystem.Colors.textTertiary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                
+                TextEditor(text: $section.lyricsText)
+                    .font(DesignSystem.Typography.title3)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+                    .scrollContentBackground(.hidden)
+                    .focused($isTextEditorFocused)
+                    .padding(.horizontal, DesignSystem.Spacing.xl)
+                    .padding(.vertical, DesignSystem.Spacing.lg)
+            }
+            .frame(maxHeight: .infinity)
+            
+            // Bottom toolbar
+            HStack {
+                Text("\(section.lyricsText.count) characters")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+                Spacer()
+                if isTextEditorFocused {
+                    Button {
+                        isTextEditorFocused = false
                     } label: {
                         Text("Done")
                             .font(DesignSystem.Typography.bodyBold)
                             .foregroundStyle(DesignSystem.Colors.primaryDark)
                     }
-                    .animatedPress()
                 }
-                .padding(.horizontal, DesignSystem.Spacing.xl)
-                .padding(.vertical, DesignSystem.Spacing.md)
-                .background(
-                    Rectangle()
-                        .fill(DesignSystem.Colors.backgroundSecondary.opacity(0.92))
-                        .blur(radius: 20)
-                )
             }
+            .padding(.horizontal, DesignSystem.Spacing.xl)
+            .padding(.vertical, DesignSystem.Spacing.sm)
         }
-                .onAppear {
+        .background(DesignSystem.Colors.background.ignoresSafeArea())
+        .offset(x: dragOffset)
+        .gesture(
+            DragGesture()
+                .updating($dragOffset) { value, state, _ in
+                    // Only track drags starting from left edge, moving right
+                    if value.startLocation.x < 40 && value.translation.width > 0 {
+                        state = value.translation.width
+                    }
+                }
+                .onEnded { value in
+                    if value.startLocation.x < 40 && value.translation.width > 100 {
+                        isTextEditorFocused = false
+                        onDismiss()
+                    }
+                }
+        )
+        .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 isTextEditorFocused = true
             }

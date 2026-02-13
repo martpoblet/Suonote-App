@@ -2,8 +2,9 @@ import SwiftUI
 
 struct AppLogoView: View {
     var height: CGFloat = 24
+    @State private var cachedImage: Image?
 
-    private var logoImage: Image? {
+    private func loadLogo() -> Image? {
         let candidates: [URL?] = [
             Bundle.main.url(forResource: "Logo", withExtension: "png", subdirectory: "Logo"),
             Bundle.main.url(forResource: "Logo", withExtension: "png", subdirectory: "Resources/Logo"),
@@ -15,14 +16,13 @@ struct AppLogoView: View {
                 return Image(uiImage: image).renderingMode(.original)
             }
         }
-
         return nil
     }
 
     var body: some View {
         Group {
-            if let logoImage {
-                logoImage
+            if let cachedImage {
+                cachedImage
                     .resizable()
                     .aspectRatio(contentMode: .fit)
             } else {
@@ -33,6 +33,11 @@ struct AppLogoView: View {
         }
         .frame(height: height)
         .fixedSize(horizontal: true, vertical: false)
+        .onAppear {
+            if cachedImage == nil {
+                cachedImage = loadLogo()
+            }
+        }
     }
 }
 

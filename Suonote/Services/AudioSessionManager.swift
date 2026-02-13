@@ -7,6 +7,7 @@ final class AudioSessionManager {
     static let shared = AudioSessionManager()
     
     private(set) var isSessionActive = false
+    private var interruptionObserver: Any?
     
     private init() {}
     
@@ -67,7 +68,10 @@ final class AudioSessionManager {
     
     /// Handle audio interruptions (phone calls, etc.)
     func setupInterruptionHandling(onInterruption: @escaping (Bool) -> Void) {
-        NotificationCenter.default.addObserver(
+        if let observer = interruptionObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        interruptionObserver = NotificationCenter.default.addObserver(
             forName: AVAudioSession.interruptionNotification,
             object: nil,
             queue: .main

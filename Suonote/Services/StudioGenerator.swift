@@ -1,6 +1,27 @@
 import Foundation
 import SwiftData
 
+// Deduplicate and sort small Int arrays (drum steps)
+@inline(__always)
+private func uniqueSorted(_ arr: [Int]) -> [Int] {
+    guard arr.count > 1 else { return arr }
+    var seen = Set<Int>(minimumCapacity: arr.count)
+    var result = [Int]()
+    result.reserveCapacity(arr.count)
+    for v in arr where seen.insert(v).inserted { result.append(v) }
+    return result.sorted()
+}
+
+@inline(__always)
+private func uniqueSorted(_ arr: [Double]) -> [Double] {
+    guard arr.count > 1 else { return arr }
+    var seen = Set<Double>(minimumCapacity: arr.count)
+    var result = [Double]()
+    result.reserveCapacity(arr.count)
+    for v in arr where seen.insert(v).inserted { result.append(v) }
+    return result.sorted()
+}
+
 struct StudioGenerator {
     struct ChordSpan {
         let chord: ChordEvent
@@ -231,7 +252,7 @@ struct StudioGenerator {
         let newChordSpans = timeline.chords.filter { newChordIds.contains($0.chord.id) }
         let newChordRanges = newChordSpans.map { span in
             (start: span.startBeat, end: span.startBeat + max(0.25, span.duration))
-        }
+        }.sorted { $0.start < $1.start }
         var didAppend = false
 
         for track in project.studioTracks where !track.instrument.isAudio {
@@ -283,9 +304,14 @@ struct StudioGenerator {
                 arpeggioPattern: track.regenerateArpeggioPattern
             )
             let newNotes = notes.filter { note in
-                newChordRanges.contains { range in
-                    note.startBeat >= range.start && note.startBeat < range.end
+                let beat = note.startBeat
+                // Binary search: find first range where end > beat
+                var lo = 0, hi = newChordRanges.count
+                while lo < hi {
+                    let mid = (lo + hi) / 2
+                    if newChordRanges[mid].end <= beat { lo = mid + 1 } else { hi = mid }
                 }
+                return lo < newChordRanges.count && beat >= newChordRanges[lo].start && beat < newChordRanges[lo].end
             }
             didAppend = appendNotes(newNotes, to: track, modelContext: modelContext) || didAppend
         }
@@ -307,9 +333,16 @@ struct StudioGenerator {
 
         let ranges = sectionRanges(for: project).filter { sectionIds.contains($0.sectionId) }
         guard !ranges.isEmpty else { return false }
+        let sortedRanges = ranges.sorted { $0.startBeat < $1.startBeat }
 
         let chordsInRanges = timeline.chords.filter { span in
-            ranges.contains { span.startBeat >= $0.startBeat && span.startBeat < $0.endBeat }
+            let beat = span.startBeat
+            var lo = 0, hi = sortedRanges.count
+            while lo < hi {
+                let mid = (lo + hi) / 2
+                if sortedRanges[mid].endBeat <= beat { lo = mid + 1 } else { hi = mid }
+            }
+            return lo < sortedRanges.count && beat >= sortedRanges[lo].startBeat && beat < sortedRanges[lo].endBeat
         }
         guard !chordsInRanges.isEmpty else { return false }
 
@@ -684,7 +717,7 @@ struct StudioGenerator {
             if intensity > 0.7, instrument != .guitar || voicingProfile.allowOctaveDoubling {
                 pitches.append(rootPitch + 12)
             }
-            pitches = Array(Set(pitches)).sorted()
+            pitches = uniqueSorted(pitches)
             pitches = fitPitches(pitches, in: range)
             
             // Monophonic instruments or variants: pick a single melodic pitch
@@ -1116,8 +1149,8 @@ struct StudioGenerator {
             let extraSnare = density > 0.9 ? (pattern.snare + offbeatSteps) : pattern.snare
             pattern = DrumPattern(
                 kick: pattern.kick,
-                snare: Array(Set(extraSnare)).sorted(),
-                hatClosed: Array(Set(extraHat)).sorted(),
+                snare: uniqueSorted(extraSnare),
+                hatClosed: uniqueSorted(extraHat),
                 hatOpen: pattern.hatOpen,
                 clap: pattern.clap,
                 rim: pattern.rim,
@@ -1156,9 +1189,9 @@ struct StudioGenerator {
 
         switch resolvedVariant {
         case .powerDrumKit:
-            kickSteps = Array(Set(kickSteps + backbeatSteps)).sorted()
+            kickSteps = uniqueSorted(kickSteps + backbeatSteps)
             if density > 0.6 {
-                snareSteps = Array(Set(snareSteps + offbeatSteps)).sorted()
+                snareSteps = uniqueSorted(snareSteps + offbeatSteps)
             }
         case .roomDrumKit:
             if density < 0.5 {
@@ -1166,9 +1199,9 @@ struct StudioGenerator {
             }
         case .electronicDrumKit, .tr808DrumKit:
             let electronicHats = density > 0.6 ? Array(0..<stepsPerBar) : offbeatSteps
-            hatClosedSteps = Array(Set(hatClosedSteps + electronicHats)).sorted()
+            hatClosedSteps = uniqueSorted(hatClosedSteps + electronicHats)
             if density > 0.5 {
-                kickSteps = Array(Set(kickSteps + offbeatSteps)).sorted()
+                kickSteps = uniqueSorted(kickSteps + offbeatSteps)
             }
         case .jazzDrumKit:
             kickSteps = Array(beatSteps.prefix(2))
@@ -1192,10 +1225,10 @@ struct StudioGenerator {
         default:
             break
         }
-        kickSteps = Array(Set(kickSteps)).sorted()
-        snareSteps = Array(Set(snareSteps)).sorted()
-        hatClosedSteps = Array(Set(hatClosedSteps)).sorted()
-        clapSteps = Array(Set(clapSteps)).sorted()
+        kickSteps = uniqueSorted(kickSteps)
+        snareSteps = uniqueSorted(snareSteps)
+        hatClosedSteps = uniqueSorted(hatClosedSteps)
+        clapSteps = uniqueSorted(clapSteps)
         let isLatinPreset = preset == .latin || preset == .bossa
         var notes: [StudioNote] = []
         var kickVelocityBase = style == .rock ? 118 : 112
@@ -1262,13 +1295,13 @@ struct StudioGenerator {
         if resolvedVariant == .brushDrumKit || resolvedVariant == .orchestraDrumKit || resolvedVariant == .sfxDrumKit {
             openHatSteps = []
         }
-        openHatSteps = Array(Set(openHatSteps)).sorted()
+        openHatSteps = uniqueSorted(openHatSteps)
 
         var rideSteps: [Int] = []
         switch style {
         case .jazz:
             if density > 0.45 {
-                rideSteps = Array(Set(beatSteps + offbeatSteps)).sorted()
+                rideSteps = uniqueSorted(beatSteps + offbeatSteps)
             }
         case .rock, .funk:
             if density > 0.6 {
@@ -1283,7 +1316,7 @@ struct StudioGenerator {
         }
         switch resolvedVariant {
         case .jazzDrumKit:
-            rideSteps = density > 0.4 ? Array(Set(beatSteps + offbeatSteps)).sorted() : beatSteps
+            rideSteps = density > 0.4 ? uniqueSorted(beatSteps + offbeatSteps) : beatSteps
         case .brushDrumKit:
             rideSteps = beatSteps
         case .electronicDrumKit, .tr808DrumKit, .orchestraDrumKit, .sfxDrumKit:
@@ -1359,9 +1392,9 @@ struct StudioGenerator {
             tomMidSteps = []
             tomHighSteps = []
         }
-        tomLowSteps = Array(Set(tomLowSteps)).sorted()
-        tomMidSteps = Array(Set(tomMidSteps)).sorted()
-        tomHighSteps = Array(Set(tomHighSteps)).sorted()
+        tomLowSteps = uniqueSorted(tomLowSteps)
+        tomMidSteps = uniqueSorted(tomMidSteps)
+        tomHighSteps = uniqueSorted(tomHighSteps)
 
         for bar in 0..<totalBars {
             let barStart = Double(bar * beatsPerBar)
@@ -1458,7 +1491,7 @@ struct StudioGenerator {
             // Hi-hat variation: open on off-beats for rock, 16th-note hats for funk
             if style == .rock && density > 0.5 {
                 let rockOpenSteps = offbeatSteps.filter { !Set(openHatSteps).contains($0) }
-                effectiveOpenHatSteps = Array(Set(openHatSteps + rockOpenSteps.prefix(2))).sorted()
+                effectiveOpenHatSteps = uniqueSorted(openHatSteps + Array(rockOpenSteps.prefix(2)))
             }
             if style == .funk && density > 0.6 {
                 // Add 16th-note subdivision hats
@@ -1516,7 +1549,7 @@ struct StudioGenerator {
                 )
             }
             if crashBars.contains(bar) {
-                let crashSteps = density > 0.85 ? Array(Set([0] + backbeatSteps)).sorted() : [0]
+                let crashSteps = density > 0.85 ? uniqueSorted([0] + backbeatSteps) : [0]
                 for step in crashSteps {
                     notes.append(
                         StudioNote(
@@ -1944,19 +1977,22 @@ struct StudioGenerator {
     }
 
     private static func fitPitches(_ pitches: [Int], in range: ClosedRange<Int>) -> [Int] {
-        guard var minPitch = pitches.min(), var maxPitch = pitches.max() else { return pitches }
-        var adjusted = pitches
-        while maxPitch > range.upperBound {
-            adjusted = adjusted.map { $0 - 12 }
-            minPitch -= 12
-            maxPitch -= 12
+        guard let minP = pitches.min(), let maxP = pitches.max() else { return pitches }
+        var shift = 0
+        var currentMax = maxP
+        var currentMin = minP
+        while currentMax > range.upperBound {
+            shift -= 12
+            currentMax -= 12
+            currentMin -= 12
         }
-        while minPitch < range.lowerBound {
-            adjusted = adjusted.map { $0 + 12 }
-            minPitch += 12
-            maxPitch += 12
+        while currentMin < range.lowerBound {
+            shift += 12
+            currentMin += 12
+            currentMax += 12
         }
-        return adjusted
+        if shift == 0 { return pitches }
+        return pitches.map { $0 + shift }
     }
 
     private static func chordIntervals(for chord: ChordEvent) -> [Int] {
@@ -2504,7 +2540,7 @@ struct StudioGenerator {
             .filter { $0 >= 0 && $0 < chordDuration }
             .map { quantize($0, step: quantStep) }
         
-        let sorted = Array(Set(clamped)).sorted()
+        let sorted = uniqueSorted(clamped)
         
         // Apply complexity: lower complexity = fewer hits
         // Complexity 0.0 = only first hit
@@ -2841,7 +2877,7 @@ struct StudioGenerator {
             clapOffsets = []
         case .shuffle:
             let shuffleKicks = basicKickOffsets(meter: meter) + offbeatOffsets.filter { $0 < Double(meter.beatsPerBar) }
-            kickOffsets = Array(Set(shuffleKicks)).sorted()
+            kickOffsets = uniqueSorted(shuffleKicks)
             snareOffsets = backbeatOffsets.isEmpty ? [Double(max(1, meter.beatsPerBar - 1))] : backbeatOffsets
             hatSteps = stepsFromOffsets(
                 beatOffsets + offbeatOffsets,
@@ -2901,11 +2937,11 @@ struct StudioGenerator {
         let clapSteps = stepsFromOffsets(clapOffsets, stepsPerBeat: stepsPerBeat, stepsPerBar: stepsPerBar)
 
         return DrumPattern(
-            kick: Array(Set(kickSteps)).sorted(),
-            snare: Array(Set(snareSteps)).sorted(),
-            hatClosed: Array(Set(hatSteps)).sorted(),
+            kick: uniqueSorted(kickSteps),
+            snare: uniqueSorted(snareSteps),
+            hatClosed: uniqueSorted(hatSteps),
             hatOpen: [],
-            clap: Array(Set(clapSteps)).sorted(),
+            clap: uniqueSorted(clapSteps),
             rim: [],
             tomLow: [],
             tomMid: [],

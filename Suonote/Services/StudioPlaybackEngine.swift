@@ -227,29 +227,16 @@ final class StudioPlaybackEngine: ObservableObject {
                 isSolo: track.isSolo
             )
             trackMixState[track.id] = state
-            // Update effects
-            if let reverb = reverbNodes[track.id] {
-                if let preset = AVAudioUnitReverbPreset(rawValue: track.reverbPreset.avPreset) {
-                    reverb.loadFactoryPreset(preset)
-                }
-                reverb.wetDryMix = track.reverbEnabled ? track.reverbMix * 100 : 0
-            }
-            if let delay = delayNodes[track.id] {
-                delay.wetDryMix = track.delayEnabled ? track.delayMix * 100 : 0
-                if track.delaySyncMode == .free {
-                    delay.delayTime = TimeInterval(track.delayTime)
-                } else {
-                    delay.delayTime = track.delaySyncMode.delayTime(bpm: bpm)
-                }
-            }
-            if let eq = eqNodes[track.id] {
-                configureEQ(eq, track: track)
-            }
+            applyEffects(for: track)
         }
         applyMixStateFromCache()
     }
 
     func updateTrackEffects(track: StudioTrack) {
+        applyEffects(for: track)
+    }
+
+    private func applyEffects(for track: StudioTrack) {
         let trackId = track.id
         if let reverb = reverbNodes[trackId] {
             if let preset = AVAudioUnitReverbPreset(rawValue: track.reverbPreset.avPreset) {
@@ -562,8 +549,7 @@ final class StudioPlaybackEngine: ObservableObject {
     }
 
     private func addNotes(_ notes: [StudioNote], to track: AVMusicTrack, channel: UInt8) {
-        let ordered = notes.sorted { $0.startBeat < $1.startBeat }
-        for note in ordered {
+        for note in notes {
             let key = UInt32(max(0, min(note.pitch, 127)))
             let velocity = UInt32(max(0, min(note.velocity, 127)))
             let message = AVMIDINoteEvent(
@@ -620,13 +606,12 @@ final class StudioPlaybackEngine: ObservableObject {
 
     private func startPlayheadTimer() {
         stopPlayheadTimer()
-        playheadTimer = Timer.scheduledTimer(
-            timeInterval: 0.05,
-            target: self,
-            selector: #selector(handlePlayheadTick),
-            userInfo: nil,
-            repeats: true
-        )
+        playheadTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            guard let strongSelf = self else { return }
+            Task { @MainActor in
+                strongSelf.handlePlayheadTick()
+            }
+        }
     }
 
     private func stopPlayheadTimer() {
@@ -634,7 +619,7 @@ final class StudioPlaybackEngine: ObservableObject {
         playheadTimer = nil
     }
 
-    @objc private func handlePlayheadTick() {
+    private func handlePlayheadTick() {
         guard let sequencer, isPlaying else { return }
         
         let position: Double
@@ -884,7 +869,7 @@ final class StudioPlaybackEngine: ObservableObject {
             guard let mTrack else { continue }
 
             let channel: UInt8 = track.instrument == .drums ? 9 : UInt8(track.orderIndex % 16)
-            for note in track.notes.sorted(by: { $0.startBeat < $1.startBeat }) {
+            for note in track.notes {
                 var msg = MIDINoteMessage(
                     channel: channel,
                     note: UInt8(max(0, min(127, note.pitch))),

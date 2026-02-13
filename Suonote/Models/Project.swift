@@ -75,7 +75,7 @@ final class Project {
         get { sectionTemplatesStore ?? [] }
         set {
             sectionTemplatesStore = newValue
-            for section in newValue {
+            for section in newValue where section.projectStore !== self {
                 section.projectStore = self
             }
         }
@@ -85,7 +85,7 @@ final class Project {
         get { arrangementItemsStore ?? [] }
         set {
             arrangementItemsStore = newValue
-            for item in newValue {
+            for item in newValue where item.projectStore !== self {
                 item.projectStore = self
             }
         }
@@ -95,7 +95,7 @@ final class Project {
         get { recordingsStore ?? [] }
         set {
             recordingsStore = newValue
-            for recording in newValue {
+            for recording in newValue where recording.projectStore !== self {
                 recording.projectStore = self
             }
         }
@@ -105,7 +105,7 @@ final class Project {
         get { studioTracksStore ?? [] }
         set {
             studioTracksStore = newValue
-            for track in newValue {
+            for track in newValue where track.project !== self {
                 track.project = self
             }
         }

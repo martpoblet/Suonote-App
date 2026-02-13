@@ -759,11 +759,19 @@ struct StudioEmptyState: View {
 }
 
 struct StudioTimelineSegment: Identifiable {
-    let id = UUID()
+    let id: String
     let label: String
     let color: Color
     let startBar: Int
     let bars: Int
+    
+    init(label: String, color: Color, startBar: Int, bars: Int) {
+        self.id = "\(startBar)_\(bars)_\(label)"
+        self.label = label
+        self.color = color
+        self.startBar = startBar
+        self.bars = bars
+    }
 }
 
 struct StudioTimelineView: View {
@@ -969,6 +977,7 @@ struct StudioTrackEditorView: View {
     @State private var regenerateArpeggioEnabled = false
     @State private var regenerateArpeggioRate = "1/8"
     @State private var regenerateArpeggioPattern = "Up"
+    @State private var effectsDebounceTask: Task<Void, Never>?
 
     private var accentColor: Color {
         track.instrument.color
@@ -1297,6 +1306,15 @@ struct StudioTrackEditorView: View {
         playback.updateTrackEffects(track: track)
     }
 
+    private func debouncedEffectsUpdate() {
+        effectsDebounceTask?.cancel()
+        effectsDebounceTask = Task {
+            try? await Task.sleep(nanoseconds: 80_000_000)
+            guard !Task.isCancelled else { return }
+            updateTrackEffects()
+        }
+    }
+
     private var trackEffectsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Section header with icon
@@ -1450,7 +1468,7 @@ struct StudioTrackEditorView: View {
                 .frame(width: 30, alignment: .leading)
             Slider(value: value, in: range)
                 .tint(accentColor)
-                .onChange(of: value.wrappedValue) { _, _ in updateTrackEffects() }
+                .onChange(of: value.wrappedValue) { _, _ in debouncedEffectsUpdate() }
             Text(display)
                 .font(.system(size: 10).monospacedDigit())
                 .foregroundStyle(DesignSystem.Colors.textPrimary)
@@ -1719,6 +1737,7 @@ struct StudioTrackRow: View {
     let onDelete: () -> Void
     let onOpenEditor: () -> Void
     @State private var isExpanded: Bool = false
+    @State private var mixDebounceTask: Task<Void, Never>?
 
     private var panLabel: String {
         if track.pan < -0.05 {
@@ -1727,6 +1746,15 @@ struct StudioTrackRow: View {
             return "R\(Int(track.pan * 100))"
         } else {
             return "C"
+        }
+    }
+
+    private func debouncedMixChange() {
+        mixDebounceTask?.cancel()
+        mixDebounceTask = Task {
+            try? await Task.sleep(nanoseconds: 80_000_000)
+            guard !Task.isCancelled else { return }
+            onMixChange()
         }
     }
 
@@ -1887,7 +1915,7 @@ struct StudioTrackRow: View {
                         Slider(value: $track.volume, in: 0...1)
                             .tint(track.instrument.color)
                             .onChange(of: track.volume) { _, _ in
-                                onMixChange()
+                                debouncedMixChange()
                             }
                         Text("\(Int(track.volume * 100))%")
                             .font(.caption2.monospacedDigit())
@@ -1904,7 +1932,7 @@ struct StudioTrackRow: View {
                         Slider(value: $track.pan, in: -1...1)
                             .tint(track.instrument.color)
                             .onChange(of: track.pan) { _, _ in
-                                onMixChange()
+                                debouncedMixChange()
                             }
                         Text(panLabel)
                             .font(.caption2.monospacedDigit())
