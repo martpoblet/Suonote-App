@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import Foundation
+import UniformTypeIdentifiers
 
 struct StudioTabView: View {
     @Bindable var project: Project
@@ -130,7 +131,8 @@ struct StudioTabView: View {
                             onOpenEditor: { track in
                                 selectedTrackId = track.id
                                 editingTrack = track
-                            }
+                            },
+                            onReorder: reorderTracks
                         )
                         StudioTrackEditorHint(
                             accentColor: selectedTrack?.instrument.color
@@ -152,6 +154,7 @@ struct StudioTabView: View {
                             currentBeat: playback.currentBeat,
                             isPlaying: playback.isPlaying,
                             accentColor: project.studioStyle?.accentColor ?? SectionColor.purple.color,
+                            isMetronomeEnabled: $playback.isMetronomeEnabled,
                             onPlay: handlePlay,
                             onPause: playback.pause,
                             onStop: handleStop,
@@ -206,6 +209,9 @@ struct StudioTabView: View {
             } else if project.studioStyle == nil {
                 pendingAddTrackAfterStyle = false
             }
+        }
+        .onChange(of: playback.isMetronomeEnabled) { _, _ in
+            needsRebuild = true
         }
         .sheet(isPresented: $showingStylePicker) {
             StudioStylePickerView(
@@ -418,6 +424,17 @@ struct StudioTabView: View {
 
         if playback.isPlaying {
             playback.stop(resetPosition: false)
+        }
+        project.updatedAt = Date()
+        try? modelContext.save()
+        needsRebuild = true
+    }
+
+    private func reorderTracks(_ source: IndexSet, _ destination: Int) {
+        var ordered = sortedTracks
+        ordered.move(fromOffsets: source, toOffset: destination)
+        for (index, track) in ordered.enumerated() {
+            track.orderIndex = index
         }
         project.updatedAt = Date()
         try? modelContext.save()
@@ -756,6 +773,7 @@ struct StudioTimelineView: View {
     let currentBeat: Double
     let isPlaying: Bool
     let accentColor: Color
+    @Binding var isMetronomeEnabled: Bool
     let onPlay: () -> Void
     let onPause: () -> Void
     let onStop: () -> Void
@@ -804,6 +822,23 @@ struct StudioTimelineView: View {
                 Spacer()
 
                 HStack(spacing: 8) {
+                    Button {
+                        isMetronomeEnabled.toggle()
+                    } label: {
+                        Image(systemName: "metronome.fill")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundStyle(isMetronomeEnabled ? .white : DesignSystem.Colors.textSecondary)
+                            .frame(width: 28, height: 28)
+                            .background(
+                                Circle()
+                                    .fill(isMetronomeEnabled ? accentColor : DesignSystem.Colors.surfaceSecondary)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(isMetronomeEnabled ? accentColor : DesignSystem.Colors.border, lineWidth: 1)
+                                    )
+                            )
+                    }
+
                     Button {
                         onStop()
                     } label: {
@@ -1259,95 +1294,167 @@ struct StudioTrackEditorView: View {
     }
 
     private func updateTrackEffects() {
-        playback.updateTrackEffects(
-            trackId: track.id,
-            reverbEnabled: track.reverbEnabled,
-            reverbMix: track.reverbMix,
-            delayEnabled: track.delayEnabled,
-            delayTime: track.delayTime,
-            delayMix: track.delayMix
-        )
+        playback.updateTrackEffects(track: track)
     }
 
     private var trackEffectsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Effects")
-                .font(DesignSystem.Typography.caption)
+        VStack(alignment: .leading, spacing: 12) {
+            // Section header with icon
+            HStack(spacing: 6) {
+                Image(systemName: "waveform.badge.plus")
+                    .font(.caption)
+                    .foregroundStyle(accentColor)
+                Text("Effects")
+                    .font(DesignSystem.Typography.caption.bold())
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+            }
+            .padding(.bottom, 2)
+
+            // Effect cards in a clean grid
+            VStack(spacing: 10) {
+                reverbEffectCard
+                delayEffectCard
+                eqEffectCard
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(DesignSystem.Colors.surface.opacity(0.6))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .strokeBorder(DesignSystem.Colors.border.opacity(0.5), lineWidth: 1)
+                )
+        )
+    }
+
+    private var reverbEffectCard: some View {
+        effectCard(
+            icon: "waveform.path.ecg",
+            title: "Reverb",
+            isEnabled: $track.reverbEnabled,
+            onToggle: updateTrackEffects
+        ) {
+            VStack(spacing: 6) {
+                Picker("Preset", selection: $track.reverbPreset) {
+                    ForEach(ReverbPreset.allCases) { preset in
+                        Text(preset.shortTitle).tag(preset)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .scaleEffect(x: 1, y: 0.85)
+                .frame(height: 26)
+                .onChange(of: track.reverbPreset) { _, _ in updateTrackEffects() }
+
+                fxSlider(label: "Mix", value: $track.reverbMix, range: 0...1,
+                         display: "\(Int(track.reverbMix * 100))%")
+            }
+        }
+    }
+
+    private var delayEffectCard: some View {
+        effectCard(
+            icon: "arrow.triangle.2.circlepath",
+            title: "Delay",
+            isEnabled: $track.delayEnabled,
+            onToggle: updateTrackEffects
+        ) {
+            VStack(spacing: 6) {
+                Picker("Sync", selection: $track.delaySyncMode) {
+                    ForEach(DelaySyncMode.allCases) { mode in
+                        Text(mode.shortTitle).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .scaleEffect(x: 1, y: 0.85)
+                .frame(height: 26)
+                .onChange(of: track.delaySyncMode) { _, _ in updateTrackEffects() }
+
+                if track.delaySyncMode == .free {
+                    fxSlider(label: "Time", value: $track.delayTime, range: 0.05...1.0,
+                             display: "\(String(format: "%.2f", track.delayTime))s")
+                }
+                fxSlider(label: "Mix", value: $track.delayMix, range: 0...1,
+                         display: "\(Int(track.delayMix * 100))%")
+            }
+        }
+    }
+
+    private var eqEffectCard: some View {
+        effectCard(
+            icon: "slider.horizontal.3",
+            title: "EQ",
+            isEnabled: $track.eqEnabled,
+            onToggle: updateTrackEffects
+        ) {
+            VStack(spacing: 4) {
+                fxSlider(label: "Low", value: $track.eqLowGain, range: -12...12,
+                         display: "\(String(format: "%.0f", track.eqLowGain))dB")
+                fxSlider(label: "Mid", value: $track.eqMidGain, range: -12...12,
+                         display: "\(String(format: "%.0f", track.eqMidGain))dB")
+                fxSlider(label: "High", value: $track.eqHighGain, range: -12...12,
+                         display: "\(String(format: "%.0f", track.eqHighGain))dB")
+            }
+        }
+    }
+
+    private func effectCard<Content: View>(
+        icon: String,
+        title: String,
+        isEnabled: Binding<Bool>,
+        onToggle: @escaping () -> Void,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(spacing: 0) {
+            // Header row: icon + title + toggle
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.caption2)
+                    .foregroundStyle(isEnabled.wrappedValue ? accentColor : DesignSystem.Colors.textSecondary)
+                    .frame(width: 16)
+                Text(title)
+                    .font(.caption.bold())
+                    .foregroundStyle(isEnabled.wrappedValue ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textSecondary)
+                Spacer()
+                Toggle("", isOn: isEnabled)
+                    .toggleStyle(SwitchToggleStyle(tint: accentColor))
+                    .labelsHidden()
+                    .scaleEffect(0.75)
+                    .onChange(of: isEnabled.wrappedValue) { _, _ in onToggle() }
+            }
+
+            // Expandable detail when enabled
+            if isEnabled.wrappedValue {
+                content()
+                    .padding(.top, 8)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(isEnabled.wrappedValue ? accentColor.opacity(0.06) : Color.clear)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(isEnabled.wrappedValue ? accentColor.opacity(0.2) : DesignSystem.Colors.border.opacity(0.3), lineWidth: 1)
+                )
+        )
+        .animation(.none, value: isEnabled.wrappedValue)
+    }
+
+    private func fxSlider(label: String, value: Binding<Float>, range: ClosedRange<Float>, display: String) -> some View {
+        HStack(spacing: 6) {
+            Text(label)
+                .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(DesignSystem.Colors.textSecondary)
-
-            // Reverb
-            VStack(spacing: 4) {
-                Toggle(isOn: $track.reverbEnabled) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "waveform.path.ecg")
-                            .font(.caption2)
-                            .foregroundStyle(accentColor)
-                        Text("Reverb")
-                            .font(DesignSystem.Typography.caption)
-                            .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    }
-                }
-                .toggleStyle(SwitchToggleStyle(tint: accentColor))
-                .onChange(of: track.reverbEnabled) { _, _ in updateTrackEffects() }
-
-                if track.reverbEnabled {
-                    HStack(spacing: 6) {
-                        Text("Mix")
-                            .font(.caption2)
-                            .foregroundStyle(DesignSystem.Colors.textSecondary)
-                        Slider(value: $track.reverbMix, in: 0...1)
-                            .tint(accentColor)
-                            .onChange(of: track.reverbMix) { _, _ in updateTrackEffects() }
-                        Text("\(Int(track.reverbMix * 100))%")
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(DesignSystem.Colors.textPrimary)
-                            .frame(width: 36, alignment: .trailing)
-                    }
-                }
-            }
-
-            // Delay
-            VStack(spacing: 4) {
-                Toggle(isOn: $track.delayEnabled) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.caption2)
-                            .foregroundStyle(accentColor)
-                        Text("Delay")
-                            .font(DesignSystem.Typography.caption)
-                            .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    }
-                }
-                .toggleStyle(SwitchToggleStyle(tint: accentColor))
-                .onChange(of: track.delayEnabled) { _, _ in updateTrackEffects() }
-
-                if track.delayEnabled {
-                    HStack(spacing: 6) {
-                        Text("Time")
-                            .font(.caption2)
-                            .foregroundStyle(DesignSystem.Colors.textSecondary)
-                        Slider(value: $track.delayTime, in: 0.05...1.0)
-                            .tint(accentColor)
-                            .onChange(of: track.delayTime) { _, _ in updateTrackEffects() }
-                        Text("\(String(format: "%.2f", track.delayTime))s")
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(DesignSystem.Colors.textPrimary)
-                            .frame(width: 42, alignment: .trailing)
-                    }
-                    HStack(spacing: 6) {
-                        Text("Mix")
-                            .font(.caption2)
-                            .foregroundStyle(DesignSystem.Colors.textSecondary)
-                        Slider(value: $track.delayMix, in: 0...1)
-                            .tint(accentColor)
-                            .onChange(of: track.delayMix) { _, _ in updateTrackEffects() }
-                        Text("\(Int(track.delayMix * 100))%")
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(DesignSystem.Colors.textPrimary)
-                            .frame(width: 36, alignment: .trailing)
-                    }
-                }
-            }
+                .frame(width: 30, alignment: .leading)
+            Slider(value: value, in: range)
+                .tint(accentColor)
+                .onChange(of: value.wrappedValue) { _, _ in updateTrackEffects() }
+            Text(display)
+                .font(.system(size: 10).monospacedDigit())
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
+                .frame(width: 38, alignment: .trailing)
         }
     }
 
@@ -1424,6 +1531,7 @@ struct StudioTrackEditorView: View {
                 currentBeat: playback.currentBeat,
                 isPlaying: playback.isPlaying,
                 accentColor: accentColor,
+                isMetronomeEnabled: $playback.isMetronomeEnabled,
                 onPlay: onPlay,
                 onPause: onPause,
                 onStop: onStop,
@@ -1516,15 +1624,26 @@ struct StudioTrackList: View {
     let onEffectsChange: () -> Void
     let onDelete: (StudioTrack) -> Void
     let onOpenEditor: (StudioTrack) -> Void
+    let onReorder: (IndexSet, Int) -> Void
+
+    @State private var draggingId: UUID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Tracks")
-                .font(DesignSystem.Typography.headline)
-                .foregroundStyle(DesignSystem.Colors.textPrimary)
+            HStack(alignment: .firstTextBaseline) {
+                Text("Tracks")
+                    .font(DesignSystem.Typography.headline)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+                Spacer()
+                if tracks.count > 1 {
+                    Text("Hold & drag to reorder")
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundStyle(DesignSystem.Colors.textTertiary)
+                }
+            }
 
             VStack(spacing: 8) {
-                ForEach(tracks, id: \.id) { track in
+                ForEach(tracks) { track in
                     SwipeActionRow(actions: [
                         SwipeActionItem(systemImage: "trash.fill", tint: DesignSystem.Colors.error, role: .destructive) {
                             onDelete(track)
@@ -1533,22 +1652,61 @@ struct StudioTrackList: View {
                         StudioTrackRow(
                             track: track,
                             isSelected: selectedTrackId == track.id,
-                            onSelect: {
-                                selectedTrackId = track.id
-                            },
+                            onSelect: { selectedTrackId = track.id },
                             onTrackStructureChange: onTrackStructureChange,
                             onMixChange: onMixChange,
                             onEffectsChange: onEffectsChange,
-                            onDelete: {
-                                onDelete(track)
-                            },
+                            onDelete: { onDelete(track) },
                             onOpenEditor: { onOpenEditor(track) }
                         )
                     }
+                    .opacity(draggingId == track.id ? 0.5 : 1.0)
+                    .onDrag {
+                        draggingId = track.id
+                        return NSItemProvider(object: track.id.uuidString as NSString)
+                    }
+                    .onDrop(of: [.text], delegate: TrackReorderDelegate(
+                        targetTrack: track,
+                        tracks: tracks,
+                        draggingId: $draggingId,
+                        onReorder: onReorder
+                    ))
                 }
             }
         }
     }
+}
+
+private struct TrackReorderDelegate: DropDelegate {
+    let targetTrack: StudioTrack
+    let tracks: [StudioTrack]
+    @Binding var draggingId: UUID?
+    let onReorder: (IndexSet, Int) -> Void
+
+    func dropEntered(info: DropInfo) {
+        guard let draggingId,
+              draggingId != targetTrack.id,
+              let fromIndex = tracks.firstIndex(where: { $0.id == draggingId }),
+              let toIndex = tracks.firstIndex(where: { $0.id == targetTrack.id })
+        else { return }
+        let dest = toIndex > fromIndex ? toIndex + 1 : toIndex
+        withAnimation(.easeInOut(duration: 0.2)) {
+            onReorder(IndexSet(integer: fromIndex), dest)
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        draggingId = nil
+        return true
+    }
+
+    func dropExited(info: DropInfo) {}
+
+    func validateDrop(info: DropInfo) -> Bool { true }
 }
 
 struct StudioTrackRow: View {
@@ -1761,7 +1919,6 @@ struct StudioTrackRow: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.bottom, 10)
-                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .background(
@@ -1775,9 +1932,7 @@ struct StudioTrackRow: View {
         .contentShape(Rectangle())
         .onTapGesture {
             onSelect()
-            withAnimation(.easeInOut(duration: 0.25)) {
-                isExpanded.toggle()
-            }
+            isExpanded.toggle()
         }
         .contextMenu {
             Button(role: .destructive) {

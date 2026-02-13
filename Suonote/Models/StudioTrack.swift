@@ -2,6 +2,73 @@ import Foundation
 import SwiftData
 import SwiftUI
 
+enum ReverbPreset: String, Codable, CaseIterable, Identifiable {
+    case small = "small"
+    case medium = "medium"
+    case large = "large"
+    case plate = "plate"
+
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .small: return "Small Room"
+        case .medium: return "Medium Hall"
+        case .large: return "Large Hall"
+        case .plate: return "Plate"
+        }
+    }
+    var avPreset: Int {
+        switch self {
+        case .small: return 2   // AVAudioUnitReverbPreset.smallRoom
+        case .medium: return 4  // AVAudioUnitReverbPreset.mediumHall
+        case .large: return 6   // AVAudioUnitReverbPreset.largeHall
+        case .plate: return 10  // AVAudioUnitReverbPreset.plate
+        }
+    }
+    var shortTitle: String {
+        switch self {
+        case .small: return "Small"
+        case .medium: return "Medium"
+        case .large: return "Large"
+        case .plate: return "Plate"
+        }
+    }
+}
+
+enum DelaySyncMode: String, Codable, CaseIterable, Identifiable {
+    case free = "free"
+    case quarter = "1/4"
+    case eighth = "1/8"
+    case dottedEighth = "dotted 1/8"
+
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .free: return "Free"
+        case .quarter: return "1/4 Note"
+        case .eighth: return "1/8 Note"
+        case .dottedEighth: return "Dotted 1/8"
+        }
+    }
+    func delayTime(bpm: Double) -> Double {
+        let beatDuration = 60.0 / bpm
+        switch self {
+        case .free: return 0.25
+        case .quarter: return beatDuration
+        case .eighth: return beatDuration / 2.0
+        case .dottedEighth: return beatDuration * 0.75
+        }
+    }
+    var shortTitle: String {
+        switch self {
+        case .free: return "Free"
+        case .quarter: return "1/4"
+        case .eighth: return "1/8"
+        case .dottedEighth: return "D 1/8"
+        }
+    }
+}
+
 enum StudioStyle: String, Codable, CaseIterable, Identifiable {
     case pop
     case rock
@@ -435,9 +502,28 @@ final class StudioTrack {
     // Per-track effects
     var reverbEnabled: Bool = false
     var reverbMix: Float = 0.3
+    private var _reverbPreset: String = "medium"
     var delayEnabled: Bool = false
     var delayTime: Float = 0.25
     var delayMix: Float = 0.2
+    private var _delaySyncMode: String = "free"
+    var eqEnabled: Bool = false
+    var eqLowGain: Float = 0.0
+    var eqMidGain: Float = 0.0
+    var eqHighGain: Float = 0.0
+    var compressorEnabled: Bool = false
+    var compressorThreshold: Float = -20.0
+    var compressorRatio: Float = 4.0
+
+    var reverbPreset: ReverbPreset {
+        get { ReverbPreset(rawValue: _reverbPreset) ?? .medium }
+        set { _reverbPreset = newValue.rawValue }
+    }
+
+    var delaySyncMode: DelaySyncMode {
+        get { DelaySyncMode(rawValue: _delaySyncMode) ?? .free }
+        set { _delaySyncMode = newValue.rawValue }
+    }
 
     var notesStore: [StudioNote]? = []
     var project: Project?

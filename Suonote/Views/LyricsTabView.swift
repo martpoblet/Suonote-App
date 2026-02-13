@@ -17,30 +17,36 @@ struct LyricsTabView: View {
     }
     
     var body: some View {
-        VStack(spacing: 0) {
-            if uniqueSections.isEmpty {
-                emptyStateView
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: DesignSystem.Spacing.md) {
-                        ForEach(uniqueSections) { section in
-                            LyricsSectionCard(
-                                section: section,
-                                usageCount: usageCount(for: section)
-                            ) {
-                                selectedSection = section
-                                showingEditor = true
+        NavigationStack {
+            VStack(spacing: 0) {
+                if uniqueSections.isEmpty {
+                    emptyStateView
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: DesignSystem.Spacing.md) {
+                            ForEach(uniqueSections) { section in
+                                LyricsSectionCard(
+                                    section: section,
+                                    usageCount: usageCount(for: section)
+                                ) {
+                                    selectedSection = section
+                                    showingEditor = true
+                                }
                             }
                         }
+                        .padding(.horizontal, DesignSystem.Spacing.xl)
+                        .padding(.top, DesignSystem.Spacing.lg)
+                        .padding(.bottom, DesignSystem.Spacing.lg)
                     }
-                    .padding(.horizontal, DesignSystem.Spacing.xl)
-                    .padding(.top, DesignSystem.Spacing.lg)
-                    .padding(.bottom, DesignSystem.Spacing.lg)
                 }
             }
-        }
-        .fullScreenCover(item: $selectedSection) { section in
-            ImmersiveLyricsEditor(section: section)
+            .navigationBarHidden(true)
+            .navigationDestination(isPresented: $showingEditor) {
+                if let section = selectedSection {
+                    ImmersiveLyricsEditor(section: section)
+                        .navigationBarBackButtonHidden(true)
+                }
+            }
         }
     }
     

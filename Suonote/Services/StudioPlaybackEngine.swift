@@ -50,10 +50,19 @@ final class StudioPlaybackEngine: ObservableObject {
     private var mixerNodes: [UUID: AVAudioMixerNode] = [:]
     private var reverbNodes: [UUID: AVAudioUnitReverb] = [:]
     private var delayNodes: [UUID: AVAudioUnitDelay] = [:]
+    private var eqNodes: [UUID: AVAudioUnitEQ] = [:]
+    private var compressorNodes: [UUID: AVAudioUnitEffect] = [:]
+    private var masterLimiter: AVAudioUnitEffect?
+    private var metronomePlayer: AVAudioPlayerNode?
+    private var metronomeBuffer: AVAudioPCMBuffer?
+    @Published var isMetronomeEnabled: Bool = false
+    @Published var metronomeVolume: Float = 0.5
+    @Published var countInBars: Int = 0  // 0 = no count-in, 1 or 2
     private var audioTrackInfo: [UUID: AudioTrackInfo] = [:]
     private var trackMixState: [UUID: TrackMixState] = [:]
     private var bpm: Double = 120
     private var beatScale: Double = 1.0
+    private var currentBeatsPerBar: Int = 4
     private var beatClock = BeatClock(bpm: 120, timeBottom: 4)
     private var playheadTimer: Timer?
     private var customBankStatus: CustomBankStatus = .unknown
@@ -169,15 +178,18 @@ final class StudioPlaybackEngine: ObservableObject {
     }
 
     func stop(resetPosition: Bool = false) {
+        stopPlayheadTimer()
+        isPlaying = false
+        
+        if resetPosition {
+            currentBeat = 0
+        }
+        
         sequencer?.stop()
         for node in audioNodes.values {
             node.stop()
         }
-        isPlaying = false
-        stopPlayheadTimer()
-
-        let position = sequencer?.currentPositionInBeats ?? beatClock.uiBeatToSequencerBeat(currentBeat)
-        currentBeat = resetPosition ? 0 : beatClock.sequencerBeatToUiBeat(position)
+        
         if resetPosition {
             sequencer?.currentPositionInBeats = 0
         }
@@ -217,16 +229,48 @@ final class StudioPlaybackEngine: ObservableObject {
             trackMixState[track.id] = state
             // Update effects
             if let reverb = reverbNodes[track.id] {
+                if let preset = AVAudioUnitReverbPreset(rawValue: track.reverbPreset.avPreset) {
+                    reverb.loadFactoryPreset(preset)
+                }
                 reverb.wetDryMix = track.reverbEnabled ? track.reverbMix * 100 : 0
             }
             if let delay = delayNodes[track.id] {
                 delay.wetDryMix = track.delayEnabled ? track.delayMix * 100 : 0
-                delay.delayTime = TimeInterval(track.delayTime)
+                if track.delaySyncMode == .free {
+                    delay.delayTime = TimeInterval(track.delayTime)
+                } else {
+                    delay.delayTime = track.delaySyncMode.delayTime(bpm: bpm)
+                }
+            }
+            if let eq = eqNodes[track.id] {
+                configureEQ(eq, track: track)
             }
         }
         applyMixStateFromCache()
     }
 
+    func updateTrackEffects(track: StudioTrack) {
+        let trackId = track.id
+        if let reverb = reverbNodes[trackId] {
+            if let preset = AVAudioUnitReverbPreset(rawValue: track.reverbPreset.avPreset) {
+                reverb.loadFactoryPreset(preset)
+            }
+            reverb.wetDryMix = track.reverbEnabled ? track.reverbMix * 100 : 0
+        }
+        if let delay = delayNodes[trackId] {
+            delay.wetDryMix = track.delayEnabled ? track.delayMix * 100 : 0
+            if track.delaySyncMode == .free {
+                delay.delayTime = TimeInterval(track.delayTime)
+            } else {
+                delay.delayTime = track.delaySyncMode.delayTime(bpm: bpm)
+            }
+        }
+        if let eq = eqNodes[trackId] {
+            configureEQ(eq, track: track)
+        }
+    }
+
+    // Legacy compatibility
     func updateTrackEffects(trackId: UUID, reverbEnabled: Bool, reverbMix: Float, delayEnabled: Bool, delayTime: Float, delayMix: Float) {
         if let reverb = reverbNodes[trackId] {
             reverb.wetDryMix = reverbEnabled ? reverbMix * 100 : 0
@@ -267,12 +311,18 @@ final class StudioPlaybackEngine: ObservableObject {
         audioNodes.values.forEach { engine.detach($0) }
         reverbNodes.values.forEach { engine.detach($0) }
         delayNodes.values.forEach { engine.detach($0) }
+        eqNodes.values.forEach { engine.detach($0) }
+        compressorNodes.values.forEach { engine.detach($0) }
         mixerNodes.values.forEach { engine.detach($0) }
+        if let limiter = masterLimiter { engine.detach(limiter); masterLimiter = nil }
+        if let metro = metronomePlayer { engine.detach(metro); metronomePlayer = nil }
         engine.reset()
         samplerNodes.removeAll()
         audioNodes.removeAll()
         reverbNodes.removeAll()
         delayNodes.removeAll()
+        eqNodes.removeAll()
+        compressorNodes.removeAll()
         mixerNodes.removeAll()
         audioTrackInfo.removeAll()
         trackMixState.removeAll()
@@ -291,23 +341,40 @@ final class StudioPlaybackEngine: ObservableObject {
             let mixer = AVAudioMixerNode()
             let reverb = AVAudioUnitReverb()
             let delay = AVAudioUnitDelay()
+            let eq = AVAudioUnitEQ(numberOfBands: 3)
             
             engine.attach(sampler)
+            engine.attach(eq)
             engine.attach(reverb)
             engine.attach(delay)
             engine.attach(mixer)
             
-            // Chain: sampler -> reverb -> delay -> mixer -> main
-            engine.connect(sampler, to: reverb, format: nil)
+            // Chain: sampler -> EQ -> reverb -> delay -> mixer -> main
+            engine.connect(sampler, to: eq, format: nil)
+            engine.connect(eq, to: reverb, format: nil)
             engine.connect(reverb, to: delay, format: nil)
             engine.connect(delay, to: mixer, format: nil)
             engine.connect(mixer, to: engine.mainMixerNode, format: nil)
             
-            // Configure effects from track settings
+            // Configure reverb
+            if let preset = AVAudioUnitReverbPreset(rawValue: track.reverbPreset.avPreset) {
+                reverb.loadFactoryPreset(preset)
+            }
             reverb.wetDryMix = track.reverbEnabled ? track.reverbMix * 100 : 0
+            
+            // Configure delay
+            let effectiveDelayTime: TimeInterval
+            if track.delaySyncMode == .free {
+                effectiveDelayTime = TimeInterval(track.delayTime)
+            } else {
+                effectiveDelayTime = track.delaySyncMode.delayTime(bpm: bpm)
+            }
             delay.wetDryMix = track.delayEnabled ? track.delayMix * 100 : 0
-            delay.delayTime = TimeInterval(track.delayTime)
+            delay.delayTime = effectiveDelayTime
             delay.feedback = 30
+            
+            // Configure 3-band EQ (low 250Hz, mid 1kHz, high 4kHz)
+            configureEQ(eq, track: track)
             
             // Apply volume and pan
             mixer.outputVolume = track.volume
@@ -317,6 +384,7 @@ final class StudioPlaybackEngine: ObservableObject {
             mixerNodes[track.id] = mixer
             reverbNodes[track.id] = reverb
             delayNodes[track.id] = delay
+            eqNodes[track.id] = eq
             trackMixState[track.id] = TrackMixState(
                 volume: track.volume,
                 pan: track.pan,
@@ -325,6 +393,46 @@ final class StudioPlaybackEngine: ObservableObject {
             )
             loadInstrument(for: track, sampler: sampler)
         }
+        // Attach master limiter
+        setupMasterLimiter()
+    }
+
+    private func configureEQ(_ eq: AVAudioUnitEQ, track: StudioTrack) {
+        let bands = eq.bands
+        guard bands.count >= 3 else { return }
+        bands[0].filterType = .lowShelf
+        bands[0].frequency = 250
+        bands[0].gain = track.eqEnabled ? track.eqLowGain : 0
+        bands[0].bypass = false
+        bands[1].filterType = .parametric
+        bands[1].frequency = 1000
+        bands[1].bandwidth = 1.0
+        bands[1].gain = track.eqEnabled ? track.eqMidGain : 0
+        bands[1].bypass = false
+        bands[2].filterType = .highShelf
+        bands[2].frequency = 4000
+        bands[2].gain = track.eqEnabled ? track.eqHighGain : 0
+        bands[2].bypass = false
+    }
+
+    private func setupMasterLimiter() {
+        guard masterLimiter == nil else { return }
+        // Use AudioComponentDescription for a dynamics processor configured as limiter
+        let desc = AudioComponentDescription(
+            componentType: kAudioUnitType_Effect,
+            componentSubType: kAudioUnitSubType_PeakLimiter,
+            componentManufacturer: kAudioUnitManufacturer_Apple,
+            componentFlags: 0,
+            componentFlagsMask: 0
+        )
+        let limiter = AVAudioUnitEffect(audioComponentDescription: desc)
+        engine.attach(limiter)
+        // Insert between mainMixer and output
+        let format = engine.mainMixerNode.outputFormat(forBus: 0)
+        engine.disconnectNodeOutput(engine.mainMixerNode)
+        engine.connect(engine.mainMixerNode, to: limiter, format: format)
+        engine.connect(limiter, to: engine.outputNode, format: format)
+        masterLimiter = limiter
     }
 
     private func attachAudioNodes(for tracks: [StudioTrack], project: Project) {
@@ -386,8 +494,71 @@ final class StudioPlaybackEngine: ObservableObject {
             addNotes(track.notes, to: musicTrack, channel: midiChannel(for: track))
         }
 
+        // Add metronome track if enabled
+        if isMetronomeEnabled {
+            addMetronomeTrack(to: sequencer)
+        }
+
         configureTempoTrack(for: sequencer)
         sequencer.prepareToPlay()
+    }
+
+    private func addMetronomeTrack(to sequencer: AVAudioSequencer) {
+        let metroSampler = AVAudioUnitSampler()
+        engine.attach(metroSampler)
+        let metroMixer = AVAudioMixerNode()
+        engine.attach(metroMixer)
+        engine.connect(metroSampler, to: metroMixer, format: nil)
+        engine.connect(metroMixer, to: engine.mainMixerNode, format: nil)
+        metroMixer.outputVolume = metronomeVolume
+
+        // Load using the app's SoundFont (percussion bank for click sounds)
+        let loaded: Bool
+        if let sfURL = SoundFontManager.soundFontURL(for: .drums, variant: nil) {
+            loaded = attemptLoad(
+                metroSampler, url: sfURL, program: 0,
+                bankMSB: UInt8(kAUSampler_DefaultPercussionBankMSB),
+                bankLSB: UInt8(kAUSampler_DefaultBankLSB), logFailure: false
+            ) || attemptLoad(
+                metroSampler, url: sfURL, program: 0,
+                bankMSB: UInt8(kAUSampler_DefaultMelodicBankMSB),
+                bankLSB: UInt8(kAUSampler_DefaultBankLSB), logFailure: false
+            )
+        } else if let sysURL = systemSoundBankURL() {
+            loaded = attemptLoad(
+                metroSampler, url: sysURL, program: 0,
+                bankMSB: UInt8(kAUSampler_DefaultPercussionBankMSB),
+                bankLSB: UInt8(kAUSampler_DefaultBankLSB), logFailure: false
+            )
+        } else {
+            loaded = false
+        }
+        guard loaded else {
+            engine.detach(metroMixer)
+            engine.detach(metroSampler)
+            return
+        }
+
+        let musicTrack = sequencer.createAndAppendTrack()
+        musicTrack.destinationAudioUnit = metroSampler
+
+        // GM percussion: 76 = Hi Wood Block (accent), 77 = Lo Wood Block (normal)
+        let accentNote: UInt32 = 76
+        let normalNote: UInt32 = 77
+        let totalSeqBeats = totalBeats * beatScale
+        let seqBeatStep = beatScale
+        var pos = 0.0
+        var beatIndex = 0
+        let beatsPerBar = max(1, currentBeatsPerBar)
+        while pos < totalSeqBeats {
+            let isDownbeat = beatIndex % beatsPerBar == 0
+            let note = isDownbeat ? accentNote : normalNote
+            let vel: UInt32 = isDownbeat ? 110 : 80
+            let event = AVMIDINoteEvent(channel: 9, key: note, velocity: vel, duration: 0.1)
+            musicTrack.addEvent(event, at: pos)
+            pos += seqBeatStep
+            beatIndex += 1
+        }
     }
 
     private func addNotes(_ notes: [StudioNote], to track: AVMusicTrack, channel: UInt8) {
@@ -464,8 +635,13 @@ final class StudioPlaybackEngine: ObservableObject {
     }
 
     @objc private func handlePlayheadTick() {
-        guard let sequencer else { return }
-        let position = beatClock.sequencerBeatToUiBeat(sequencer.currentPositionInBeats)
+        guard let sequencer, isPlaying else { return }
+        
+        let position: Double
+        do {
+            let raw = sequencer.currentPositionInBeats
+            position = beatClock.sequencerBeatToUiBeat(raw)
+        }
         currentBeat = position
         
         // Loop/Cycle support (P-06)
@@ -478,7 +654,9 @@ final class StudioPlaybackEngine: ObservableObject {
         }
         
         if totalBeats > 0, position >= totalBeats {
-            stop(resetPosition: true)
+            DispatchQueue.main.async { [weak self] in
+                self?.stop(resetPosition: true)
+            }
         }
     }
 
@@ -642,6 +820,7 @@ final class StudioPlaybackEngine: ObservableObject {
         bpm = project.quarterNoteBpm()
         beatClock = BeatClock(bpm: bpm, timeBottom: project.timeBottom)
         beatScale = beatClock.beatScale
+        currentBeatsPerBar = project.timeTop
     }
 
     private func configureTempoTrack(for sequencer: AVAudioSequencer) {
@@ -679,5 +858,53 @@ final class StudioPlaybackEngine: ObservableObject {
         } else {
             node.play()
         }
+    }
+
+    // MARK: - MIDI Export
+
+    func exportMIDI(project: Project) -> URL? {
+        let tracks = project.studioTracks
+            .filter { !$0.instrument.isAudio }
+            .sorted { $0.orderIndex < $1.orderIndex }
+        guard !tracks.isEmpty else { return nil }
+
+        var musicSequence: MusicSequence?
+        guard NewMusicSequence(&musicSequence) == noErr, let seq = musicSequence else { return nil }
+
+        // Tempo track
+        var tempoTrack: MusicTrack?
+        MusicSequenceGetTempoTrack(seq, &tempoTrack)
+        if let tempoTrack {
+            MusicTrackNewExtendedTempoEvent(tempoTrack, 0, Float64(bpm))
+        }
+
+        for track in tracks {
+            var mTrack: MusicTrack?
+            MusicSequenceNewTrack(seq, &mTrack)
+            guard let mTrack else { continue }
+
+            let channel: UInt8 = track.instrument == .drums ? 9 : UInt8(track.orderIndex % 16)
+            for note in track.notes.sorted(by: { $0.startBeat < $1.startBeat }) {
+                var msg = MIDINoteMessage(
+                    channel: channel,
+                    note: UInt8(max(0, min(127, note.pitch))),
+                    velocity: UInt8(max(0, min(127, note.velocity))),
+                    releaseVelocity: 0,
+                    duration: Float32(note.duration * beatScale)
+                )
+                MusicTrackNewMIDINoteEvent(mTrack, note.startBeat * beatScale, &msg)
+            }
+        }
+
+        let fileName = "\(project.title.replacingOccurrences(of: " ", with: "_"))_studio.mid"
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+        try? FileManager.default.removeItem(at: url)
+
+        guard MusicSequenceFileCreate(seq, url as CFURL, .midiType, .eraseFile, 0) == noErr else {
+            DisposeMusicSequence(seq)
+            return nil
+        }
+        DisposeMusicSequence(seq)
+        return url
     }
 }
