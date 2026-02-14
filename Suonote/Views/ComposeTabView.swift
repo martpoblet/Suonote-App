@@ -813,31 +813,36 @@ struct ChordSlotDropDelegate: DropDelegate {
 }
 
 struct BarRowDropDelegate: DropDelegate {
-    let targetBarIndex: Int
-    let sectionId: UUID
-    let onBarHovered: (Int) -> Void
-    let onDrop: (Int) -> Void
-    let onExit: () -> Void
-
-    func validateDrop(info: DropInfo) -> Bool {
-        info.hasItemsConforming(to: [barRowDragUTType])
-    }
+    let targetRowId: UUID
+    @Binding var barRowIds: [UUID]
+    @Binding var draggingId: UUID?
+    let onReorder: (Int, Int) -> Void
 
     func dropEntered(info: DropInfo) {
-        onBarHovered(targetBarIndex)
+        guard info.hasItemsConforming(to: [barRowDragUTType]) else { return }
+        guard let draggingId,
+              draggingId != targetRowId,
+              let fromIndex = barRowIds.firstIndex(of: draggingId),
+              let toIndex = barRowIds.firstIndex(of: targetRowId)
+        else { return }
+        let dest = toIndex > fromIndex ? toIndex + 1 : toIndex
+        withAnimation(.easeInOut(duration: 0.2)) {
+            onReorder(fromIndex, dest)
+        }
     }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
         DropProposal(operation: .move)
     }
 
-    func dropExited(info: DropInfo) {
-        onExit()
+    func performDrop(info: DropInfo) -> Bool {
+        draggingId = nil
+        return true
     }
 
-    func performDrop(info: DropInfo) -> Bool {
-        onDrop(targetBarIndex)
-        return true
+    func dropExited(info: DropInfo) {}
+    func validateDrop(info: DropInfo) -> Bool {
+        info.hasItemsConforming(to: [barRowDragUTType])
     }
 }
 
@@ -869,18 +874,11 @@ struct ChordGridView: View {
     @Binding var draggingChord: ChordDragInfo?
     @Namespace private var barRowNamespace
     @State private var barRowIds: [UUID]
-    @State private var draggingBarIndex: Int?
-    @State private var lastBarReorderTargetIndex: Int?
+    @State private var draggingRowId: UUID?
     
     private var beatsPerBar: Int { project.timeTop }
     private let barRowHeight: CGFloat = 104
     private var barRowSpacing: CGFloat { DesignSystem.Spacing.sm }
-    
-    private var barsListHeight: CGFloat {
-        let count = CGFloat(section.bars)
-        guard count > 0 else { return 0 }
-        return (count * barRowHeight) + (max(0, count - 1) * barRowSpacing)
-    }
 
     init(
         section: SectionTemplate,
@@ -896,11 +894,10 @@ struct ChordGridView: View {
     }
     
     var body: some View {
-        let rowIds = resolvedBarRowIds()
         VStack(spacing: DesignSystem.Spacing.sm) {
-            // Show only the bars defined in section.bars
             VStack(spacing: barRowSpacing) {
-                ForEach(Array(rowIds.enumerated()), id: \.element) { barIndex, rowId in
+                ForEach(barRowIds, id: \.self) { rowId in
+                    let barIndex = barRowIds.firstIndex(of: rowId) ?? 0
                     BarRow(
                         section: section,
                         project: project,
@@ -915,29 +912,23 @@ struct ChordGridView: View {
                         onBarDeleted: removeBarId
                     )
                     .frame(height: barRowHeight)
-                    .opacity(draggingBarIndex == barIndex ? 0.1 : 1.0)
                     .onDrag {
-                        draggingBarIndex = barIndex
-                        return NSItemProvider(
-                            item: "\(section.id.uuidString)|\(barIndex)" as NSString,
-                            typeIdentifier: barRowDragUTType.identifier
-                        )
+                        draggingRowId = rowId
+                        return barRowProvider(for: rowId)
                     }
                     .onDrop(of: [barRowDragUTType], delegate: BarRowDropDelegate(
-                        targetBarIndex: barIndex,
-                        sectionId: section.id,
-                        onBarHovered: { targetIndex in
-                            handleBarHover(targetIndex: targetIndex)
-                        },
-                        onDrop: { _ in
-                            draggingBarIndex = nil
-                            lastBarReorderTargetIndex = nil
-                        },
-                        onExit: { lastBarReorderTargetIndex = nil }
+                        targetRowId: rowId,
+                        barRowIds: $barRowIds,
+                        draggingId: $draggingRowId,
+                        onReorder: { fromIndex, destIndex in
+                            let target = destIndex > fromIndex ? destIndex - 1 : destIndex
+                            guard fromIndex != target else { return }
+                            moveBarId(from: fromIndex, to: target)
+                            moveBarChords(from: fromIndex, to: target)
+                        }
                     ))
                 }
             }
-            .animation(.easeInOut(duration: 0.2), value: barRowIds)
             
             // Add Bar button
             Button {
@@ -983,20 +974,22 @@ struct ChordGridView: View {
         }
     }
 
-    private func resolvedBarRowIds() -> [UUID] {
-        if barRowIds.count == section.bars {
-            return barRowIds
-        }
-        if barRowIds.count > section.bars {
-            return Array(barRowIds.prefix(section.bars))
-        }
-        let missing = section.bars - barRowIds.count
-        return barRowIds + (0..<missing).map { _ in UUID() }
-    }
-
     private func insertBarId(at index: Int) {
         let clamped = min(max(0, index), barRowIds.count)
         barRowIds.insert(UUID(), at: clamped)
+    }
+
+    private func barRowProvider(for rowId: UUID) -> NSItemProvider {
+        let provider = NSItemProvider()
+        let payload = rowId.uuidString
+        provider.registerDataRepresentation(
+            forTypeIdentifier: barRowDragUTType.identifier,
+            visibility: .all
+        ) { completion in
+            completion(payload.data(using: .utf8), nil)
+            return nil
+        }
+        return provider
     }
 
     private func removeBarId(at index: Int) {
@@ -1010,19 +1003,6 @@ struct ChordGridView: View {
         guard sourceIndex != clampedTarget else { return }
         let id = barRowIds.remove(at: sourceIndex)
         barRowIds.insert(id, at: clampedTarget)
-    }
-
-    private func handleBarHover(targetIndex: Int) {
-        guard let sourceIndex = draggingBarIndex,
-              sourceIndex != targetIndex else { return }
-        if lastBarReorderTargetIndex == targetIndex { return }
-        lastBarReorderTargetIndex = targetIndex
-
-        withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
-            moveBarId(from: sourceIndex, to: targetIndex)
-            moveBarChords(from: sourceIndex, to: targetIndex)
-            draggingBarIndex = targetIndex
-        }
     }
 
     private func moveBarChords(from sourceIndex: Int, to targetIndex: Int) {
