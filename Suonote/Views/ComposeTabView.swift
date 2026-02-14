@@ -94,6 +94,34 @@ struct ComposeTabView: View {
                             sectionEditor(section, recordings: recordingsBySectionId[section.id] ?? [])
                                 .id(section.id)
                         }
+                        
+                        // Add Section button at the bottom
+                        Button {
+                            haptic(.medium)
+                            withAnimation(DesignSystem.Animations.smoothSpring) {
+                                showingSectionCreator = true
+                            }
+                        } label: {
+                            HStack(spacing: DesignSystem.Spacing.xxs) {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(DesignSystem.Typography.title3)
+                                Text("Add Section")
+                                    .font(DesignSystem.Typography.callout)
+                            }
+                            .foregroundStyle(DesignSystem.Colors.primaryDark)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, DesignSystem.Spacing.md)
+                            .background(
+                                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
+                                    .fill(DesignSystem.Colors.primaryDark.opacity(0.1))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
+                                            .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
+                                            .foregroundStyle(DesignSystem.Colors.primaryDark.opacity(0.5))
+                                    )
+                            )
+                        }
+                        .buttonStyle(.haptic(.medium))
                     }
                     .padding(24)
                     .padding(.bottom, 24)
@@ -171,7 +199,7 @@ struct ComposeTabView: View {
             } label: {
                 AppChip(
                     text: "\(project.timeTop)/\(project.timeBottom)",
-                    icon: DesignSystem.Icons.tempo,
+                    icon: DesignSystem.Icons.timeSignature,
                     tint: DesignSystem.Colors.warning,
                     font: DesignSystem.Typography.callout
                 )
@@ -186,7 +214,7 @@ struct ComposeTabView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     AppChip(
                         text: "\(project.bpm) BPM",
-                        icon: DesignSystem.Icons.waveform,
+                        icon: DesignSystem.Icons.tempo,
                         tint: DesignSystem.Colors.accent,
                         font: DesignSystem.Typography.callout
                     )
@@ -446,6 +474,16 @@ struct ComposeTabView: View {
                         .foregroundStyle(sectionColor)
                 }
                 .buttonStyle(.haptic(.light))
+
+                Button {
+                    haptic(.light)
+                    duplicateSection(section)
+                } label: {
+                    Image(systemName: "rectangle.on.rectangle.circle.fill")
+                        .font(DesignSystem.Typography.title2)
+                        .foregroundStyle(sectionColor)
+                }
+                .buttonStyle(.haptic(.light))
             }
             
             // Linked recordings section (collapsible)
@@ -547,6 +585,43 @@ struct ComposeTabView: View {
                         .stroke(DesignSystem.Colors.primary.opacity(0.25), lineWidth: 1)
                 )
         )
+    }
+    
+    private func duplicateSection(_ section: SectionTemplate) {
+        let newSection = SectionTemplate(
+            name: "\(section.name) Copy",
+            bars: section.bars,
+            lyricsText: section.lyricsText,
+            colorHex: section.colorHex ?? "#6B7B6B"
+        )
+        newSection.project = project
+        project.sectionTemplates.append(newSection)
+        
+        // Clone all chord events
+        for chord in section.chordEvents {
+            let cloned = ChordEvent(
+                barIndex: chord.barIndex,
+                beatOffset: chord.beatOffset,
+                duration: chord.duration,
+                isRest: chord.isRest,
+                root: chord.root,
+                quality: chord.quality,
+                extensions: chord.extensions,
+                slashRoot: chord.slashRoot
+            )
+            newSection.chordEvents.append(cloned)
+        }
+        
+        let arrangementItem = ArrangementItem(orderIndex: project.arrangementItems.count)
+        arrangementItem.sectionTemplate = newSection
+        project.arrangementItems.append(arrangementItem)
+        
+        try? modelContext.save()
+        
+        withAnimation(.spring(response: 0.3)) {
+            selectedSection = newSection
+            showAllSections = false
+        }
     }
     
     private func deleteArrangementItem(_ item: ArrangementItem) {
@@ -737,6 +812,35 @@ struct ChordSlotDropDelegate: DropDelegate {
     }
 }
 
+struct BarRowDropDelegate: DropDelegate {
+    let targetBarIndex: Int
+    let sectionId: UUID
+    let onBarHovered: (Int) -> Void
+    let onDrop: (Int) -> Void
+    let onExit: () -> Void
+
+    func validateDrop(info: DropInfo) -> Bool {
+        info.hasItemsConforming(to: [barRowDragUTType])
+    }
+
+    func dropEntered(info: DropInfo) {
+        onBarHovered(targetBarIndex)
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func dropExited(info: DropInfo) {
+        onExit()
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        onDrop(targetBarIndex)
+        return true
+    }
+}
+
 struct BarSlot: Identifiable {
     let id: String
     let beatOffset: Double
@@ -765,6 +869,8 @@ struct ChordGridView: View {
     @Binding var draggingChord: ChordDragInfo?
     @Namespace private var barRowNamespace
     @State private var barRowIds: [UUID]
+    @State private var draggingBarIndex: Int?
+    @State private var lastBarReorderTargetIndex: Int?
     
     private var beatsPerBar: Int { project.timeTop }
     private let barRowHeight: CGFloat = 104
@@ -793,8 +899,8 @@ struct ChordGridView: View {
         let rowIds = resolvedBarRowIds()
         VStack(spacing: DesignSystem.Spacing.sm) {
             // Show only the bars defined in section.bars
-            LazyVStack(spacing: barRowSpacing) {
-                ForEach(0..<section.bars, id: \.self) { barIndex in
+            VStack(spacing: barRowSpacing) {
+                ForEach(Array(rowIds.enumerated()), id: \.element) { barIndex, rowId in
                     BarRow(
                         section: section,
                         project: project,
@@ -802,16 +908,36 @@ struct ChordGridView: View {
                         beatsPerBar: beatsPerBar,
                         selectedChordSlot: $selectedChordSlot,
                         draggingChord: $draggingChord,
-                        barRowId: rowIds[barIndex],
+                        barRowId: rowId,
                         barRowNamespace: barRowNamespace,
                         onBarMoved: moveBarId,
                         onBarInserted: insertBarId,
                         onBarDeleted: removeBarId
                     )
                     .frame(height: barRowHeight)
+                    .opacity(draggingBarIndex == barIndex ? 0.1 : 1.0)
+                    .onDrag {
+                        draggingBarIndex = barIndex
+                        return NSItemProvider(
+                            item: "\(section.id.uuidString)|\(barIndex)" as NSString,
+                            typeIdentifier: barRowDragUTType.identifier
+                        )
+                    }
+                    .onDrop(of: [barRowDragUTType], delegate: BarRowDropDelegate(
+                        targetBarIndex: barIndex,
+                        sectionId: section.id,
+                        onBarHovered: { targetIndex in
+                            handleBarHover(targetIndex: targetIndex)
+                        },
+                        onDrop: { _ in
+                            draggingBarIndex = nil
+                            lastBarReorderTargetIndex = nil
+                        },
+                        onExit: { lastBarReorderTargetIndex = nil }
+                    ))
                 }
             }
-            .frame(height: barsListHeight)
+            .animation(.easeInOut(duration: 0.2), value: barRowIds)
             
             // Add Bar button
             Button {
@@ -884,6 +1010,40 @@ struct ChordGridView: View {
         guard sourceIndex != clampedTarget else { return }
         let id = barRowIds.remove(at: sourceIndex)
         barRowIds.insert(id, at: clampedTarget)
+    }
+
+    private func handleBarHover(targetIndex: Int) {
+        guard let sourceIndex = draggingBarIndex,
+              sourceIndex != targetIndex else { return }
+        if lastBarReorderTargetIndex == targetIndex { return }
+        lastBarReorderTargetIndex = targetIndex
+
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
+            moveBarId(from: sourceIndex, to: targetIndex)
+            moveBarChords(from: sourceIndex, to: targetIndex)
+            draggingBarIndex = targetIndex
+        }
+    }
+
+    private func moveBarChords(from sourceIndex: Int, to targetIndex: Int) {
+        guard sourceIndex != targetIndex else { return }
+        if sourceIndex < targetIndex {
+            for chord in section.chordEvents {
+                if chord.barIndex == sourceIndex {
+                    chord.barIndex = targetIndex
+                } else if chord.barIndex > sourceIndex && chord.barIndex <= targetIndex {
+                    chord.barIndex -= 1
+                }
+            }
+        } else {
+            for chord in section.chordEvents {
+                if chord.barIndex == sourceIndex {
+                    chord.barIndex = targetIndex
+                } else if chord.barIndex >= targetIndex && chord.barIndex < sourceIndex {
+                    chord.barIndex += 1
+                }
+            }
+        }
     }
 }
 
@@ -1152,15 +1312,6 @@ struct BarRow: View {
             }
             .matchedGeometryEffect(id: barRowId, in: barRowNamespace)
             .offset(y: reorderNudge)
-            .onDrag {
-                NSItemProvider(
-                    item: barRowPayload() as NSString,
-                    typeIdentifier: barRowDragUTType.identifier
-                )
-            }
-            .onDrop(of: [barRowDragUTType], isTargeted: $isBarRowDropTargeted) { providers in
-                handleBarRowDrop(providers)
-            }
         }
     }
     

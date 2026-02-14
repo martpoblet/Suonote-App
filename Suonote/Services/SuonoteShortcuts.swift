@@ -16,21 +16,25 @@ struct CreateProjectIntent: AppIntent {
     var bpm: Int
     
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        // Note: Actual project creation requires ModelContext which isn't available here
-        // This intent opens the app with parameters
+        let schema = Schema([Project.self])
+        let config = ModelConfiguration(
+            "Cloud",
+            schema: schema,
+            isStoredInMemoryOnly: false,
+            allowsSave: true,
+            groupContainer: .none,
+            cloudKitDatabase: .private("iCloud.Suonote")
+        )
+        let container = try ModelContainer(for: schema, configurations: [config])
+        let context = ModelContext(container)
+        
+        let project = Project(title: title)
+        project.keyRoot = key
+        project.bpm = bpm
+        context.insert(project)
+        try context.save()
+        
         return .result(dialog: "Created '\(title)' in \(key) at \(bpm) BPM")
-    }
-    
-    static var openAppWhenRun: Bool = true
-}
-
-/// Siri Shortcut: Quick voice note
-struct QuickRecordIntent: AppIntent {
-    static var title: LocalizedStringResource = "Quick Voice Note"
-    static var description = IntentDescription("Start a quick audio recording in Suonote")
-    
-    func perform() async throws -> some IntentResult & ProvidesDialog {
-        return .result(dialog: "Opening Suonote for recording...")
     }
     
     static var openAppWhenRun: Bool = true
@@ -48,15 +52,6 @@ struct SuonoteShortcuts: AppShortcutsProvider {
             ],
             shortTitle: "New Song",
             systemImageName: "music.note"
-        )
-        AppShortcut(
-            intent: QuickRecordIntent(),
-            phrases: [
-                "Record a voice note in \(.applicationName)",
-                "Quick recording in \(.applicationName)"
-            ],
-            shortTitle: "Quick Record",
-            systemImageName: "mic.fill"
         )
     }
 }

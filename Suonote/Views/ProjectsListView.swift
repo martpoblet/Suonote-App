@@ -443,20 +443,26 @@ struct ModernProjectCard: View {
                 // Metadata
                 HStack(spacing: 12) {
                     HStack(spacing: 4) {
-                        Image(systemName: "music.note")
+                        Image(systemName: DesignSystem.Icons.key)
                         Text("\(project.keyRoot)\(project.keyMode == .minor ? "m" : "")")
                     }
                     .font(DesignSystem.Typography.caption)
                     
                     HStack(spacing: 4) {
-                        Image(systemName: "metronome")
+                        Image(systemName: DesignSystem.Icons.tempo)
                         Text("\(project.bpm)")
+                    }
+                    .font(DesignSystem.Typography.caption)
+                    
+                    HStack(spacing: 4) {
+                        Image(systemName: DesignSystem.Icons.timeSignature)
+                        Text("\(project.timeTop)/\(project.timeBottom)")
                     }
                     .font(DesignSystem.Typography.caption)
                     
                     if project.recordingsCount > 0 {
                         HStack(spacing: 4) {
-                            Image(systemName: "waveform")
+                            Image(systemName: DesignSystem.Icons.waveform)
                             Text("\(project.recordingsCount)")
                         }
                         .font(DesignSystem.Typography.caption)
@@ -615,17 +621,17 @@ struct ProjectCardView: View {
             
             HStack(spacing: 12) {
                 if !project.keyRoot.isEmpty {
-                    Label("\(project.keyRoot) \(project.keyMode.rawValue)", systemImage: "music.note")
+                    Label("\(project.keyRoot) \(project.keyMode.rawValue)", systemImage: DesignSystem.Icons.key)
                         .font(DesignSystem.Typography.caption)
                         .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
                 
-                Label("\(project.bpm) BPM", systemImage: "metronome")
+                Label("\(project.bpm) BPM", systemImage: DesignSystem.Icons.tempo)
                     .font(DesignSystem.Typography.caption)
                     .foregroundStyle(DesignSystem.Colors.textSecondary)
                 
                 if project.recordingsCount > 0 {
-                    Label("\(project.recordingsCount) takes", systemImage: "waveform")
+                    Label("\(project.recordingsCount) takes", systemImage: DesignSystem.Icons.waveform)
                         .font(DesignSystem.Typography.caption)
                         .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }

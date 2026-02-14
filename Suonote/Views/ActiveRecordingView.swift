@@ -367,7 +367,7 @@ struct ActiveRecordingView: View {
             // BPM and Time signature info
             HStack(spacing: 24) {
                 HStack(spacing: 8) {
-                    Image(systemName: "metronome")
+                    Image(systemName: DesignSystem.Icons.tempo)
                         .font(DesignSystem.Typography.caption)
                     Text("\(project.bpm) BPM")
                         .font(DesignSystem.Typography.subheadline)
@@ -379,7 +379,7 @@ struct ActiveRecordingView: View {
                     .frame(width: 4, height: 4)
                 
                 HStack(spacing: 8) {
-                    Image(systemName: "music.note")
+                    Image(systemName: DesignSystem.Icons.timeSignature)
                         .font(DesignSystem.Typography.caption)
                     Text("\(project.timeTop)/\(project.timeBottom)")
                         .font(DesignSystem.Typography.subheadline)

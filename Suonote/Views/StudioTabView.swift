@@ -997,9 +997,9 @@ struct StudioTrackEditorView: View {
 
     private var infoItems: [StudioInfoChipData] {
         let items: [StudioInfoChipData] = [
-            StudioInfoChipData(icon: "key.fill", text: keyLabel),
-            StudioInfoChipData(icon: "metronome", text: "\(project.bpm) BPM"),
-            StudioInfoChipData(icon: "music.quarternote.3", text: "\(project.timeTop)/\(project.timeBottom)")
+            StudioInfoChipData(icon: DesignSystem.Icons.key, text: keyLabel),
+            StudioInfoChipData(icon: DesignSystem.Icons.tempo, text: "\(project.bpm) BPM"),
+            StudioInfoChipData(icon: DesignSystem.Icons.timeSignature, text: "\(project.timeTop)/\(project.timeBottom)")
         ]
         return items
     }

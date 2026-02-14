@@ -188,8 +188,9 @@ struct DesignSystem {
     struct Icons {
         static let chord = "music.note"
         static let chords = "music.note.list"
-        static let key = "key.fill"
+        static let key = "music.note"
         static let tempo = "metronome"
+        static let timeSignature = "clock"
         static let waveform = "waveform"
 
         static let add = "plus"
