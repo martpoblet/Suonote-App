@@ -16,41 +16,30 @@ struct LyricsTabView: View {
     }
     
     var body: some View {
-        ZStack {
-            // List view
-            VStack(spacing: 0) {
-                if uniqueSections.isEmpty {
-                    emptyStateView
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: DesignSystem.Spacing.md) {
-                            ForEach(uniqueSections) { section in
-                                LyricsSectionCard(
-                                    section: section,
-                                    usageCount: usageCount(for: section)
-                                ) {
-                                    withAnimation(.easeInOut(duration: 0.3)) {
-                                        selectedSection = section
-                                    }
-                                }
+        VStack(spacing: 0) {
+            if uniqueSections.isEmpty {
+                emptyStateView
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: DesignSystem.Spacing.md) {
+                        ForEach(uniqueSections) { section in
+                            LyricsSectionCard(
+                                section: section,
+                                usageCount: usageCount(for: section)
+                            ) {
+                                selectedSection = section
                             }
                         }
-                        .padding(.horizontal, DesignSystem.Spacing.xl)
-                        .padding(.top, DesignSystem.Spacing.lg)
-                        .padding(.bottom, DesignSystem.Spacing.lg)
                     }
+                    .padding(.horizontal, DesignSystem.Spacing.xl)
+                    .padding(.top, DesignSystem.Spacing.lg)
+                    .padding(.bottom, DesignSystem.Spacing.lg)
                 }
             }
-            
-            // Editor overlay
-            if let section = selectedSection {
-                ImmersiveLyricsEditor(section: section) {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        selectedSection = nil
-                    }
-                }
-                .transition(.move(edge: .trailing))
-                .zIndex(1)
+        }
+        .fullScreenCover(item: $selectedSection) { section in
+            ImmersiveLyricsEditor(section: section) {
+                selectedSection = nil
             }
         }
     }
@@ -147,7 +136,6 @@ struct ImmersiveLyricsEditor: View {
     @Bindable var section: SectionTemplate
     var onDismiss: () -> Void
     @FocusState private var isTextEditorFocused: Bool
-    @GestureState private var dragOffset: CGFloat = 0
     
     var body: some View {
         VStack(spacing: 0) {
@@ -224,22 +212,6 @@ struct ImmersiveLyricsEditor: View {
             .padding(.vertical, DesignSystem.Spacing.sm)
         }
         .background(DesignSystem.Colors.background.ignoresSafeArea())
-        .offset(x: dragOffset)
-        .gesture(
-            DragGesture()
-                .updating($dragOffset) { value, state, _ in
-                    // Only track drags starting from left edge, moving right
-                    if value.startLocation.x < 40 && value.translation.width > 0 {
-                        state = value.translation.width
-                    }
-                }
-                .onEnded { value in
-                    if value.startLocation.x < 40 && value.translation.width > 100 {
-                        isTextEditorFocused = false
-                        onDismiss()
-                    }
-                }
-        )
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 isTextEditorFocused = true
