@@ -1066,9 +1066,13 @@ struct StudioEditorPlayhead: View {
                 .frame(width: 2, height: max(0, height))
             Circle()
                 .fill(color)
-                .frame(width: 8, height: 8)
-                .offset(x: -3, y: -3)
-                .shadow(color: color.opacity(0.3), radius: 3, x: 0, y: 1)
+                .frame(width: 16, height: 16)
+                .overlay(
+                    Circle()
+                        .stroke(DesignSystem.Colors.backgroundSecondary, lineWidth: 2)
+                )
+                .offset(x: -7, y: -7)
+                .shadow(color: color.opacity(0.35), radius: 4, x: 0, y: 1)
         }
         .offset(x: x, y: 0)
         .allowsHitTesting(false)
@@ -1455,6 +1459,9 @@ struct StudioTrackEditorView: View {
                 barSectionInfos: barSectionInfos,
                 currentBeat: playback.currentBeat,
                 isPlaying: playback.isPlaying,
+                onSeek: { beat in
+                    playback.seek(to: beat)
+                },
                 style: style,
                 onNotesChanged: onNotesChanged
             )
@@ -1468,6 +1475,9 @@ struct StudioTrackEditorView: View {
                 barSectionInfos: barSectionInfos,
                 currentBeat: playback.currentBeat,
                 isPlaying: playback.isPlaying,
+                onSeek: { beat in
+                    playback.seek(to: beat)
+                },
                 style: style,
                 onNotesChanged: onNotesChanged
             )
@@ -2235,16 +2245,20 @@ struct StudioNoteEditor: View {
     let barSectionInfos: [StudioBarSectionInfo]
     let currentBeat: Double
     let isPlaying: Bool
+    let onSeek: (Double) -> Void
     let style: StudioStyle?
     let onNotesChanged: () -> Void
 
     @Environment(\.modelContext) private var modelContext
     @State private var selectedNoteId: UUID?
     @State private var defaultDuration: Double = 1.0
+    @State private var isScrubbingPlayhead = false
+    @State private var playheadScrubBeat: Double = 0
+    @State private var playheadDragStartBeat: Double = 0
 
     private let stepsPerBeat = 4
     private let barRulerHeight: CGFloat = 34
-    private let pitchColumnWidth: CGFloat = 52
+    private let pitchColumnWidth: CGFloat = 30
     private let cellWidth: CGFloat = 28
     private let cellHeight: CGFloat = 26
     private let durationOptions: [Double] = [0.25, 0.5, 1, 2, 4]
@@ -2313,16 +2327,64 @@ struct StudioNoteEditor: View {
         Double(max(1, totalBars * beatsPerBar))
     }
 
+    private var displayedBeat: Double {
+        isScrubbingPlayhead ? playheadScrubBeat : currentBeat
+    }
+
     private var shouldShowPlayhead: Bool {
-        isPlaying || currentBeat > 0.0001
+        true
+    }
+
+    private var gridWidth: CGFloat {
+        CGFloat(totalSteps) * cellWidth
     }
 
     private var playheadX: CGFloat {
-        let width = CGFloat(totalSteps) * cellWidth
+        let width = gridWidth
         guard width > 0 else { return 0 }
-        let clampedBeat = min(max(currentBeat, 0), timelineBeats)
+        let clampedBeat = clampedBeatValue(displayedBeat)
         let x = CGFloat(clampedBeat / timelineBeats) * width
         return min(max(0, x), max(0, width - 2))
+    }
+
+    private var playheadDragGesture: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                if !isScrubbingPlayhead {
+                    isScrubbingPlayhead = true
+                    playheadDragStartBeat = displayedBeat
+                    playheadScrubBeat = displayedBeat
+                }
+                let deltaBeats = Double(value.translation.width / max(gridWidth, 1)) * timelineBeats
+                playheadScrubBeat = clampedBeatValue(playheadDragStartBeat + deltaBeats)
+            }
+            .onEnded { _ in
+                let targetBeat = clampedBeatValue(playheadScrubBeat)
+                isScrubbingPlayhead = false
+                onSeek(targetBeat)
+            }
+    }
+
+    private func rulerScrubGesture(width: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .local)
+            .onChanged { value in
+                if !isScrubbingPlayhead {
+                    isScrubbingPlayhead = true
+                }
+                playheadScrubBeat = beat(forX: value.location.x, width: width)
+            }
+            .onEnded { value in
+                let targetBeat = beat(forX: value.location.x, width: width)
+                playheadScrubBeat = targetBeat
+                isScrubbingPlayhead = false
+                onSeek(targetBeat)
+            }
+    }
+
+    private func beat(forX x: CGFloat, width: CGFloat) -> Double {
+        let clampedX = min(max(0, x), width)
+        let ratio = Double(clampedX / max(width, 1))
+        return clampedBeatValue(ratio * timelineBeats)
     }
 
     var body: some View {
@@ -2389,7 +2451,7 @@ struct StudioNoteEditor: View {
             }
 
             ScrollView(.vertical, showsIndicators: true) {
-                HStack(alignment: .top, spacing: 8) {
+                HStack(alignment: .top, spacing: 0) {
                     VStack(alignment: .trailing, spacing: 0) {
                         Color.clear
                             .frame(height: barRulerHeight)
@@ -2410,10 +2472,12 @@ struct StudioNoteEditor: View {
                                 height: barRulerHeight
                             )
                             .frame(
-                                width: CGFloat(totalSteps) * cellWidth,
+                                width: gridWidth,
                                 height: barRulerHeight,
                                 alignment: .leading
                             )
+                            .contentShape(Rectangle())
+                            .highPriorityGesture(rulerScrubGesture(width: gridWidth))
 
                             ZStack(alignment: .topLeading) {
                                 GridBackground(
@@ -2451,10 +2515,27 @@ struct StudioNoteEditor: View {
                                         height: CGFloat(pitchRows.count) * cellHeight,
                                         color: track.instrument.color
                                     )
+
+                                    let playheadHandleWidth: CGFloat = 56
+                                    Rectangle()
+                                        .fill(Color.clear)
+                                        .frame(
+                                            width: playheadHandleWidth,
+                                            height: CGFloat(pitchRows.count) * cellHeight + 24
+                                        )
+                                        .offset(
+                                            x: min(
+                                                max(playheadX - playheadHandleWidth / 2, 0),
+                                                max(0, gridWidth - playheadHandleWidth)
+                                            ),
+                                            y: -12
+                                        )
+                                        .contentShape(Rectangle())
+                                        .highPriorityGesture(playheadDragGesture)
                                 }
                             }
                             .frame(
-                                width: CGFloat(totalSteps) * cellWidth,
+                                width: gridWidth,
                                 height: CGFloat(pitchRows.count) * cellHeight
                             )
                             .contentShape(Rectangle())
@@ -2463,8 +2544,10 @@ struct StudioNoteEditor: View {
                             }
                         }
                     }
+                    .scrollDisabled(isScrubbingPlayhead)
                 }
             }
+            .scrollDisabled(isScrubbingPlayhead)
             .frame(height: gridHeight + barRulerHeight + 8)
 
             NoteVelocityLegend(color: track.instrument.color)
@@ -2679,6 +2762,10 @@ struct StudioNoteEditor: View {
         }
         return min(max(adjusted, range.lowerBound), range.upperBound)
     }
+
+    private func clampedBeatValue(_ beat: Double) -> Double {
+        min(max(0, beat), timelineBeats)
+    }
 }
 
 struct PitchRow: Identifiable {
@@ -2737,6 +2824,8 @@ struct PitchLabelColumn: View {
                 Text(row.label)
                     .font(DesignSystem.Typography.caption2)
                     .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
                     .frame(height: rowHeight)
                     .frame(width: columnWidth, alignment: .trailing)
             }

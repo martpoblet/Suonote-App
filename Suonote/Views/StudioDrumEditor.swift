@@ -12,6 +12,7 @@ struct StudioDrumEditor: View {
     let barSectionInfos: [StudioBarSectionInfo]
     let currentBeat: Double
     let isPlaying: Bool
+    let onSeek: (Double) -> Void
     let style: StudioStyle?
     let onNotesChanged: () -> Void
 
@@ -19,6 +20,9 @@ struct StudioDrumEditor: View {
     @State private var copiedBarIndex: Int?
     @State private var cachedNotesByPitch: [Int: [Int: StudioNote]] = [:]
     @State private var cachedNotesSignature: Int = 0
+    @State private var isScrubbingPlayhead = false
+    @State private var playheadScrubBeat: Double = 0
+    @State private var playheadDragStartBeat: Double = 0
 
     private let baseCellWidth: CGFloat = 26
     private let cellHeight: CGFloat = 26
@@ -55,14 +59,58 @@ struct StudioDrumEditor: View {
         Double(max(1, totalBars * beatsPerBar))
     }
 
+    private var displayedBeat: Double {
+        isScrubbingPlayhead ? playheadScrubBeat : currentBeat
+    }
+
     private var shouldShowPlayhead: Bool {
-        isPlaying || currentBeat > 0.0001
+        true
     }
 
     private func playheadX(contentWidth: CGFloat) -> CGFloat {
-        let clampedBeat = min(max(currentBeat, 0), timelineBeats)
+        let clampedBeat = clampedBeatValue(displayedBeat)
         let x = CGFloat(clampedBeat / timelineBeats) * contentWidth
         return min(max(0, x), max(0, contentWidth - 2))
+    }
+
+    private func playheadDragGesture(contentWidth: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                if !isScrubbingPlayhead {
+                    isScrubbingPlayhead = true
+                    playheadDragStartBeat = displayedBeat
+                    playheadScrubBeat = displayedBeat
+                }
+                let deltaBeats = Double(value.translation.width / max(contentWidth, 1)) * timelineBeats
+                playheadScrubBeat = clampedBeatValue(playheadDragStartBeat + deltaBeats)
+            }
+            .onEnded { _ in
+                let targetBeat = clampedBeatValue(playheadScrubBeat)
+                isScrubbingPlayhead = false
+                onSeek(targetBeat)
+            }
+    }
+
+    private func rulerScrubGesture(contentWidth: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .local)
+            .onChanged { value in
+                if !isScrubbingPlayhead {
+                    isScrubbingPlayhead = true
+                }
+                playheadScrubBeat = beat(forX: value.location.x, width: contentWidth)
+            }
+            .onEnded { value in
+                let targetBeat = beat(forX: value.location.x, width: contentWidth)
+                playheadScrubBeat = targetBeat
+                isScrubbingPlayhead = false
+                onSeek(targetBeat)
+            }
+    }
+
+    private func beat(forX x: CGFloat, width: CGFloat) -> Double {
+        let clampedX = min(max(0, x), width)
+        let ratio = Double(clampedX / max(width, 1))
+        return clampedBeatValue(ratio * timelineBeats)
     }
 
     private var barInfoByIndex: [Int: StudioBarSectionInfo] {
@@ -215,6 +263,8 @@ struct StudioDrumEditor: View {
                                 barInfos: normalizedBarInfos
                             )
                             .frame(width: contentWidth, height: barRulerHeight, alignment: .leading)
+                            .contentShape(Rectangle())
+                            .highPriorityGesture(rulerScrubGesture(contentWidth: contentWidth))
 
                             ZStack(alignment: .topLeading) {
                                 DrumGridBackground(
@@ -256,11 +306,29 @@ struct StudioDrumEditor: View {
                                         height: gridHeight,
                                         color: track.instrument.color
                                     )
+
+                                    let playheadHandleWidth: CGFloat = 56
+                                    Rectangle()
+                                        .fill(Color.clear)
+                                        .frame(
+                                            width: playheadHandleWidth,
+                                            height: gridHeight + 24
+                                        )
+                                        .offset(
+                                            x: min(
+                                                max(playheadX(contentWidth: contentWidth) - playheadHandleWidth / 2, 0),
+                                                max(0, contentWidth - playheadHandleWidth)
+                                            ),
+                                            y: -12
+                                        )
+                                        .contentShape(Rectangle())
+                                        .highPriorityGesture(playheadDragGesture(contentWidth: contentWidth))
                                 }
                             }
                             .frame(width: contentWidth, height: gridHeight, alignment: .topLeading)
                         }
                     }
+                    .scrollDisabled(isScrubbingPlayhead)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .layoutPriority(1)
                 }
@@ -605,6 +673,10 @@ struct StudioDrumEditor: View {
             map[note.pitch, default: [:]][step] = note
         }
         return map
+    }
+
+    private func clampedBeatValue(_ beat: Double) -> Double {
+        min(max(0, beat), timelineBeats)
     }
 }
 

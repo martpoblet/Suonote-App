@@ -606,12 +606,15 @@ final class StudioPlaybackEngine: ObservableObject {
 
     private func startPlayheadTimer() {
         stopPlayheadTimer()
-        playheadTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
             guard let strongSelf = self else { return }
             Task { @MainActor in
                 strongSelf.handlePlayheadTick()
             }
         }
+        timer.tolerance = 0.02
+        RunLoop.main.add(timer, forMode: .common)
+        playheadTimer = timer
     }
 
     private func stopPlayheadTimer() {
