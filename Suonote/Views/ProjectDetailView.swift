@@ -275,7 +275,7 @@ struct EditProjectSheet: View {
                     // Title
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Project Title")
-                            .font(.subheadline)
+                            .font(DesignSystem.Typography.subheadline)
                             .foregroundStyle(DesignSystem.Colors.textPrimary)
                         
                         TextField("Project name", text: $tempTitle)
@@ -296,7 +296,7 @@ struct EditProjectSheet: View {
                     // Status
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Status")
-                            .font(.subheadline)
+                            .font(DesignSystem.Typography.subheadline)
                             .foregroundStyle(DesignSystem.Colors.textPrimary)
                         
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 12) {
@@ -308,7 +308,7 @@ struct EditProjectSheet: View {
                                         Image(systemName: status.icon)
                                             .font(DesignSystem.Typography.caption)
                                         Text(status.rawValue)
-                                            .font(.subheadline)
+                                            .font(DesignSystem.Typography.subheadline)
                                     }
                                     .foregroundStyle(tempStatus == status ? DesignSystem.Colors.textSecondary : DesignSystem.Colors.textSecondary)
                                     .frame(maxWidth: .infinity)
@@ -332,7 +332,7 @@ struct EditProjectSheet: View {
                     // Time Signature
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Time Signature")
-                            .font(.subheadline)
+                            .font(DesignSystem.Typography.subheadline)
                             .foregroundStyle(DesignSystem.Colors.textPrimary)
                         
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 12) {
@@ -342,7 +342,7 @@ struct EditProjectSheet: View {
                                     tempTimeBottom = signature.bottom
                                 } label: {
                                     Text(signature.rawValue)
-                                        .font(.headline)
+                                        .font(DesignSystem.Typography.headline)
                                         .foregroundStyle(DesignSystem.Colors.textSecondary)
                                         .frame(maxWidth: .infinity)
                                         .frame(height: 44)
@@ -363,7 +363,7 @@ struct EditProjectSheet: View {
                     // Key
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Key")
-                            .font(.subheadline)
+                            .font(DesignSystem.Typography.subheadline)
                             .foregroundStyle(DesignSystem.Colors.textPrimary)
                         
                         // Root note
@@ -391,7 +391,7 @@ struct EditProjectSheet: View {
                                 tempKeyMode = .major
                             } label: {
                                 Text("Major")
-                                    .font(.subheadline)
+                                    .font(DesignSystem.Typography.subheadline)
                                     .foregroundStyle(tempKeyMode == .major ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
                                     .frame(maxWidth: .infinity)
                                     .frame(height: 44)
@@ -405,7 +405,7 @@ struct EditProjectSheet: View {
                                 tempKeyMode = .minor
                             } label: {
                                 Text("Minor")
-                                    .font(.subheadline)
+                                    .font(DesignSystem.Typography.subheadline)
                                     .foregroundStyle(tempKeyMode == .minor ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
                                     .frame(maxWidth: .infinity)
                                     .frame(height: 44)
@@ -420,7 +420,7 @@ struct EditProjectSheet: View {
                     // Tags
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Tags")
-                            .font(.subheadline)
+                            .font(DesignSystem.Typography.subheadline)
                             .foregroundStyle(DesignSystem.Colors.textPrimary)
                         
                         // Current tags
@@ -739,7 +739,7 @@ struct BPMSelector: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Tempo")
-                .font(.subheadline)
+                .font(DesignSystem.Typography.subheadline)
                 .foregroundStyle(DesignSystem.Colors.textPrimary)
             
             VStack(spacing: 16) {

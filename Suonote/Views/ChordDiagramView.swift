@@ -154,14 +154,14 @@ private struct GuitarChordDiagram: View {
                         if let pos = fingerPositions[string] {
                             if pos == 0 {
                                 Text("O")
-                                    .font(.caption)
+                                    .font(DesignSystem.Typography.caption)
                                     .foregroundStyle(accentColor)
                             } else {
                                 Text("")
                             }
                         } else {
                             Text("X")
-                                .font(.caption)
+                                .font(DesignSystem.Typography.caption)
                                 .foregroundStyle(DesignSystem.Colors.error)
                         }
                         if string < 5 {
@@ -274,7 +274,7 @@ private struct ChordNoteChips: View {
     var body: some View {
         HStack(spacing: 8) {
             Text(display)
-                .font(.headline)
+                .font(DesignSystem.Typography.headline)
                 .foregroundStyle(DesignSystem.Colors.textPrimary)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)

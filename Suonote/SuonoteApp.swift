@@ -25,6 +25,25 @@ struct SuonoteApp: App {
         UINavigationBar.appearance().scrollEdgeAppearance = appearance
         UINavigationBar.appearance().tintColor = UIColor(DesignSystem.Colors.primaryDark)
         UIBarButtonItem.appearance().tintColor = UIColor(DesignSystem.Colors.primaryDark)
+
+        // Segmented controls (Picker segmented style) should always use app font.
+        let segmentedAppearance = UISegmentedControl.appearance()
+        segmentedAppearance.setTitleTextAttributes(
+            [
+                .font: UIFont.manrope(11),
+                .foregroundColor: UIColor(DesignSystem.Colors.textSecondary)
+            ],
+            for: .normal
+        )
+        segmentedAppearance.setTitleTextAttributes(
+            [
+                .font: UIFont.manrope(11),
+                .foregroundColor: UIColor(DesignSystem.Colors.textPrimary)
+            ],
+            for: .selected
+        )
+        segmentedAppearance.backgroundColor = UIColor(DesignSystem.Colors.surfaceSecondary)
+        segmentedAppearance.selectedSegmentTintColor = UIColor(DesignSystem.Colors.backgroundSecondary)
         
         // Configure tab bar appearance
         let tabAppearance = UITabBarAppearance()
@@ -103,6 +122,7 @@ struct SuonoteApp: App {
     var body: some Scene {
         WindowGroup {
             SplashContainerView()
+                .font(DesignSystem.Typography.body)
                 .alert("Database Reset", isPresented: $showMigrationAlert) {
                     Button("OK", role: .cancel) { }
                 } message: {

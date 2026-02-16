@@ -231,7 +231,7 @@ struct SliderControl: View {
                 Spacer()
                 
                 Text(String(format: format, value))
-                    .font(.subheadline.monospacedDigit())
+                    .font(DesignSystem.Typography.subheadline.monospacedDigit())
                     .foregroundStyle(DesignSystem.Colors.textSecondary)
             }
             

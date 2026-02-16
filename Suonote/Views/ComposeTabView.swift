@@ -2106,7 +2106,7 @@ struct ChordSlotButton: View {
                 )
             
             Text(text)
-                .font(.subheadline)
+                .font(DesignSystem.Typography.subheadline)
                 .foregroundStyle(isRest ? DesignSystem.Colors.textSecondary : DesignSystem.Colors.textPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
@@ -2158,7 +2158,7 @@ struct SectionCreatorView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Section Name")
-                            .font(.subheadline)
+                            .font(DesignSystem.Typography.subheadline)
                             .foregroundStyle(DesignSystem.Colors.textPrimary)
                         
                         TextField("e.g., Verse 1", text: $sectionName)
@@ -2177,7 +2177,7 @@ struct SectionCreatorView: View {
                     
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Color")
-                            .font(.subheadline)
+                            .font(DesignSystem.Typography.subheadline)
                             .foregroundStyle(DesignSystem.Colors.textPrimary)
                         
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 12) {
@@ -2309,7 +2309,7 @@ struct PresetCard: View {
                     .foregroundStyle(preset.color)
                 
                 Text(preset.name)
-                    .font(.subheadline)
+                    .font(DesignSystem.Typography.subheadline)
                     .foregroundStyle(DesignSystem.Colors.textPrimary)
             }
             .frame(maxWidth: .infinity)
@@ -2541,7 +2541,7 @@ struct ChordPaletteSheet: View {
                         addChord()
                     } label: {
                         Text(existingChord == nil ? "Add" : "Save")
-                            .font(.subheadline)
+                            .font(DesignSystem.Typography.subheadline)
                             .foregroundStyle(DesignSystem.Colors.textPrimary)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
@@ -2601,7 +2601,7 @@ struct ChordPaletteSheet: View {
                             .font(DesignSystem.Typography.title3)
                         if !showingDiagram {
                             Text("View Diagram")
-                                .font(.subheadline)
+                                .font(DesignSystem.Typography.subheadline)
                         }
                     }
                     .foregroundStyle(isRest ? DesignSystem.Colors.textSecondary : DesignSystem.Colors.textPrimary)
@@ -2634,7 +2634,7 @@ struct ChordPaletteSheet: View {
     private var noteTypeSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Note Type")
-                .font(.subheadline)
+                .font(DesignSystem.Typography.subheadline)
                 .foregroundStyle(DesignSystem.Colors.textPrimary)
 
             Picker("Note Type", selection: $isRest) {
@@ -2651,7 +2651,7 @@ struct ChordPaletteSheet: View {
                         .foregroundStyle(accentColor)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Silence")
-                            .font(.subheadline)
+                            .font(DesignSystem.Typography.subheadline)
                             .foregroundStyle(DesignSystem.Colors.textPrimary)
                         Text("No harmony will be generated during this beat range.")
                             .font(DesignSystem.Typography.caption)
@@ -2732,7 +2732,7 @@ struct ChordPaletteSheet: View {
     private var rootNoteSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Root Note")
-                .font(.subheadline)
+                .font(DesignSystem.Typography.subheadline)
                 .foregroundStyle(DesignSystem.Colors.textPrimary)
             
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 8) {
@@ -2762,7 +2762,7 @@ struct ChordPaletteSheet: View {
     private var qualitySection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Quality")
-                .font(.subheadline)
+                .font(DesignSystem.Typography.subheadline)
                 .foregroundStyle(DesignSystem.Colors.textPrimary)
             
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 8) {
@@ -2771,7 +2771,7 @@ struct ChordPaletteSheet: View {
                         selectedQuality = quality
                     } label: {
                         Text(quality.rawValue.isEmpty ? "Major" : quality.rawValue)
-                            .font(.subheadline)
+                            .font(DesignSystem.Typography.subheadline)
                             .foregroundStyle(selectedQuality == quality ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textSecondary)
                             .frame(height: 44)
                             .frame(maxWidth: .infinity)
@@ -2792,7 +2792,7 @@ struct ChordPaletteSheet: View {
     private var extensionsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Extensions (Max 2)")
-                .font(.subheadline)
+                .font(DesignSystem.Typography.subheadline)
                 .foregroundStyle(DesignSystem.Colors.textPrimary)
             
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 8) {
@@ -2835,7 +2835,7 @@ struct ChordPaletteSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Duration")
-                    .font(.subheadline)
+                    .font(DesignSystem.Typography.subheadline)
                     .foregroundStyle(DesignSystem.Colors.textPrimary)
                 
                 Spacer()
@@ -3176,7 +3176,7 @@ struct SectionEditorSheet: View {
             VStack(spacing: 24) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Section Name")
-                        .font(.subheadline)
+                        .font(DesignSystem.Typography.subheadline)
                         .foregroundStyle(DesignSystem.Colors.textPrimary)
                     
                     TextField("e.g., Verse 1", text: $tempName)
@@ -3195,7 +3195,7 @@ struct SectionEditorSheet: View {
                 
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Color")
-                        .font(.subheadline)
+                        .font(DesignSystem.Typography.subheadline)
                         .foregroundStyle(DesignSystem.Colors.textPrimary)
                     
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 12) {
@@ -3305,7 +3305,7 @@ struct KeyPickerSheet: View {
                             tempMode = .major
                         } label: {
                             Text("Major")
-                                .font(.subheadline)
+                                .font(DesignSystem.Typography.subheadline)
                                 .foregroundStyle(tempMode == .major ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 50)
@@ -3319,7 +3319,7 @@ struct KeyPickerSheet: View {
                             tempMode = .minor
                         } label: {
                             Text("Minor")
-                                .font(.subheadline)
+                                .font(DesignSystem.Typography.subheadline)
                                 .foregroundStyle(tempMode == .minor ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 50)

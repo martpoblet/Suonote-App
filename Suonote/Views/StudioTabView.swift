@@ -715,7 +715,7 @@ struct StudioEmptyState: View {
                         onPickStyle()
                     } label: {
                         Text("Pick Style")
-                            .font(.subheadline)
+                            .font(DesignSystem.Typography.subheadline)
                             .foregroundStyle(DesignSystem.Colors.textPrimary)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 10)
@@ -734,7 +734,7 @@ struct StudioEmptyState: View {
                             Image(systemName: "plus.circle.fill")
                             Text("Add Track")
                         }
-                        .font(.subheadline)
+                        .font(DesignSystem.Typography.subheadline)
                         .foregroundStyle(DesignSystem.Colors.textWhite)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 10)
@@ -1285,7 +1285,7 @@ struct StudioTrackEditorView: View {
                     .foregroundStyle(DesignSystem.Colors.textSecondary)
                 Spacer()
                 Text(valueText)
-                    .font(.caption2.monospacedDigit())
+                    .font(DesignSystem.Typography.caption2.monospacedDigit())
                     .foregroundStyle(DesignSystem.Colors.textPrimary)
             }
 
@@ -1320,7 +1320,7 @@ struct StudioTrackEditorView: View {
             // Section header with icon
             HStack(spacing: 6) {
                 Image(systemName: "waveform.badge.plus")
-                    .font(.caption)
+                    .font(DesignSystem.Typography.caption)
                     .foregroundStyle(accentColor)
                 Text("Effects")
                     .font(DesignSystem.Typography.caption.bold())
@@ -1356,9 +1356,12 @@ struct StudioTrackEditorView: View {
             VStack(spacing: 6) {
                 Picker("Preset", selection: $track.reverbPreset) {
                     ForEach(ReverbPreset.allCases) { preset in
-                        Text(preset.shortTitle).tag(preset)
+                        Text(preset.shortTitle)
+                            .font(DesignSystem.Typography.caption2)
+                            .tag(preset)
                     }
                 }
+                .font(DesignSystem.Typography.caption2)
                 .pickerStyle(.segmented)
                 .scaleEffect(x: 1, y: 0.85)
                 .frame(height: 26)
@@ -1380,9 +1383,12 @@ struct StudioTrackEditorView: View {
             VStack(spacing: 6) {
                 Picker("Sync", selection: $track.delaySyncMode) {
                     ForEach(DelaySyncMode.allCases) { mode in
-                        Text(mode.shortTitle).tag(mode)
+                        Text(mode.shortTitle)
+                            .font(DesignSystem.Typography.caption2)
+                            .tag(mode)
                     }
                 }
+                .font(DesignSystem.Typography.caption2)
                 .pickerStyle(.segmented)
                 .scaleEffect(x: 1, y: 0.85)
                 .frame(height: 26)
@@ -1427,11 +1433,11 @@ struct StudioTrackEditorView: View {
             // Header row: icon + title + toggle
             HStack(spacing: 8) {
                 Image(systemName: icon)
-                    .font(.caption2)
+                    .font(DesignSystem.Typography.caption2)
                     .foregroundStyle(isEnabled.wrappedValue ? accentColor : DesignSystem.Colors.textSecondary)
                     .frame(width: 16)
                 Text(title)
-                    .font(.caption.bold())
+                    .font(DesignSystem.Typography.caption2.weight(.semibold))
                     .foregroundStyle(isEnabled.wrappedValue ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textSecondary)
                 Spacer()
                 Toggle("", isOn: isEnabled)
@@ -1463,14 +1469,14 @@ struct StudioTrackEditorView: View {
     private func fxSlider(label: String, value: Binding<Float>, range: ClosedRange<Float>, display: String) -> some View {
         HStack(spacing: 6) {
             Text(label)
-                .font(.system(size: 10, weight: .medium))
+                .font(DesignSystem.Typography.caption2)
                 .foregroundStyle(DesignSystem.Colors.textSecondary)
                 .frame(width: 30, alignment: .leading)
             Slider(value: value, in: range)
                 .tint(accentColor)
                 .onChange(of: value.wrappedValue) { _, _ in debouncedEffectsUpdate() }
             Text(display)
-                .font(.system(size: 10).monospacedDigit())
+                .font(DesignSystem.Typography.caption2.monospacedDigit())
                 .foregroundStyle(DesignSystem.Colors.textPrimary)
                 .frame(width: 38, alignment: .trailing)
         }
@@ -1766,8 +1772,8 @@ struct StudioTrackRow: View {
                 onEffectsChange()
             } label: {
                 HStack(spacing: 4) {
-                    Image(systemName: "waveform.path.ecg").font(.caption2)
-                    Text("Reverb").font(.caption2)
+                    Image(systemName: "waveform.path.ecg").font(DesignSystem.Typography.caption2)
+                    Text("Reverb").font(DesignSystem.Typography.caption2)
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
@@ -1781,8 +1787,8 @@ struct StudioTrackRow: View {
                 onEffectsChange()
             } label: {
                 HStack(spacing: 4) {
-                    Image(systemName: "arrow.triangle.2.circlepath").font(.caption2)
-                    Text("Delay").font(.caption2)
+                    Image(systemName: "arrow.triangle.2.circlepath").font(DesignSystem.Typography.caption2)
+                    Text("Delay").font(DesignSystem.Typography.caption2)
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
@@ -1805,7 +1811,7 @@ struct StudioTrackRow: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(track.name)
-                        .font(.subheadline)
+                        .font(DesignSystem.Typography.subheadline)
                         .foregroundStyle(DesignSystem.Colors.textPrimary)
 
                     // Variant selector inline
@@ -1848,7 +1854,7 @@ struct StudioTrackRow: View {
                     onMixChange()
                 } label: {
                     Text("M")
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                         .foregroundStyle(track.isMuted ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
                         .frame(width: 26, height: 26)
                         .background(
@@ -1867,7 +1873,7 @@ struct StudioTrackRow: View {
                     onMixChange()
                 } label: {
                     Text("S")
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                         .foregroundStyle(track.isSolo ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
                         .frame(width: 26, height: 26)
                         .background(
@@ -1885,7 +1891,7 @@ struct StudioTrackRow: View {
                     onOpenEditor()
                 } label: {
                     Image(systemName: "square.and.pencil")
-                        .font(.caption)
+                        .font(DesignSystem.Typography.caption)
                         .foregroundStyle(DesignSystem.Colors.textPrimary)
                         .frame(width: 26, height: 26)
                         .background(
@@ -1909,7 +1915,7 @@ struct StudioTrackRow: View {
                     // Volume
                     HStack(spacing: 8) {
                         Image(systemName: "speaker.wave.2.fill")
-                            .font(.caption2)
+                            .font(DesignSystem.Typography.caption2)
                             .foregroundStyle(DesignSystem.Colors.textSecondary)
                             .frame(width: 16)
                         Slider(value: $track.volume, in: 0...1)
@@ -1918,7 +1924,7 @@ struct StudioTrackRow: View {
                                 debouncedMixChange()
                             }
                         Text("\(Int(track.volume * 100))%")
-                            .font(.caption2.monospacedDigit())
+                            .font(DesignSystem.Typography.caption2.monospacedDigit())
                             .foregroundStyle(DesignSystem.Colors.textPrimary)
                             .frame(width: 36, alignment: .trailing)
                     }
@@ -1926,7 +1932,7 @@ struct StudioTrackRow: View {
                     // Pan
                     HStack(spacing: 8) {
                         Image(systemName: "l.joystick.fill")
-                            .font(.caption2)
+                            .font(DesignSystem.Typography.caption2)
                             .foregroundStyle(DesignSystem.Colors.textSecondary)
                             .frame(width: 16)
                         Slider(value: $track.pan, in: -1...1)
@@ -1935,7 +1941,7 @@ struct StudioTrackRow: View {
                                 debouncedMixChange()
                             }
                         Text(panLabel)
-                            .font(.caption2.monospacedDigit())
+                            .font(DesignSystem.Typography.caption2.monospacedDigit())
                             .foregroundStyle(DesignSystem.Colors.textPrimary)
                             .frame(width: 36, alignment: .trailing)
                     }
@@ -1986,7 +1992,7 @@ struct StudioAudioTrackView: View {
             if let recording = project.recordings.first(where: { $0.id == track.audioRecordingId }) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(recording.name)
-                        .font(.subheadline)
+                        .font(DesignSystem.Typography.subheadline)
                         .foregroundStyle(DesignSystem.Colors.textPrimary)
                     Text("Starts at beat \(String(format: "%.1f", track.audioStartBeat))")
                         .font(DesignSystem.Typography.caption)
@@ -2215,7 +2221,7 @@ struct StudioNoteEditor: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.caption2)
+                .font(DesignSystem.Typography.caption2)
                 .frame(width: 24, height: 24)
                 .background(
                     Circle()
@@ -2959,11 +2965,11 @@ struct RegenerateOptionsView: View {
                             Image(systemName: "waveform")
                                 .foregroundStyle(DesignSystem.Colors.primary)
                             Text("Intensity")
-                                .font(.subheadline)
+                                .font(DesignSystem.Typography.subheadline)
                                 .foregroundStyle(DesignSystem.Colors.textPrimary)
                             Spacer()
                             Text("\(Int(intensity * 100))%")
-                                .font(.caption.monospacedDigit())
+                                .font(DesignSystem.Typography.caption.monospacedDigit())
                                 .foregroundStyle(DesignSystem.Colors.textSecondary)
                         }
                         
@@ -2991,11 +2997,11 @@ struct RegenerateOptionsView: View {
                             Image(systemName: "music.note.list")
                                 .foregroundStyle(DesignSystem.Colors.info)
                             Text("Complexity")
-                                .font(.subheadline)
+                                .font(DesignSystem.Typography.subheadline)
                                 .foregroundStyle(DesignSystem.Colors.textPrimary)
                             Spacer()
                             Text("\(Int(complexity * 100))%")
-                                .font(.caption.monospacedDigit())
+                                .font(DesignSystem.Typography.caption.monospacedDigit())
                                 .foregroundStyle(DesignSystem.Colors.textSecondary)
                         }
                         
@@ -3023,11 +3029,11 @@ struct RegenerateOptionsView: View {
                             Image(systemName: "tuningfork")
                                 .foregroundStyle(DesignSystem.Colors.warning)
                             Text("Naturalness")
-                                .font(.subheadline)
+                                .font(DesignSystem.Typography.subheadline)
                                 .foregroundStyle(DesignSystem.Colors.textPrimary)
                             Spacer()
                             Text("\(Int(naturalness * 100))%")
-                                .font(.caption.monospacedDigit())
+                                .font(DesignSystem.Typography.caption.monospacedDigit())
                                 .foregroundStyle(DesignSystem.Colors.textSecondary)
                         }
                         
@@ -3057,7 +3063,7 @@ struct RegenerateOptionsView: View {
                                     Image(systemName: "arrow.up.right.and.arrow.down.left")
                                         .foregroundStyle(DesignSystem.Colors.info)
                                     Text("Arpeggiate")
-                                        .font(.subheadline)
+                                        .font(DesignSystem.Typography.subheadline)
                                         .foregroundStyle(DesignSystem.Colors.textPrimary)
                                 }
                             }

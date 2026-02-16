@@ -753,7 +753,7 @@ struct SectionLinkSheet: View {
                                 } label: {
                                     VStack(spacing: 8) {
                                         Text(section.name)
-                                            .font(.subheadline)
+                                            .font(DesignSystem.Typography.subheadline)
                                             .foregroundStyle(DesignSystem.Colors.textPrimary)
                                         
                                         Text("\(section.bars) bars")
@@ -788,7 +788,7 @@ struct SectionLinkSheet: View {
                                         .foregroundStyle(DesignSystem.Colors.error)
                                     
                                     Text("Remove Link")
-                                        .font(.subheadline)
+                                        .font(DesignSystem.Typography.subheadline)
                                         .foregroundStyle(DesignSystem.Colors.textPrimary)
                                 }
                                 .frame(maxWidth: .infinity)

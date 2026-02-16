@@ -43,9 +43,9 @@ struct ColorBlindIndicator: View {
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: status.icon)
-                .font(.caption2)
+                .font(DesignSystem.Typography.caption2)
             Text(status.rawValue)
-                .font(.caption2)
+                .font(DesignSystem.Typography.caption2)
         }
         .foregroundStyle(status.swiftUIColor)
         .accessibilityLabel("\(status.rawValue) status")
@@ -94,7 +94,7 @@ struct AccessibleChordChip: View {
     var body: some View {
         Button(action: action) {
             Text("\(root)\(quality.rawValue)")
-                .font(.system(size: 14, weight: isSelected ? .bold : .medium))
+                .font(Font.manrope(14).weight(isSelected ? .bold : .medium))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
                 .background(

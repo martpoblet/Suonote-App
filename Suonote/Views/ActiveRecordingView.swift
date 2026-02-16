@@ -273,7 +273,7 @@ struct ActiveRecordingView: View {
                     .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: audioManager.isRecording)
                 
                 Text("RECORDING")
-                    .font(.subheadline)
+                    .font(DesignSystem.Typography.subheadline)
                     .foregroundStyle(DesignSystem.Colors.error)
                     .tracking(2)
             }

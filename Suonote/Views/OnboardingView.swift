@@ -33,11 +33,12 @@ struct OnboardingView: View {
                             .symbolEffect(.bounce, value: currentPage == index)
                         
                         Text(page.title)
-                            .font(.title.bold())
+                            .font(DesignSystem.Typography.title)
+                            .fontWeight(.bold)
                             .multilineTextAlignment(.center)
                         
                         Text(page.description)
-                            .font(.body)
+                            .font(DesignSystem.Typography.body)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 40)
@@ -59,7 +60,7 @@ struct OnboardingView: View {
                 }
             }) {
                 Text(currentPage < pages.count - 1 ? "Next" : "Get Started")
-                    .font(.headline)
+                    .font(DesignSystem.Typography.headline)
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 54)
@@ -73,7 +74,7 @@ struct OnboardingView: View {
                 Button("Skip") {
                     onComplete()
                 }
-                .font(.subheadline)
+                .font(DesignSystem.Typography.subheadline)
                 .foregroundStyle(.secondary)
                 .padding(.bottom, 24)
             } else {

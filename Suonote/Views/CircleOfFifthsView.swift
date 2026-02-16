@@ -43,7 +43,7 @@ struct CircleOfFifthsView: View {
                 
                 // Center label
                 Text("5ths")
-                    .font(.caption2)
+                    .font(DesignSystem.Typography.caption2)
                     .foregroundStyle(.secondary)
                     .position(center)
             }

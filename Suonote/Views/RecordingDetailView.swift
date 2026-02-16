@@ -124,7 +124,7 @@ struct RecordingDetailView: View {
             // Name
             VStack(alignment: .leading, spacing: 8) {
                 Text("Name")
-                    .font(.subheadline)
+                    .font(DesignSystem.Typography.subheadline)
                     .foregroundStyle(DesignSystem.Colors.textSecondary)
                 
                 HStack {
@@ -161,7 +161,7 @@ struct RecordingDetailView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Recording Type")
-                            .font(.subheadline)
+                            .font(DesignSystem.Typography.subheadline)
                             .foregroundStyle(DesignSystem.Colors.textSecondary)
                         
                         HStack(spacing: 8) {
@@ -369,7 +369,7 @@ struct RecordingDetailView: View {
                             } label: {
                                 VStack(spacing: 8) {
                                     Text(section.name)
-                                        .font(.subheadline)
+                                        .font(DesignSystem.Typography.subheadline)
                                         .lineLimit(2)
                                     
                                     Text("\(section.bars) bars")
@@ -465,7 +465,7 @@ struct EffectToggle<Content: View>: View {
                     Image(systemName: icon)
                         .foregroundStyle(color)
                     Text(title)
-                        .font(.subheadline)
+                        .font(DesignSystem.Typography.subheadline)
                         .foregroundStyle(DesignSystem.Colors.textPrimary)
                 }
             }
@@ -501,7 +501,7 @@ struct EffectSlider: View {
                     .foregroundStyle(DesignSystem.Colors.textSecondary)
                 Spacer()
                 Text(String(format: format, value))
-                    .font(.caption.monospacedDigit())
+                    .font(DesignSystem.Typography.caption.monospacedDigit())
                     .foregroundStyle(DesignSystem.Colors.textPrimary)
             }
             
