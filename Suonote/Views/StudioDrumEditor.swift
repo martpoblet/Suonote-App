@@ -10,6 +10,8 @@ struct StudioDrumEditor: View {
     let timeBottom: Int
     let totalBars: Int
     let barSectionInfos: [StudioBarSectionInfo]
+    let currentBeat: Double
+    let isPlaying: Bool
     let style: StudioStyle?
     let onNotesChanged: () -> Void
 
@@ -47,6 +49,20 @@ struct StudioDrumEditor: View {
 
     private var notesByPitch: [Int: [Int: StudioNote]] {
         cachedNotesByPitch
+    }
+
+    private var timelineBeats: Double {
+        Double(max(1, totalBars * beatsPerBar))
+    }
+
+    private var shouldShowPlayhead: Bool {
+        isPlaying || currentBeat > 0.0001
+    }
+
+    private func playheadX(contentWidth: CGFloat) -> CGFloat {
+        let clampedBeat = min(max(currentBeat, 0), timelineBeats)
+        let x = CGFloat(clampedBeat / timelineBeats) * contentWidth
+        return min(max(0, x), max(0, contentWidth - 2))
     }
 
     private var barInfoByIndex: [Int: StudioBarSectionInfo] {
@@ -232,6 +248,14 @@ struct StudioDrumEditor: View {
                                             }
                                         )
                                     }
+                                }
+
+                                if shouldShowPlayhead {
+                                    StudioEditorPlayhead(
+                                        x: playheadX(contentWidth: contentWidth),
+                                        height: gridHeight,
+                                        color: track.instrument.color
+                                    )
                                 }
                             }
                             .frame(width: contentWidth, height: gridHeight, alignment: .topLeading)

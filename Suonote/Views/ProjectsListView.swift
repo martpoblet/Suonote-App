@@ -26,7 +26,10 @@ struct ProjectsListView: View {
         if !searchText.isEmpty {
             projects = projects.filter { project in
                 project.title.localizedCaseInsensitiveContains(searchText) ||
-                project.tags.contains { $0.localizedCaseInsensitiveContains(searchText) }
+                project.tags.contains { $0.localizedCaseInsensitiveContains(searchText) } ||
+                project.sectionTemplates.contains { section in
+                    section.lyricsText.localizedCaseInsensitiveContains(searchText)
+                }
             }
         }
         

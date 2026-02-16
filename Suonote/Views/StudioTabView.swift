@@ -293,7 +293,6 @@ struct StudioTabView: View {
                 beatsPerBar: project.timeTop,
                 timeBottom: project.timeBottom,
                 style: project.studioStyle,
-                timelineSegments: timelineSegments,
                 playback: playback,
                 onNotesChanged: { needsRebuild = true },
                 onPlay: handlePlay,
@@ -964,6 +963,118 @@ struct StudioTimelineView: View {
     }
 }
 
+struct StudioEditorTransportView: View {
+    let title: String
+    let barBeatLabel: String
+    let isPlaying: Bool
+    let accentColor: Color
+    @Binding var isMetronomeEnabled: Bool
+    let onPlay: () -> Void
+    let onPause: () -> Void
+    let onStop: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title.isEmpty ? "Project" : title)
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+                    .lineLimit(1)
+                Text(barBeatLabel.uppercased())
+                    .font(DesignSystem.Typography.nano)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    .tracking(0.5)
+            }
+
+            Spacer()
+
+            HStack(spacing: 8) {
+                Button {
+                    isMetronomeEnabled.toggle()
+                } label: {
+                    Image(systemName: "metronome.fill")
+                        .font(DesignSystem.Typography.caption2)
+                        .foregroundStyle(isMetronomeEnabled ? Color.white : DesignSystem.Colors.textSecondary)
+                        .frame(width: 28, height: 28)
+                        .background(
+                            Circle()
+                                .fill(isMetronomeEnabled ? accentColor : DesignSystem.Colors.surfaceSecondary)
+                                .overlay(
+                                    Circle()
+                                        .stroke(isMetronomeEnabled ? accentColor : DesignSystem.Colors.border, lineWidth: 1)
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    onStop()
+                } label: {
+                    Image(systemName: "stop.fill")
+                        .font(DesignSystem.Typography.caption2)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
+                        .frame(width: 28, height: 28)
+                        .background(
+                            Circle()
+                                .fill(DesignSystem.Colors.surfaceSecondary)
+                                .overlay(
+                                    Circle()
+                                        .stroke(DesignSystem.Colors.border, lineWidth: 1)
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    isPlaying ? onPause() : onPlay()
+                } label: {
+                    Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                        .font(DesignSystem.Typography.title3)
+                        .foregroundStyle(DesignSystem.Colors.textWhite)
+                        .frame(width: 40, height: 40)
+                        .background(
+                            Circle()
+                                .fill(accentColor)
+                        )
+                        .shadow(color: accentColor.opacity(0.25), radius: 8, x: 0, y: 4)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(DesignSystem.Colors.surfaceSecondary)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(accentColor.opacity(0.35), lineWidth: 1)
+                )
+        )
+    }
+}
+
+struct StudioEditorPlayhead: View {
+    let x: CGFloat
+    let height: CGFloat
+    let color: Color
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Rectangle()
+                .fill(color.opacity(0.85))
+                .frame(width: 2, height: max(0, height))
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+                .offset(x: -3, y: -3)
+                .shadow(color: color.opacity(0.3), radius: 3, x: 0, y: 1)
+        }
+        .offset(x: x, y: 0)
+        .allowsHitTesting(false)
+    }
+}
+
 struct StudioTrackEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -973,7 +1084,6 @@ struct StudioTrackEditorView: View {
     let beatsPerBar: Int
     let timeBottom: Int
     let style: StudioStyle?
-    let timelineSegments: [StudioTimelineSegment]
     @ObservedObject var playback: StudioPlaybackEngine
     let onNotesChanged: () -> Void
     let onPlay: () -> Void
@@ -1025,6 +1135,17 @@ struct StudioTrackEditorView: View {
         } else {
             return "C"
         }
+    }
+
+    private var timelineBeats: Double {
+        Double(max(1, totalBars * beatsPerBar))
+    }
+
+    private var transportBarBeatLabel: String {
+        let beat = min(max(playback.currentBeat, 0), timelineBeats)
+        let barNumber = max(1, Int(beat / Double(beatsPerBar)) + 1)
+        let beatNumber = max(1, Int(beat.truncatingRemainder(dividingBy: Double(beatsPerBar))) + 1)
+        return "Bar \(barNumber) · Beat \(beatNumber)"
     }
 
     private var barSectionInfos: [StudioBarSectionInfo] {
@@ -1332,6 +1453,8 @@ struct StudioTrackEditorView: View {
                 timeBottom: timeBottom,
                 totalBars: totalBars,
                 barSectionInfos: barSectionInfos,
+                currentBeat: playback.currentBeat,
+                isPlaying: playback.isPlaying,
                 style: style,
                 onNotesChanged: onNotesChanged
             )
@@ -1343,6 +1466,8 @@ struct StudioTrackEditorView: View {
                 beatsPerBar: beatsPerBar,
                 totalBars: totalBars,
                 barSectionInfos: barSectionInfos,
+                currentBeat: playback.currentBeat,
+                isPlaying: playback.isPlaying,
                 style: style,
                 onNotesChanged: onNotesChanged
             )
@@ -1629,20 +1754,15 @@ struct StudioTrackEditorView: View {
 
     private var playbackHud: some View {
         VStack(spacing: 0) {
-            StudioTimelineView(
-                segments: timelineSegments,
-                beatsPerBar: beatsPerBar,
-                totalBars: totalBars,
-                currentBeat: playback.currentBeat,
+            StudioEditorTransportView(
+                title: project.title,
+                barBeatLabel: transportBarBeatLabel,
                 isPlaying: playback.isPlaying,
                 accentColor: accentColor,
                 isMetronomeEnabled: $playback.isMetronomeEnabled,
                 onPlay: onPlay,
                 onPause: onPause,
-                onStop: onStop,
-                onSeek: { beat in
-                    playback.seek(to: beat)
-                }
+                onStop: onStop
             )
             .padding(.horizontal, DesignSystem.Spacing.md)
             .padding(.vertical, DesignSystem.Spacing.sm)
@@ -2113,6 +2233,8 @@ struct StudioNoteEditor: View {
     let beatsPerBar: Int
     let totalBars: Int
     let barSectionInfos: [StudioBarSectionInfo]
+    let currentBeat: Double
+    let isPlaying: Bool
     let style: StudioStyle?
     let onNotesChanged: () -> Void
 
@@ -2185,6 +2307,22 @@ struct StudioNoteEditor: View {
         guard let selectedNote else { return nil }
         let bar = Int(selectedNote.startBeat / Double(beatsPerBar)) + 1
         return "\(midiNoteName(for: selectedNote.pitch)) · Bar \(bar)"
+    }
+
+    private var timelineBeats: Double {
+        Double(max(1, totalBars * beatsPerBar))
+    }
+
+    private var shouldShowPlayhead: Bool {
+        isPlaying || currentBeat > 0.0001
+    }
+
+    private var playheadX: CGFloat {
+        let width = CGFloat(totalSteps) * cellWidth
+        guard width > 0 else { return 0 }
+        let clampedBeat = min(max(currentBeat, 0), timelineBeats)
+        let x = CGFloat(clampedBeat / timelineBeats) * width
+        return min(max(0, x), max(0, width - 2))
     }
 
     var body: some View {
@@ -2305,6 +2443,14 @@ struct StudioNoteEditor: View {
                                             onNotesChanged: onNotesChanged
                                         )
                                     }
+                                }
+
+                                if shouldShowPlayhead {
+                                    StudioEditorPlayhead(
+                                        x: playheadX,
+                                        height: CGFloat(pitchRows.count) * cellHeight,
+                                        color: track.instrument.color
+                                    )
                                 }
                             }
                             .frame(
