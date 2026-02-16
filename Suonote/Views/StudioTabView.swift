@@ -774,6 +774,15 @@ struct StudioTimelineSegment: Identifiable {
     }
 }
 
+struct StudioBarSectionInfo: Identifiable {
+    let barIndex: Int
+    let sectionLabel: String
+    let sectionColor: Color
+    let chordLabel: String?
+
+    var id: Int { barIndex }
+}
+
 struct StudioTimelineView: View {
     let segments: [StudioTimelineSegment]
     let beatsPerBar: Int
@@ -1018,6 +1027,76 @@ struct StudioTrackEditorView: View {
         }
     }
 
+    private var barSectionInfos: [StudioBarSectionInfo] {
+        let orderedItems = project.arrangementItems.sorted { $0.orderIndex < $1.orderIndex }
+        var infos: [StudioBarSectionInfo] = []
+        var globalBar = 0
+
+        for item in orderedItems {
+            guard let section = item.sectionTemplate else { continue }
+            let bars = max(1, section.bars)
+            let sectionLabel = item.labelOverride?.isEmpty == false ? item.labelOverride! : section.name
+            let chordsByBar = Dictionary(grouping: section.chordEvents, by: \.barIndex)
+
+            for localBar in 0..<bars {
+                let chords = (chordsByBar[localBar] ?? []).sorted { lhs, rhs in
+                    if lhs.beatOffset != rhs.beatOffset { return lhs.beatOffset < rhs.beatOffset }
+                    return lhs.id.uuidString < rhs.id.uuidString
+                }
+                infos.append(
+                    StudioBarSectionInfo(
+                        barIndex: globalBar + localBar,
+                        sectionLabel: sectionLabel,
+                        sectionColor: section.color,
+                        chordLabel: chordSummary(for: chords)
+                    )
+                )
+            }
+
+            globalBar += bars
+        }
+
+        if infos.isEmpty {
+            infos = (0..<max(1, totalBars)).map { index in
+                StudioBarSectionInfo(
+                    barIndex: index,
+                    sectionLabel: "Song",
+                    sectionColor: accentColor,
+                    chordLabel: nil
+                )
+            }
+        }
+
+        return infos
+    }
+
+    private func chordSummary(for chords: [ChordEvent]) -> String? {
+        let symbols = chords.map(chordDisplayText(for:))
+        guard !symbols.isEmpty else { return nil }
+        let preview = Array(symbols.prefix(2)).joined(separator: " · ")
+        if symbols.count > 2 {
+            return "\(preview) +"
+        }
+        return preview
+    }
+
+    private func chordDisplayText(for chord: ChordEvent) -> String {
+        if !chord.display.isEmpty {
+            return chord.display
+        }
+        if chord.isRest {
+            return "Rest"
+        }
+        var text = chord.root + chord.quality.symbol
+        if !chord.extensions.isEmpty {
+            text += chord.extensions.joined()
+        }
+        if let slash = chord.slashRoot, !slash.isEmpty {
+            text += "/\(slash)"
+        }
+        return text
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -1252,6 +1331,7 @@ struct StudioTrackEditorView: View {
                 beatsPerBar: beatsPerBar,
                 timeBottom: timeBottom,
                 totalBars: totalBars,
+                barSectionInfos: barSectionInfos,
                 style: style,
                 onNotesChanged: onNotesChanged
             )
@@ -1262,6 +1342,7 @@ struct StudioTrackEditorView: View {
                 track: track,
                 beatsPerBar: beatsPerBar,
                 totalBars: totalBars,
+                barSectionInfos: barSectionInfos,
                 style: style,
                 onNotesChanged: onNotesChanged
             )
@@ -2031,6 +2112,7 @@ struct StudioNoteEditor: View {
     @Bindable var track: StudioTrack
     let beatsPerBar: Int
     let totalBars: Int
+    let barSectionInfos: [StudioBarSectionInfo]
     let style: StudioStyle?
     let onNotesChanged: () -> Void
 
@@ -2039,6 +2121,8 @@ struct StudioNoteEditor: View {
     @State private var defaultDuration: Double = 1.0
 
     private let stepsPerBeat = 4
+    private let barRulerHeight: CGFloat = 34
+    private let pitchColumnWidth: CGFloat = 52
     private let cellWidth: CGFloat = 28
     private let cellHeight: CGFloat = 26
     private let durationOptions: [Double] = [0.25, 0.5, 1, 2, 4]
@@ -2075,12 +2159,45 @@ struct StudioNoteEditor: View {
         return track.notes.first { $0.id == selectedNoteId }
     }
 
+    private var stepsPerBar: Int {
+        beatsPerBar * stepsPerBeat
+    }
+
+    private var barInfoByIndex: [Int: StudioBarSectionInfo] {
+        Dictionary(uniqueKeysWithValues: barSectionInfos.map { ($0.barIndex, $0) })
+    }
+
+    private var normalizedBarInfos: [StudioBarSectionInfo] {
+        (0..<max(1, totalBars)).map { bar in
+            if let info = barInfoByIndex[bar] {
+                return info
+            }
+            return StudioBarSectionInfo(
+                barIndex: bar,
+                sectionLabel: "Song",
+                sectionColor: track.instrument.color,
+                chordLabel: nil
+            )
+        }
+    }
+
+    private var selectedNoteSummary: String? {
+        guard let selectedNote else { return nil }
+        let bar = Int(selectedNote.startBeat / Double(beatsPerBar)) + 1
+        return "\(midiNoteName(for: selectedNote.pitch)) · Bar \(bar)"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center, spacing: 12) {
-                Text("Note Editor")
-                    .font(DesignSystem.Typography.headline)
-                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Note Editor")
+                        .font(DesignSystem.Typography.headline)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
+                    Text("Tap to add · Double tap to delete · Hold note for velocity")
+                        .font(DesignSystem.Typography.caption2)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                }
 
                 Spacer()
 
@@ -2114,50 +2231,97 @@ struct StudioNoteEditor: View {
                 octaveControl
             }
 
+            if let summary = selectedNoteSummary, let selectedNote {
+                HStack(spacing: 8) {
+                    Image(systemName: "music.note")
+                        .font(DesignSystem.Typography.caption2)
+                    Text(summary)
+                        .font(DesignSystem.Typography.caption2)
+                    Spacer()
+                    Text("Vel \(selectedNote.velocity)")
+                        .font(DesignSystem.Typography.caption2.monospacedDigit())
+                }
+                .foregroundStyle(DesignSystem.Colors.textSecondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule()
+                        .fill(track.instrument.color.opacity(0.12))
+                )
+            }
+
             ScrollView(.vertical, showsIndicators: true) {
                 HStack(alignment: .top, spacing: 8) {
-                    PitchLabelColumn(rows: pitchRows, rowHeight: cellHeight)
+                    VStack(alignment: .trailing, spacing: 0) {
+                        Color.clear
+                            .frame(height: barRulerHeight)
+                        PitchLabelColumn(
+                            rows: pitchRows,
+                            rowHeight: cellHeight,
+                            columnWidth: pitchColumnWidth
+                        )
+                    }
+                    .frame(width: pitchColumnWidth, alignment: .trailing)
 
                     ScrollView(.horizontal, showsIndicators: false) {
-                        ZStack(alignment: .topLeading) {
-                            GridBackground(
-                                rows: pitchRows.count,
-                                columns: totalSteps,
-                                beatsPerBar: beatsPerBar,
-                                stepsPerBeat: stepsPerBeat,
+                        VStack(alignment: .leading, spacing: 8) {
+                            StudioNoteBarRuler(
+                                barInfos: normalizedBarInfos,
+                                stepsPerBar: stepsPerBar,
                                 cellWidth: cellWidth,
-                                cellHeight: cellHeight
+                                height: barRulerHeight
+                            )
+                            .frame(
+                                width: CGFloat(totalSteps) * cellWidth,
+                                height: barRulerHeight,
+                                alignment: .leading
                             )
 
-                            ForEach(track.notes, id: \.id) { note in
-                                if let rowIndex = pitchRowIndexByPitch[note.pitch] {
-                                    StudioNoteBlock(
-                                        note: note,
-                                        rowIndex: rowIndex,
-                                        stepLength: stepLength,
-                                        cellWidth: cellWidth,
-                                        cellHeight: cellHeight,
-                                        maxBeats: Double(totalBars * beatsPerBar),
-                                        color: track.instrument.color,
-                                        isSelected: selectedNoteId == note.id,
-                                        onSelect: { selectedNoteId = note.id },
-                                        onNotesChanged: onNotesChanged
-                                    )
+                            ZStack(alignment: .topLeading) {
+                                GridBackground(
+                                    rows: pitchRows.count,
+                                    columns: totalSteps,
+                                    beatsPerBar: beatsPerBar,
+                                    stepsPerBeat: stepsPerBeat,
+                                    cellWidth: cellWidth,
+                                    cellHeight: cellHeight,
+                                    barInfos: normalizedBarInfos
+                                )
+
+                                ForEach(track.notes, id: \.id) { note in
+                                    if let rowIndex = pitchRowIndexByPitch[note.pitch] {
+                                        StudioNoteBlock(
+                                            note: note,
+                                            rowIndex: rowIndex,
+                                            stepLength: stepLength,
+                                            cellWidth: cellWidth,
+                                            cellHeight: cellHeight,
+                                            maxBeats: Double(totalBars * beatsPerBar),
+                                            color: track.instrument.color,
+                                            isSelected: selectedNoteId == note.id,
+                                            onSelect: { selectedNoteId = note.id },
+                                            onDelete: { deleteNote(note) },
+                                            onCycleVelocity: { cycleVelocity(for: note) },
+                                            onNotesChanged: onNotesChanged
+                                        )
+                                    }
                                 }
                             }
-                        }
-                        .frame(
-                            width: CGFloat(totalSteps) * cellWidth,
-                            height: CGFloat(pitchRows.count) * cellHeight
-                        )
-                        .contentShape(Rectangle())
-                        .onTapGesture(count: 1, coordinateSpace: .local) { location in
-                            handleGridTap(location: location)
+                            .frame(
+                                width: CGFloat(totalSteps) * cellWidth,
+                                height: CGFloat(pitchRows.count) * cellHeight
+                            )
+                            .contentShape(Rectangle())
+                            .onTapGesture(count: 1, coordinateSpace: .local) { location in
+                                handleGridTap(location: location)
+                            }
                         }
                     }
                 }
             }
-            .frame(height: gridHeight)
+            .frame(height: gridHeight + barRulerHeight + 8)
+
+            NoteVelocityLegend(color: track.instrument.color)
 
             if let note = selectedNote {
                 NoteInspector(
@@ -2312,6 +2476,25 @@ struct StudioNoteEditor: View {
         onNotesChanged()
     }
 
+    private func cycleVelocity(for note: StudioNote) {
+        note.velocity = nextVelocity(for: note.velocity)
+        selectedNoteId = note.id
+        onNotesChanged()
+    }
+
+    private func nextVelocity(for current: Int) -> Int {
+        if current >= 108 { return 56 }   // ghost
+        if current <= 64 { return 92 }    // normal
+        return 120                        // accent
+    }
+
+    private func midiNoteName(for midi: Int) -> String {
+        let names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+        let name = names[(midi % 12 + 12) % 12]
+        let octave = (midi / 12) - 1
+        return "\(name)\(octave)"
+    }
+
     private func maxDuration(for note: StudioNote) -> Double {
         let timelineBeats = Double(totalBars * beatsPerBar)
         return max(stepLength, timelineBeats - note.startBeat)
@@ -2400,6 +2583,7 @@ struct PitchRow: Identifiable {
 struct PitchLabelColumn: View {
     let rows: [PitchRow]
     let rowHeight: CGFloat
+    var columnWidth: CGFloat = 42
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 0) {
@@ -2408,7 +2592,7 @@ struct PitchLabelColumn: View {
                     .font(DesignSystem.Typography.caption2)
                     .foregroundStyle(DesignSystem.Colors.textSecondary)
                     .frame(height: rowHeight)
-                    .frame(width: 42, alignment: .trailing)
+                    .frame(width: columnWidth, alignment: .trailing)
             }
         }
     }
@@ -2424,6 +2608,8 @@ struct StudioNoteBlock: View {
     let color: Color
     let isSelected: Bool
     let onSelect: () -> Void
+    let onDelete: () -> Void
+    let onCycleVelocity: () -> Void
     let onNotesChanged: () -> Void
 
     @State private var resizeStartDuration: Double = 0
@@ -2441,14 +2627,35 @@ struct StudioNoteBlock: View {
         CGFloat(rowIndex) * cellHeight
     }
 
+    private var intensity: Double {
+        if note.velocity >= 108 { return 0.95 }
+        if note.velocity <= 64 { return 0.38 }
+        return 0.72
+    }
+
     var body: some View {
         ZStack(alignment: .trailing) {
             RoundedRectangle(cornerRadius: 6)
-                .fill(color.opacity(0.8))
+                .fill(color.opacity(intensity))
                 .overlay(
                     RoundedRectangle(cornerRadius: 6)
                         .stroke(isSelected ? DesignSystem.Colors.backgroundSecondary : Color.clear, lineWidth: 2)
                 )
+                .overlay(alignment: .leading) {
+                    if width > cellWidth * 1.4 {
+                        Text("\(note.velocity)")
+                            .font(DesignSystem.Typography.nano.monospacedDigit())
+                            .foregroundStyle(DesignSystem.Colors.backgroundSecondary.opacity(0.92))
+                            .padding(.leading, 4)
+                    }
+                }
+                .overlay(alignment: .center) {
+                    if note.velocity <= 64 {
+                        Circle()
+                            .fill(DesignSystem.Colors.backgroundSecondary)
+                            .frame(width: 4, height: 4)
+                    }
+                }
 
             Rectangle()
                 .fill(DesignSystem.Colors.textPrimary.opacity(0.45))
@@ -2477,7 +2684,24 @@ struct StudioNoteBlock: View {
         .offset(x: x, y: y + 2)
         .contentShape(Rectangle())
         .onTapGesture(perform: onSelect)
+        .onTapGesture(count: 2, perform: onDelete)
+        .onLongPressGesture(minimumDuration: 0.25, perform: onCycleVelocity)
+        .contextMenu {
+            Button {
+                onCycleVelocity()
+            } label: {
+                Label("Cycle Velocity", systemImage: "waveform.path.ecg")
+            }
+            Button(role: .destructive) {
+                onDelete()
+            } label: {
+                Label("Delete Note", systemImage: "trash.fill")
+            }
+        }
         .onChange(of: note.duration) { _, _ in
+            onNotesChanged()
+        }
+        .onChange(of: note.velocity) { _, _ in
             onNotesChanged()
         }
     }
@@ -2496,9 +2720,26 @@ struct GridBackground: View {
     let stepsPerBeat: Int
     let cellWidth: CGFloat
     let cellHeight: CGFloat
+    let barInfos: [StudioBarSectionInfo]
 
     var body: some View {
+        let stepsPerBar = max(1, beatsPerBar * stepsPerBeat)
+        let totalBars = max(1, columns / stepsPerBar)
+        let infoByBar = Dictionary(uniqueKeysWithValues: barInfos.map { ($0.barIndex, $0) })
+
         Canvas { context, size in
+            // Section tint blocks across bars.
+            for bar in 0..<totalBars {
+                let x = CGFloat(bar * stepsPerBar) * cellWidth
+                let width = CGFloat(stepsPerBar) * cellWidth
+                let info = infoByBar[bar]
+                let fillColor = (info?.sectionColor ?? SectionColor.purple.color).opacity(bar.isMultiple(of: 2) ? 0.08 : 0.04)
+                context.fill(
+                    Path(CGRect(x: x, y: 0, width: width, height: size.height)),
+                    with: .color(fillColor)
+                )
+            }
+
             var gridPath = Path()
             for column in 0...columns {
                 let x = CGFloat(column) * cellWidth
@@ -2513,18 +2754,79 @@ struct GridBackground: View {
             context.stroke(gridPath, with: .color(DesignSystem.Colors.border.opacity(0.6)), lineWidth: 0.5)
 
             var barPath = Path()
-            let stepsPerBar = beatsPerBar * stepsPerBeat
             for bar in 0...max(0, columns / stepsPerBar) {
                 let x = CGFloat(bar * stepsPerBar) * cellWidth
                 barPath.move(to: CGPoint(x: x, y: 0))
                 barPath.addLine(to: CGPoint(x: x, y: size.height))
             }
-            context.stroke(barPath, with: .color(DesignSystem.Colors.borderActive), lineWidth: 1)
+            context.stroke(barPath, with: .color(DesignSystem.Colors.borderActive), lineWidth: 1.25)
         }
         .frame(
             width: CGFloat(columns) * cellWidth,
             height: CGFloat(rows) * cellHeight
         )
+    }
+}
+
+struct StudioNoteBarRuler: View {
+    let barInfos: [StudioBarSectionInfo]
+    let stepsPerBar: Int
+    let cellWidth: CGFloat
+    let height: CGFloat
+
+    var body: some View {
+        let barWidth = CGFloat(max(1, stepsPerBar)) * cellWidth
+
+        HStack(spacing: 0) {
+            ForEach(barInfos) { info in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Bar \(info.barIndex + 1)")
+                        .font(DesignSystem.Typography.caption2)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    Text(info.chordLabel ?? info.sectionLabel)
+                        .font(DesignSystem.Typography.nano)
+                        .foregroundStyle(info.sectionColor)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+                .frame(width: barWidth, height: height, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(info.sectionColor.opacity(0.14))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(info.sectionColor.opacity(0.35), lineWidth: 1)
+                        )
+                )
+            }
+        }
+    }
+}
+
+struct NoteVelocityLegend: View {
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 12) {
+            legendItem(title: "Ghost", opacity: 0.38)
+            legendItem(title: "Normal", opacity: 0.72)
+            legendItem(title: "Accent", opacity: 0.95)
+            Spacer()
+            Text("Long press note to cycle")
+        }
+        .font(DesignSystem.Typography.caption2)
+        .foregroundStyle(DesignSystem.Colors.textSecondary)
+    }
+
+    private func legendItem(title: String, opacity: Double) -> some View {
+        HStack(spacing: 6) {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(color.opacity(opacity))
+                .frame(width: 16, height: 12)
+            Text(title)
+        }
     }
 }
 
@@ -2535,48 +2837,68 @@ struct NoteInspector: View {
     let onDelete: () -> Void
     let onNoteUpdated: () -> Void
 
+    private var durationText: String {
+        "\(String(format: "%.2g", note.duration)) beats"
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Note Settings")
-                .font(DesignSystem.Typography.caption)
-                .foregroundStyle(DesignSystem.Colors.textSecondary)
-
-            HStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Length")
-                        .font(DesignSystem.Typography.caption2)
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                    Stepper(value: $note.duration, in: stepLength...maxDuration, step: stepLength) {
-                        Text("\(note.duration, specifier: "%.2g") beats")
-                            .font(DesignSystem.Typography.caption)
-                            .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Velocity")
-                        .font(DesignSystem.Typography.caption2)
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                    Slider(
-                        value: Binding(
-                            get: { Double(note.velocity) },
-                            set: { note.velocity = Int($0) }
-                        ),
-                        in: 20...127,
-                        step: 1
-                    )
-                }
-
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Text("Note Settings")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
                 Spacer()
-
                 Button(role: .destructive) {
                     onDelete()
                 } label: {
                     Image(systemName: "trash.fill")
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        .padding(10)
-                        .background(Circle().fill(DesignSystem.Colors.error))
+                        .font(DesignSystem.Typography.caption2)
+                        .foregroundStyle(Color.white)
+                        .frame(width: 28, height: 28)
+                        .background(
+                            Circle()
+                                .fill(DesignSystem.Colors.error)
+                        )
                 }
+                .buttonStyle(.plain)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("Length")
+                        .font(DesignSystem.Typography.caption2)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    Spacer()
+                    Text(durationText)
+                        .font(DesignSystem.Typography.caption2.monospacedDigit())
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                }
+
+                Stepper("", value: $note.duration, in: stepLength...maxDuration, step: stepLength)
+                    .labelsHidden()
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("Velocity")
+                        .font(DesignSystem.Typography.caption2)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    Spacer()
+                    Text("\(note.velocity)")
+                        .font(DesignSystem.Typography.caption2.monospacedDigit())
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
+                }
+
+                Slider(
+                    value: Binding(
+                        get: { Double(note.velocity) },
+                        set: { note.velocity = Int($0) }
+                    ),
+                    in: 20...127,
+                    step: 1
+                )
             }
         }
         .padding(12)

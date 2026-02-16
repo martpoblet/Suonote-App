@@ -9,6 +9,7 @@ struct StudioDrumEditor: View {
     let beatsPerBar: Int
     let timeBottom: Int
     let totalBars: Int
+    let barSectionInfos: [StudioBarSectionInfo]
     let style: StudioStyle?
     let onNotesChanged: () -> Void
 
@@ -21,7 +22,7 @@ struct StudioDrumEditor: View {
     private let cellHeight: CGFloat = 26
     private let cellSpacing: CGFloat = 6
     private let laneSpacing: CGFloat = 10
-    private let barRulerHeight: CGFloat = 18
+    private let barRulerHeight: CGFloat = 34
     private let labelColumnWidth: CGFloat = 110
 
     private var stepsPerBeat: Int {
@@ -46,6 +47,24 @@ struct StudioDrumEditor: View {
 
     private var notesByPitch: [Int: [Int: StudioNote]] {
         cachedNotesByPitch
+    }
+
+    private var barInfoByIndex: [Int: StudioBarSectionInfo] {
+        Dictionary(uniqueKeysWithValues: barSectionInfos.map { ($0.barIndex, $0) })
+    }
+
+    private var normalizedBarInfos: [StudioBarSectionInfo] {
+        (0..<max(1, totalBars)).map { bar in
+            if let info = barInfoByIndex[bar] {
+                return info
+            }
+            return StudioBarSectionInfo(
+                barIndex: bar,
+                sectionLabel: "Song",
+                sectionColor: track.instrument.color,
+                chordLabel: nil
+            )
+        }
     }
 
     private var drumLanes: [DrumLane] {
@@ -176,7 +195,8 @@ struct StudioDrumEditor: View {
                                 totalBars: totalBars,
                                 stepsPerBar: stepsPerBar,
                                 cellWidth: cellWidth,
-                                cellSpacing: cellSpacing
+                                cellSpacing: cellSpacing,
+                                barInfos: normalizedBarInfos
                             )
                             .frame(width: contentWidth, height: barRulerHeight, alignment: .leading)
 
@@ -189,7 +209,8 @@ struct StudioDrumEditor: View {
                                     cellWidth: cellWidth,
                                     cellHeight: cellHeight,
                                     cellSpacing: cellSpacing,
-                                    laneSpacing: laneSpacing
+                                    laneSpacing: laneSpacing,
+                                    barInfos: normalizedBarInfos
                                 )
 
                                 VStack(alignment: .leading, spacing: laneSpacing) {
@@ -653,18 +674,35 @@ struct DrumBarRuler: View {
     let stepsPerBar: Int
     let cellWidth: CGFloat
     let cellSpacing: CGFloat
+    let barInfos: [StudioBarSectionInfo]
 
     var body: some View {
         let barWidth = CGFloat(stepsPerBar) * cellWidth + CGFloat(max(stepsPerBar - 1, 0)) * cellSpacing
+        let infoByBar = Dictionary(uniqueKeysWithValues: barInfos.map { ($0.barIndex, $0) })
         HStack(spacing: cellSpacing) {
             ForEach(0..<totalBars, id: \.self) { bar in
-                HStack(spacing: 6) {
+                let info = infoByBar[bar]
+                VStack(alignment: .leading, spacing: 2) {
                     Text("Bar \(bar + 1)")
                         .font(DesignSystem.Typography.caption2)
                         .foregroundStyle(DesignSystem.Colors.textSecondary)
-                    Spacer()
+                    Text(info?.chordLabel ?? info?.sectionLabel ?? "Song")
+                        .font(DesignSystem.Typography.nano)
+                        .foregroundStyle((info?.sectionColor ?? SectionColor.purple.color))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
                 .frame(width: barWidth, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill((info?.sectionColor ?? SectionColor.purple.color).opacity(0.14))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke((info?.sectionColor ?? SectionColor.purple.color).opacity(0.35), lineWidth: 1)
+                        )
+                )
             }
         }
     }
@@ -679,6 +717,7 @@ struct DrumGridBackground: View {
     let cellHeight: CGFloat
     let cellSpacing: CGFloat
     let laneSpacing: CGFloat
+    let barInfos: [StudioBarSectionInfo]
 
     var body: some View {
         let width = CGFloat(totalSteps) * cellWidth + CGFloat(max(totalSteps - 1, 0)) * cellSpacing
@@ -686,8 +725,20 @@ struct DrumGridBackground: View {
         let stepStride = cellWidth + cellSpacing
         let beatStride = CGFloat(stepsPerBeat) * stepStride
         let barStride = CGFloat(stepsPerBar) * stepStride
+        let totalBars = max(1, totalSteps / max(1, stepsPerBar))
+        let infoByBar = Dictionary(uniqueKeysWithValues: barInfos.map { ($0.barIndex, $0) })
 
         Canvas { context, size in
+            for bar in 0..<totalBars {
+                let x = CGFloat(bar) * barStride
+                let barWidth = max(0, barStride - cellSpacing)
+                let color = (infoByBar[bar]?.sectionColor ?? SectionColor.purple.color).opacity(bar.isMultiple(of: 2) ? 0.08 : 0.04)
+                context.fill(
+                    Path(CGRect(x: x, y: 0, width: barWidth, height: size.height)),
+                    with: .color(color)
+                )
+            }
+
             var rowPath = Path()
             for row in 0...lanes {
                 let y = CGFloat(row) * (cellHeight + laneSpacing) - (row == lanes ? laneSpacing : 0)
@@ -706,7 +757,6 @@ struct DrumGridBackground: View {
             context.stroke(beatPath, with: .color(DesignSystem.Colors.border.opacity(0.8)), lineWidth: 1)
 
             var barPath = Path()
-            let totalBars = max(1, totalSteps / max(1, stepsPerBar))
             for bar in 0...totalBars {
                 var x = CGFloat(bar) * barStride
                 if bar == totalBars {
