@@ -5,6 +5,7 @@ import SwiftData
 struct SuonoteApp: App {
 
     @State private var showMigrationAlert = false
+    @StateObject private var cloudSyncMonitor = CloudSyncMonitor()
 
     init() {
         UIView.appearance().overrideUserInterfaceStyle = .light
@@ -123,6 +124,7 @@ struct SuonoteApp: App {
         WindowGroup {
             SplashContainerView()
                 .font(DesignSystem.Typography.body)
+                .environmentObject(cloudSyncMonitor)
                 .alert("Database Reset", isPresented: $showMigrationAlert) {
                     Button("OK", role: .cancel) { }
                 } message: {

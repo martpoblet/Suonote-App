@@ -12,29 +12,61 @@ struct SyncStatusIndicator: View {
     @State private var isAnimating = false
     @State private var rotation: Double = 0
     @State private var spinTask: Task<Void, Never>?
-    @AppStorage("sync_lastSuccess") private var lastSyncTime: Double = 0
-    @AppStorage("sync_pendingSince") private var pendingSince: Double = 0
+    @AppStorage(SyncStatusDefaultsKeys.lastSuccess) private var lastSyncTime: Double = 0
+    @AppStorage(SyncStatusDefaultsKeys.pendingSince) private var pendingSince: Double = 0
+    @AppStorage(SyncStatusDefaultsKeys.lastFailure) private var lastFailureTime: Double = 0
+    @AppStorage(SyncStatusDefaultsKeys.lastFailureCode) private var lastFailureCodeRaw: Int = SyncFailureCode.none.rawValue
+    @AppStorage(SyncStatusDefaultsKeys.lastErrorMessage) private var lastErrorMessage: String = ""
     let style: Style
 
     init(style: Style = .full) {
         self.style = style
     }
 
-    private var statusIcon: String {
-        modelContext.hasChanges ? "icloud.and.arrow.up" : "icloud"
-    }
-
     private var statusColor: Color {
-        syncState == .paused ? DesignSystem.Colors.warning : (modelContext.hasChanges ? DesignSystem.Colors.warning : DesignSystem.Colors.success)
+        switch syncState {
+        case .synced:
+            return DesignSystem.Colors.success
+        case .syncing, .paused:
+            return DesignSystem.Colors.warning
+        case .failed:
+            return DesignSystem.Colors.error
+        }
     }
 
     private enum SyncState {
         case synced
         case syncing
         case paused
+        case failed
+    }
+
+    private var failureCode: SyncFailureCode {
+        SyncFailureCode(rawValue: lastFailureCodeRaw) ?? .unknown
+    }
+
+    private var hasActiveFailure: Bool {
+        lastFailureTime > 0 && failureCode != .none
+    }
+
+    private var statusText: String {
+        switch syncState {
+        case .synced:
+            return "Synced"
+        case .syncing:
+            return "Syncing…"
+        case .paused:
+            return "Sync paused"
+        case .failed:
+            return "Sync failed"
+        }
     }
 
     private var syncState: SyncState {
+        if hasActiveFailure {
+            return .failed
+        }
+
         if modelContext.hasChanges {
             if pendingSince > 0 && Date().timeIntervalSince1970 - pendingSince > 120 {
                 return .paused
@@ -64,11 +96,15 @@ struct SyncStatusIndicator: View {
                             .font(DesignSystem.Typography.caption)
                             .foregroundStyle(DesignSystem.Colors.warning)
                             .opacity(syncState == .paused ? 1 : 0)
+                        Image(systemName: "xmark.icloud")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundStyle(DesignSystem.Colors.error)
+                            .opacity(syncState == .failed ? 1 : 0)
                     }
                     .frame(width: 16, height: 16)
 
                     if style == .full || syncState != .synced {
-                        Text(syncState == .paused ? "Sync paused" : (syncState == .syncing ? "Syncing…" : "Synced"))
+                        Text(statusText)
                             .font(DesignSystem.Typography.caption2)
                             .foregroundStyle(DesignSystem.Colors.textSecondary)
                             .fixedSize()
@@ -77,20 +113,23 @@ struct SyncStatusIndicator: View {
                     }
                 }
                 .contentShape(Rectangle())
-                .accessibilityLabel(modelContext.hasChanges ? "Syncing" : "Synced")
-                .animation(.easeInOut(duration: 0.2), value: modelContext.hasChanges)
+                .accessibilityLabel(statusText)
+                .animation(.easeInOut(duration: 0.2), value: syncState)
             }
             .buttonStyle(.plain)
             .sheet(isPresented: $showDetails) {
-                SyncDetailsSheet(hasChanges: modelContext.hasChanges)
+                SyncDetailsSheet(
+                    hasChanges: modelContext.hasChanges,
+                    hasFailure: hasActiveFailure,
+                    failureCode: failureCode,
+                    lastErrorMessage: lastErrorMessage,
+                    isPaused: syncState == .paused
+                )
                     .presentationDetents([.fraction(0.42)])
                     .presentationDragIndicator(.visible)
             }
             .onAppear {
                 updateAnimationState(state: syncState)
-                if !modelContext.hasChanges, lastSyncTime == 0 {
-                    lastSyncTime = Date().timeIntervalSince1970
-                }
             }
             .onChange(of: syncState) { _, newValue in
                 updateAnimationState(state: newValue)
@@ -118,7 +157,6 @@ struct SyncStatusIndicator: View {
             }
         } else if state == .synced {
             pendingSince = 0
-            lastSyncTime = Date().timeIntervalSince1970
             withAnimation(.none) { rotation = 0 }
         } else {
             withAnimation(.none) { rotation = 0 }
@@ -128,9 +166,14 @@ struct SyncStatusIndicator: View {
 
 private struct SyncDetailsSheet: View {
     let hasChanges: Bool
+    let hasFailure: Bool
+    let failureCode: SyncFailureCode
+    let lastErrorMessage: String
+    let isPaused: Bool
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("sync_lastSuccess") private var lastSyncTime: Double = 0
-    @AppStorage("sync_pendingSince") private var pendingSince: Double = 0
+    @AppStorage(SyncStatusDefaultsKeys.lastSuccess) private var lastSyncTime: Double = 0
+    @AppStorage(SyncStatusDefaultsKeys.pendingSince) private var pendingSince: Double = 0
+    @AppStorage(SyncStatusDefaultsKeys.lastFailure) private var lastFailureTime: Double = 0
 
     var body: some View {
         ScrollView {
@@ -140,11 +183,11 @@ private struct SyncDetailsSheet: View {
                         Circle()
                             .fill(DesignSystem.Colors.surfaceSecondary)
                             .frame(width: 46, height: 46)
-                        Image(systemName: hasChanges ? "arrow.triangle.2.circlepath" : "icloud")
+                        Image(systemName: statusIconName)
                             .font(DesignSystem.Typography.title3)
-                            .foregroundStyle(hasChanges ? DesignSystem.Colors.warning : DesignSystem.Colors.success)
-                            .rotationEffect(.degrees(hasChanges ? 360 : 0))
-                            .animation(hasChanges ? .linear(duration: 1.1).repeatForever(autoreverses: false) : .default, value: hasChanges)
+                            .foregroundStyle(statusIconColor)
+                            .rotationEffect(.degrees(hasChanges && !hasFailure && !isPaused ? 360 : 0))
+                            .animation(hasChanges && !hasFailure && !isPaused ? .linear(duration: 1.1).repeatForever(autoreverses: false) : .default, value: hasChanges && !hasFailure && !isPaused)
                     }
                     VStack(alignment: .leading, spacing: 4) {
                         Text("iCloud Sync")
@@ -158,9 +201,7 @@ private struct SyncDetailsSheet: View {
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Text(hasChanges
-                         ? "Changes are pending. Sync runs automatically in the background when the device is online."
-                         : "All changes are saved locally. iCloud keeps syncing automatically in the background.")
+                    Text(summaryText)
                         .font(DesignSystem.Typography.body)
                         .foregroundStyle(DesignSystem.Colors.textSecondary)
 
@@ -199,9 +240,48 @@ private struct SyncDetailsSheet: View {
         .background(DesignSystem.Colors.background)
     }
 
-    private var statusSubtitle: String {
+    private var statusIconName: String {
+        if hasFailure {
+            return "xmark.icloud"
+        }
+        if isPaused {
+            return "exclamationmark.icloud"
+        }
         if hasChanges {
-            if pendingSince > 0 && Date().timeIntervalSince1970 - pendingSince > 120 {
+            return "arrow.triangle.2.circlepath"
+        }
+        return "icloud"
+    }
+
+    private var statusIconColor: Color {
+        if hasFailure {
+            return DesignSystem.Colors.error
+        }
+        if hasChanges || isPaused {
+            return DesignSystem.Colors.warning
+        }
+        return DesignSystem.Colors.success
+    }
+
+    private var summaryText: String {
+        if hasFailure {
+            return "Latest iCloud export failed. Your changes stay safe locally until sync can resume."
+        }
+        return hasChanges
+            ? "Changes are pending. Sync runs automatically in the background when the device is online."
+            : "All changes are saved locally. iCloud keeps syncing automatically in the background."
+    }
+
+    private var statusSubtitle: String {
+        if hasFailure {
+            if failureCode == .quotaExceeded {
+                return "Sync failed — iCloud storage full"
+            }
+            return "Sync failed — check details"
+        }
+
+        if hasChanges {
+            if isPaused {
                 return "Sync paused — check iCloud storage"
             }
             return "Syncing changes…"
@@ -216,11 +296,30 @@ private struct SyncDetailsSheet: View {
             "• Sync may take a few moments depending on connection.",
             "• Your data is safe locally while it syncs."
         ]
+
+        if hasFailure {
+            if lastFailureTime > 0 {
+                let lastFailure = relativeDateString(from: Date(timeIntervalSince1970: lastFailureTime))
+                lines.insert("• Last failed export: \(lastFailure)", at: 1)
+            }
+
+            let message = lastErrorMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !message.isEmpty {
+                lines.insert("• Cloud error: \(message)", at: 2)
+            } else {
+                lines.insert("• Cloud error: \(failureCode.userMessage)", at: 2)
+            }
+
+            if failureCode == .quotaExceeded {
+                lines.append("• Free up iCloud storage to resume sync.")
+            }
+        }
+
         if pendingSince > 0 {
             let pending = relativeDateString(from: Date(timeIntervalSince1970: pendingSince))
             lines.insert("• Pending changes since: \(pending)", at: 1)
         }
-        if hasChanges && pendingSince > 0 && Date().timeIntervalSince1970 - pendingSince > 120 {
+        if hasChanges && isPaused {
             lines.append("• If sync doesn’t resume, free up iCloud storage.")
         }
         return lines.joined(separator: "\n")
