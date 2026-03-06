@@ -484,7 +484,7 @@ final class StudioTrack {
     private var _instrument: String = StudioInstrument.piano.rawValue
     private var _drumPreset: String = ""
     private var _variant: String? = nil
-    var octaveShift: Int = 0
+    var octaveShift: Int = 2
     var isMuted: Bool = false
     var isSolo: Bool = false
     var volume: Float = 0.75
@@ -568,7 +568,7 @@ final class StudioTrack {
         self._instrument = instrument.rawValue
         self._drumPreset = ""
         self._variant = SoundFontManager.defaultVariant(for: instrument)?.rawValue
-        self.octaveShift = 0
+        self.octaveShift = 2
         self.isMuted = isMuted
         self.isSolo = isSolo
         self.volume = 0.75

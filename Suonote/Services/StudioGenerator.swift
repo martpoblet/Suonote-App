@@ -134,6 +134,7 @@ struct StudioGenerator {
             if instrument == .drums {
                 track.drumPreset = defaultDrumPreset
             }
+            track.octaveShift = defaultOctaveShift(for: instrument, variant: track.variant)
 
             let notes = notesForInstrument(
                 instrument,
@@ -387,7 +388,7 @@ struct StudioGenerator {
         style: StudioStyle,
         drumPreset: DrumPreset? = nil,
         variant: InstrumentVariant? = nil,
-        octaveShift: Int = 0,
+        octaveShift: Int = 2, // 2 = neutral (formula: (octaveShift − 2) × 12 = 0)
         intensity: Double = 0.5,
         complexity: Double = 0.5,
         naturalness: Double = 0.0,
@@ -658,7 +659,9 @@ struct StudioGenerator {
             naturalness: naturalness
         )
         if instrument != .drums && instrument != .audio {
-            return dedupeAndClampNotes(humanized)
+            let deduped = dedupeAndClampNotes(humanized)
+            // Snap notes that almost fill a bar to cover it completely.
+            return snapNotesToBarBoundaries(deduped, beatsPerBar: beatsPerBar)
         }
         return humanized
     }
@@ -1041,6 +1044,31 @@ struct StudioGenerator {
         }
 
         return result.sorted { $0.startBeat < $1.startBeat }
+    }
+
+    /// Snaps notes whose end falls just before a bar boundary, extending them to fill the bar.
+    /// e.g., a note lasting 3.75 beats in a 4/4 bar becomes 4.0 beats (full bar).
+    /// Threshold: notes within `snapThreshold` beats of a bar boundary are snapped.
+    private static func snapNotesToBarBoundaries(
+        _ notes: [StudioNote],
+        beatsPerBar: Int,
+        snapThreshold: Double = 0.5
+    ) -> [StudioNote] {
+        let bpb = Double(beatsPerBar)
+        return notes.map { note in
+            let noteEnd = note.startBeat + note.duration
+            // Find the next bar boundary at or above noteEnd
+            let barBoundary = ceil(noteEnd / bpb) * bpb
+            let gap = barBoundary - noteEnd
+            // Only snap if the gap is small but positive (avoids snapping already-full bars)
+            guard gap > 1e-6 && gap <= snapThreshold else { return note }
+            return StudioNote(
+                startBeat: note.startBeat,
+                duration: note.duration + gap,
+                pitch: note.pitch,
+                velocity: note.velocity
+            )
+        }
     }
 
     private static func applyNaturalness(
@@ -1813,12 +1841,157 @@ struct StudioGenerator {
         for instrument: StudioInstrument,
         variant: InstrumentVariant? = nil,
         style: StudioStyle? = nil,
-        octaveShift: Int = 0
+        octaveShift: Int = 2 // 2 = neutral (formula: (octaveShift − 2) × 12 = 0)
     ) -> ClosedRange<Int> {
         let base = baseInstrumentRange(for: instrument, variant: variant)
         let styleShift = styleRegisterShift(for: instrument, style: style)
         let semitoneShift = styleShift + ((octaveShift - 2) * 12)
         return shiftRange(base, by: semitoneShift)
+    }
+
+    /// Returns the default internal `octaveShift` for a new track.
+    /// The UI uses this as the reference where the octave control displays `Oct 0`.
+    /// Internal formula: semitoneShift = (octaveShift − 2) × 12
+    static func defaultOctaveShift(
+        for instrument: StudioInstrument,
+        variant: InstrumentVariant? = nil
+    ) -> Int {
+        switch instrument {
+
+        case .synth:
+            return 0
+
+        case .guitar:
+            switch variant {
+            case .acousticNylonGuitar:
+                return 3
+            case .acousticSteelGuitar:
+                return 1
+            default:
+                return 2
+            }
+
+        case .bass:
+            switch variant {
+            case .fingerBass:
+                return 0
+            case .synthBass:
+                return 1
+            default:
+                return 2
+            }
+
+        case .strings:
+            switch variant {
+            case .stringEnsemble, .synthStrings1, .synthStrings2:
+                return 1
+            default:
+                return 2
+            }
+
+        case .woodwinds:
+            switch variant {
+            case .clarinet:
+                return 1
+            default:
+                return 2
+            }
+
+        default:
+            // The base ranges already encode the instrument's natural concert register.
+            return 2
+        }
+    }
+
+    /// Returns the allowed range of `octaveShift` values for a given instrument/variant.
+    /// Display octave = octaveShift − defaultOctaveShift(for:variant:)
+    /// Internal formula: semitoneShift = (octaveShift − 2) × 12
+    static func allowedOctaveShiftRange(
+        for instrument: StudioInstrument,
+        variant: InstrumentVariant? = nil
+    ) -> ClosedRange<Int> {
+        switch instrument {
+        case .drums, .audio:
+            return 2...2   // Fixed – no octave shift for drums or audio tracks
+
+        case .guitar:
+            switch variant {
+            case .acousticNylonGuitar:
+                return 2...4
+            case .acousticSteelGuitar:
+                return 0...2
+            default:
+                return 1...3
+            }
+
+        case .piano:
+            return 0...4
+
+        case .bass:
+            switch variant {
+            case .fingerBass:
+                return -1...1
+            case .synthBass:
+                return 0...2
+            default:
+                return 2...3
+            }
+
+        case .synth:
+            return -1...2
+
+        case .organ:
+            return 0...4
+
+        case .strings:
+            switch variant {
+            case .stringEnsemble, .synthStrings1, .synthStrings2:
+                return 0...3
+            default:
+                return 1...4
+            }
+
+        case .brass:
+            return 1...3   // −1 to +1 octave (physical instrument limits)
+
+        case .woodwinds:
+            switch variant {
+            case .clarinet:
+                return 0...2
+            default:
+                return 1...3
+            }
+
+        case .mallets:
+            if let variant {
+                switch variant {
+                case .glockenspiel:
+                    return 1...2   // Already very high; only Oct 0/+1 above neutral
+                case .xylophone, .marimba, .vibraphone, .tubularBells,
+                     .dulcimer, .kalimba, .musicBox:
+                    return 1...3
+                default:
+                    break
+                }
+            }
+            return 1...4
+        }
+    }
+
+    /// Recomputes the internal octave shift when the variant changes while preserving the
+    /// user-facing octave offset shown in the UI (`Oct -1`, `Oct 0`, `Oct +1`, etc.).
+    static func remapOctaveShiftPreservingDisplayOffset(
+        _ currentShift: Int,
+        for instrument: StudioInstrument,
+        oldVariant: InstrumentVariant?,
+        newVariant: InstrumentVariant?
+    ) -> Int {
+        let oldDefault = defaultOctaveShift(for: instrument, variant: oldVariant)
+        let newDefault = defaultOctaveShift(for: instrument, variant: newVariant)
+        let displayOffset = currentShift - oldDefault
+        let target = newDefault + displayOffset
+        let allowed = allowedOctaveShiftRange(for: instrument, variant: newVariant)
+        return min(allowed.upperBound, max(allowed.lowerBound, target))
     }
 
     static func supportsArpeggio(
@@ -1838,6 +2011,10 @@ struct StudioGenerator {
         // Variant-specific overrides
         if let variant {
             switch variant {
+            // Piano/Keyboard — variant-specific ranges
+            case .clavinet:      return 41...64  // F2 to E4 (Clavinet D6 real range)
+            case .harpsichord:   return 29...89  // F1 to A6 (standard harpsichord)
+            case .harp:          return 24...103 // C1 to G7 (concert harp full range)
             // Woodwinds — realistic per-instrument ranges
             case .sopranoSax:    return 56...76
             case .altoSax:       return 49...69
@@ -1854,6 +2031,22 @@ struct StudioGenerator {
             case .brassSection:  return 42...72
             case .synthBrass1, .synthBrass2: return 48...67
             case .mutedTrumpet:  return 55...79
+            // Mallets — realistic per-instrument ranges
+            case .marimba:      return 35...84  // B1 to C6 (bass marimba register)
+            case .vibraphone:   return 53...89  // F3 to F6 (full jazz vibraphone)
+            case .xylophone:    return 65...96  // F4 to C7 (bright upper register)
+            case .glockenspiel: return 79...108 // G5 to high register (orchestral sparkle)
+            case .tubularBells: return 60...79  // C4 to G5 (concert tubular bells)
+            case .musicBox:     return 60...84  // C4 to C6 (delicate mid-high range)
+            case .dulcimer:     return 36...72  // C2 to C5 (mountain dulcimer)
+            case .kalimba:      return 52...81  // E3 to A5 (17-key kalimba)
+            // Guitar — realistic per-instrument ranges
+            case .acousticNylonGuitar:              return 52...76  // E3 to E5 (classical guitar practical chord range – avoids low-sample artifacts)
+            case .acousticSteelGuitar:              return 40...76  // E2 to E5 (acoustic guitar)
+            case .electricGuitar, .cleanGuitar, .jazzGuitar: return 40...79  // E2 to G5
+            case .mutedGuitar:                      return 40...71  // E2 to B4 (rhythm range)
+            case .overdriveGuitar, .distortionGuitar: return 40...84  // E2 to C6
+            case .harmonicsGuitar:                  return 52...88  // E3 to E6 (artificial harmonics)
             default: break
             }
         }
@@ -1863,7 +2056,7 @@ struct StudioGenerator {
         case .synth:
             return 52...88  // E3 to E6
         case .guitar:
-            return 52...76  // E3 to E5
+            return 40...76  // E2 to E5 (low E string to high E)
         case .bass:
             return 28...52  // E1 to E3
         case .strings:
@@ -1892,18 +2085,22 @@ struct StudioGenerator {
         case .rock:
             return 0
         case .lofi:
-            if instrument == .piano || instrument == .synth || instrument == .strings {
+            // Only push piano/synth lower; strings at -12 drops below cello (C1 = MIDI 24)
+            if instrument == .piano || instrument == .synth {
                 return -12
             }
             return 0
         case .edm:
             return instrument == .synth ? 12 : 0
         case .jazz:
-            return (instrument == .piano || instrument == .brass) ? 12 : 0
+            // Only piano shifts up; brass +12 pushes trumpet to Bb6+ (above physical limit)
+            return instrument == .piano ? 12 : 0
         case .hiphop:
-            return (instrument == .bass || instrument == .synth) ? -12 : 0
+            // Bass is already at E1 (MIDI 28); -12 drops to E0 (MIDI 16), out of soundfont range
+            return instrument == .synth ? -12 : 0
         case .funk:
-            return instrument == .bass ? -12 : 0
+            // Bass sits naturally at E1-E3 for funk; no downward shift needed
+            return 0
         case .ambient:
             if instrument == .synth || instrument == .strings || instrument == .organ {
                 return 12
@@ -2183,13 +2380,22 @@ struct StudioGenerator {
             case .celesta, .glockenspiel, .musicBox, .xylophone, .tubularBells:
                 profile.maxNotes = 2
                 profile.durationScale = 0.5
-            case .vibraphone, .marimba:
-                profile.maxNotes = 3
-                profile.durationScale = 0.7
+            case .vibraphone:
+                profile.maxNotes = 4  // 2 mallets per hand → up to 4-note chords
+                profile.durationScale = 0.75
                 profile.preferOpenVoicing = true
-            case .dulcimer, .kalimba:
+                profile.extensionBias = 0.1  // Jazz vibraphone loves extensions
+            case .marimba:
+                profile.maxNotes = 4  // 2 mallets per hand → 4-note chords common
+                profile.durationScale = 0.65
+                profile.preferOpenVoicing = true
+            case .dulcimer:
                 profile.maxNotes = 2
                 profile.durationScale = 0.6
+                profile.preferOpenVoicing = false
+            case .kalimba:
+                profile.maxNotes = 2
+                profile.durationScale = 0.55  // Short attack, fast decay
             default:
                 break
             }

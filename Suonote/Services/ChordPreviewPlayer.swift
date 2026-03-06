@@ -34,15 +34,15 @@ final class ChordPreviewPlayer: ObservableObject {
     }
     
     private func loadPianoSoundFont() {
-        // Try custom SoundFont first
-        if let customURL = SoundFontManager.soundFontURL(for: .piano, variant: .acousticPiano) {
-            attemptLoad(url: customURL, program: 0) // Piano = 0
+        // Use Electric Piano from Arachno (warm, cleaner preview than acoustic)
+        if let customURL = SoundFontManager.soundFontURL(for: .piano, variant: .electricPiano) {
+            attemptLoad(url: customURL, program: 4) // Electric Piano = GM program 4
             return
         }
-        
+
         // Fallback to system SoundFont
         if let systemURL = systemSoundBankURL() {
-            attemptLoad(url: systemURL, program: 0)
+            attemptLoad(url: systemURL, program: 4)
         }
     }
     

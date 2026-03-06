@@ -21,7 +21,7 @@ enum SoundFontManager {
         case .brass:
             return [.synthBrass1, .synthBrass2]
         case .woodwinds:
-            return [.clarinet, .tenorSax, .flute]
+            return [.flute, .clarinet, .tenorSax]
         case .organ:
             return [.drawbarOrgan, .churchOrgan]
         case .mallets:

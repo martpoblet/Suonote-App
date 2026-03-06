@@ -218,13 +218,14 @@ class ChordSuggestionEngine {
             
             switch chord.quality {
             case .major:
-                // Tonic major chords get maj7, dominant gets dom7
-                if index == 0 || index == 3 {
-                    seventh = .major7
-                    reason = "Major 7th chord"
-                } else {
+                // V (index 4) always gets dom7; ♭VII (index 6) keeps dom7 for modal color.
+                // All other major positions (I, II, III, IV, VI) get maj7.
+                if index == 4 || index == 6 {
                     seventh = .dominant7
                     reason = "Dominant 7th"
+                } else {
+                    seventh = .major7
+                    reason = "Major 7th chord"
                 }
             case .minor:
                 seventh = .minor7
@@ -314,12 +315,13 @@ class ChordSuggestionEngine {
         if let lastIndex = diatonic.firstIndex(where: { $0.root == last.root && $0.quality == last.quality }) {
             // Use music theory progressions based on functional harmony
             switch lastIndex {
-            case 0: // I/i (Tonic) - can go anywhere, common: IV, V, vi/VI
+            case 0: // I/i (Tonic) - can go anywhere, common: IV, V, vi/VI, iii
                 suggestions = [
                     ChordSuggestion(root: diatonic[3].root, quality: diatonic[3].quality, reason: "IV - Subdominant movement", confidence: 0.95),
                     ChordSuggestion(root: diatonic[4].root, quality: diatonic[4].quality, reason: "V - Dominant movement", confidence: 0.95),
-                    ChordSuggestion(root: diatonic[5].root, quality: diatonic[5].quality, reason: "vi/VI - Deceptive resolution", confidence: 0.85),
-                    ChordSuggestion(root: diatonic[1].root, quality: diatonic[1].quality, reason: "ii - Pre-dominant", confidence: 0.75)
+                    ChordSuggestion(root: diatonic[5].root, quality: diatonic[5].quality, reason: "vi/VI - Relative minor color", confidence: 0.85),
+                    ChordSuggestion(root: diatonic[1].root, quality: diatonic[1].quality, reason: "ii - Pre-dominant", confidence: 0.75),
+                    ChordSuggestion(root: diatonic[2].root, quality: diatonic[2].quality, reason: "iii/III - Mediant color", confidence: 0.65)
                 ]
                 
             case 1: // ii/ii° (Supertonic) - commonly to V or back to I
@@ -345,11 +347,19 @@ class ChordSuggestionEngine {
                 ]
                 
             case 4: // V/v (Dominant) - strong pull to I
-                suggestions = [
+                var v4: [ChordSuggestion] = [
                     ChordSuggestion(root: diatonic[0].root, quality: diatonic[0].quality, reason: "I - Perfect cadence", confidence: 1.0),
                     ChordSuggestion(root: diatonic[5].root, quality: diatonic[5].quality, reason: "vi/VI - Deceptive cadence", confidence: 0.85),
                     ChordSuggestion(root: diatonic[3].root, quality: diatonic[3].quality, reason: "IV - Extended resolution", confidence: 0.65)
                 ]
+                // In minor, v is minor by default; surface V major (harmonic minor) for strong resolution
+                if mode != .major, diatonic[4].quality == .minor {
+                    v4.insert(
+                        ChordSuggestion(root: diatonic[4].root, quality: .major, reason: "V major – harmonic minor cadence", confidence: 0.92, romanNumeral: "V"),
+                        at: 1
+                    )
+                }
+                suggestions = v4
                 
             case 5: // vi/VI (Submediant) - to IV, ii, or V
                 suggestions = [
@@ -450,7 +460,7 @@ class ChordSuggestionEngine {
                 ChordSuggestion(
                     root: secondarySupertonic,
                     quality: .minor7,
-                    reason: "ii/V approach toward \(targetRoot)",
+                    reason: "ii of \(targetRoot) – sets up V–I into next chord",
                     confidence: 0.75
                 )
             )
@@ -651,11 +661,13 @@ private extension ChordSuggestionEngine {
             let interval = intervalBetween(from: lastChord.root, to: suggestion.root)
             switch interval {
             case 2, 10:
-                adjusted += 0.05 // stepwise
+                adjusted += 0.05 // stepwise motion
+            case 3, 9:
+                adjusted += 0.04 // minor/major third (common in minor keys: i→III, i→VI)
             case 5, 7:
-                adjusted += 0.08 // fourth/fifth
+                adjusted += 0.08 // fourth/fifth motion (strongest functional moves)
             case 1, 11:
-                adjusted += 0.03 // semitone color
+                adjusted += 0.03 // semitone chromatic color
             case 6:
                 if !suggestion.reason.lowercased().contains("tritone") {
                     adjusted -= 0.05
@@ -670,6 +682,8 @@ private extension ChordSuggestionEngine {
             switch interval {
             case 2, 10:
                 adjusted += 0.04
+            case 3, 9:
+                adjusted += 0.03
             case 5, 7:
                 adjusted += 0.06
             case 1, 11:

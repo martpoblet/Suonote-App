@@ -123,6 +123,7 @@ struct StudioTabView: View {
                     LazyVStack(spacing: DesignSystem.Spacing.xs) {
                         StudioTrackList(
                             tracks: sortedTracks,
+                            style: project.studioStyle,
                             selectedTrackId: $selectedTrackId,
                             onTrackStructureChange: { needsRebuild = true },
                             onMixChange: applyMixState,
@@ -372,6 +373,9 @@ struct StudioTabView: View {
         track.project = project
         project.studioTracks.append(track)
         modelContext.insert(track)
+
+        // Set the musically correct default octave for this instrument before generating.
+        track.octaveShift = StudioGenerator.defaultOctaveShift(for: instrument, variant: track.variant)
 
         let drumPreset = instrument == .drums
             ? DrumPreset.defaultPreset(for: style, beatsPerBar: project.timeTop, timeBottom: project.timeBottom)
@@ -1414,8 +1418,12 @@ struct StudioTrackEditorView: View {
             Menu {
                 ForEach(track.instrument.variants, id: \.self) { variant in
                     Button {
-                        track.variant = variant
-                        onNotesChanged()
+                        applyVariantSelection(
+                            variant,
+                            to: track,
+                            style: style,
+                            onChange: onNotesChanged
+                        )
                     } label: {
                         HStack {
                                     Text(variant.displayName)
@@ -1851,8 +1859,52 @@ private struct StudioInfoChip: View {
     }
 }
 
+private func clampPitchToRange(_ pitch: Int, range: ClosedRange<Int>) -> Int {
+    var adjusted = pitch
+    while adjusted < range.lowerBound {
+        adjusted += 12
+    }
+    while adjusted > range.upperBound {
+        adjusted -= 12
+    }
+    return min(max(adjusted, range.lowerBound), range.upperBound)
+}
+
+private func applyVariantSelection(
+    _ newVariant: InstrumentVariant,
+    to track: StudioTrack,
+    style: StudioStyle?,
+    onChange: () -> Void
+) {
+    let previousVariant = track.variant
+    guard previousVariant != newVariant else { return }
+
+    let remappedShift = StudioGenerator.remapOctaveShiftPreservingDisplayOffset(
+        track.octaveShift,
+        for: track.instrument,
+        oldVariant: previousVariant,
+        newVariant: newVariant
+    )
+
+    track.variant = newVariant
+    track.octaveShift = remappedShift
+
+    let targetRange = StudioGenerator.instrumentRange(
+        for: track.instrument,
+        variant: newVariant,
+        style: style,
+        octaveShift: remappedShift
+    )
+    for note in track.notes {
+        note.pitch = clampPitchToRange(note.pitch, range: targetRange)
+    }
+
+    onChange()
+}
+
 struct StudioTrackList: View {
     let tracks: [StudioTrack]
+    let style: StudioStyle?
     @Binding var selectedTrackId: UUID?
     let onTrackStructureChange: () -> Void
     let onMixChange: () -> Void
@@ -1886,6 +1938,7 @@ struct StudioTrackList: View {
                     ]) {
                         StudioTrackRow(
                             track: track,
+                            style: style,
                             isSelected: selectedTrackId == track.id,
                             onSelect: { selectedTrackId = track.id },
                             onTrackStructureChange: onTrackStructureChange,
@@ -1946,6 +1999,7 @@ private struct TrackReorderDelegate: DropDelegate {
 
 struct StudioTrackRow: View {
     @Bindable var track: StudioTrack
+    let style: StudioStyle?
     let isSelected: Bool
     let onSelect: () -> Void
     let onTrackStructureChange: () -> Void
@@ -2030,8 +2084,12 @@ struct StudioTrackRow: View {
                         Menu {
                             ForEach(track.instrument.variants, id: \.self) { variant in
                                 Button {
-                                    track.variant = variant
-                                    onTrackStructureChange()
+                                    applyVariantSelection(
+                                        variant,
+                                        to: track,
+                                        style: style,
+                                        onChange: onTrackStructureChange
+                                    )
                                 } label: {
                                     HStack {
                                         Text(variant.displayName)
@@ -2262,7 +2320,17 @@ struct StudioNoteEditor: View {
     private let cellWidth: CGFloat = 28
     private let cellHeight: CGFloat = 26
     private let durationOptions: [Double] = [0.25, 0.5, 1, 2, 4]
-    private let octaveRange = -4...4
+    private var octaveRange: ClosedRange<Int> {
+        StudioGenerator.allowedOctaveShiftRange(for: track.instrument, variant: track.variant)
+    }
+
+    /// User-facing octave offset: 0 = the instrument's natural default position.
+    /// Negative = lower, positive = higher.
+    /// Each instrument has its own reference point via `defaultOctaveShift`.
+    private var displayOctave: Int {
+        let ref = StudioGenerator.defaultOctaveShift(for: track.instrument, variant: track.variant)
+        return track.octaveShift - ref
+    }
 
     private var totalSteps: Int {
         max(1, totalBars * beatsPerBar * stepsPerBeat)
@@ -2275,6 +2343,7 @@ struct StudioNoteEditor: View {
     private var pitchRows: [PitchRow] {
         PitchRow.rows(
             for: track.instrument,
+            variant: track.variant,
             style: style,
             octaveShift: track.octaveShift
         )
@@ -2587,7 +2656,7 @@ struct StudioNoteEditor: View {
                 adjustOctave(-1)
             }
 
-            Text("Oct \(track.octaveShift >= 0 ? "+\(track.octaveShift)" : "\(track.octaveShift)")")
+            Text("Oct \(displayOctave >= 0 ? "+\(displayOctave)" : "\(displayOctave)")")
                 .font(DesignSystem.Typography.caption2)
 
             octaveButton(
@@ -2742,6 +2811,7 @@ struct StudioNoteEditor: View {
         let semitones = delta * 12
         let targetRange = StudioGenerator.instrumentRange(
             for: track.instrument,
+            variant: track.variant,
             style: style,
             octaveShift: newValue
         )
@@ -2775,6 +2845,7 @@ struct PitchRow: Identifiable {
 
     static func rows(
         for instrument: StudioInstrument,
+        variant: InstrumentVariant? = nil,
         style: StudioStyle?,
         octaveShift: Int
     ) -> [PitchRow] {
@@ -2789,6 +2860,7 @@ struct PitchRow: Identifiable {
         case .bass, .guitar, .synth, .piano, .strings, .brass, .woodwinds, .organ, .mallets:
             let range = StudioGenerator.instrumentRange(
                 for: instrument,
+                variant: variant,
                 style: style,
                 octaveShift: octaveShift
             )
