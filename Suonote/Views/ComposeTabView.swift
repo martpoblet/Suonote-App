@@ -2387,13 +2387,23 @@ struct ChordPaletteSheet: View {
     private let commonExtensions = ["7", "9", "11", "13", "sus2", "sus4", "add9"]
     
     private var accentColor: Color { section.color }
-    
+
     // Use cached values instead of computed properties for better performance
     private var lastChord: ChordEvent? { cachedLastChord }
     private var previousChords: [ChordEvent] { cachedPreviousChords }
     private var nextChords: [ChordEvent] { cachedNextChords }
     private var smartSuggestions: [ChordSuggestion] { cachedSmartSuggestions }
     private var diatonicChords: [ChordSuggestion] { cachedDiatonicChords }
+
+    // Scale highlight helpers — derived from the cached diatonic chord set.
+    // A note is "in scale" if it appears as a root in any diatonic chord.
+    private var diatonicRoots: Set<String> {
+        Set(cachedDiatonicChords.map { $0.root })
+    }
+    // A (root, quality) pair is "in key" when the diatonic set contains it exactly.
+    private func isDiatonic(root: String, quality: ChordQuality) -> Bool {
+        cachedDiatonicChords.contains { $0.root == root && $0.quality == quality }
+    }
     
     init(section: SectionTemplate, slot: ChordSlot, project: Project, onChordSelected: ((String, ChordQuality) -> Void)? = nil) {
         self.section = section
@@ -2731,28 +2741,52 @@ struct ChordPaletteSheet: View {
     
     private var rootNoteSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Root Note")
-                .font(DesignSystem.Typography.subheadline)
-                .foregroundStyle(DesignSystem.Colors.textPrimary)
-            
+            HStack(spacing: 6) {
+                Text("Root Note")
+                    .font(DesignSystem.Typography.subheadline)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+                // Legend: small dot + label explaining the scale indicator
+                Circle()
+                    .fill(DesignSystem.Colors.primary)
+                    .frame(width: 6, height: 6)
+                Text("= in key")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+            }
+
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 8) {
                 ForEach(roots, id: \.self) { root in
+                    let isSelected = selectedRoot == root
+                    let inScale = diatonicRoots.contains(root)
                     Button {
                         selectedRoot = root
                     } label: {
-                        Text(root)
-                            .font(DesignSystem.Typography.headline)
-                            .foregroundStyle(selectedRoot == root ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textSecondary)
-                            .frame(height: 44)
-                            .frame(maxWidth: .infinity)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(selectedRoot == root ? accentColor.opacity(0.5) : DesignSystem.Colors.surfaceSecondary)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(selectedRoot == root ? accentColor.opacity(0.6) : DesignSystem.Colors.border, lineWidth: 1)
-                                    )
-                            )
+                        ZStack(alignment: .topTrailing) {
+                            Text(root)
+                                .font(DesignSystem.Typography.headline)
+                                .foregroundStyle(isSelected ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textSecondary)
+                                .frame(height: 44)
+                                .frame(maxWidth: .infinity)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(isSelected ? accentColor.opacity(0.5) : DesignSystem.Colors.surfaceSecondary)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(
+                                                    isSelected ? accentColor.opacity(0.6) :
+                                                    (inScale ? DesignSystem.Colors.primary.opacity(0.5) : DesignSystem.Colors.border),
+                                                    lineWidth: inScale && !isSelected ? 1.5 : 1
+                                                )
+                                        )
+                                )
+                            // Small teal dot on in-scale notes that aren't selected
+                            if inScale && !isSelected {
+                                Circle()
+                                    .fill(DesignSystem.Colors.primary)
+                                    .frame(width: 6, height: 6)
+                                    .offset(x: -3, y: 3)
+                            }
+                        }
                     }
                 }
             }
@@ -2764,25 +2798,40 @@ struct ChordPaletteSheet: View {
             Text("Quality")
                 .font(DesignSystem.Typography.subheadline)
                 .foregroundStyle(DesignSystem.Colors.textPrimary)
-            
+
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 8) {
                 ForEach(ChordQuality.allCases, id: \.self) { quality in
+                    let isSelected = selectedQuality == quality
+                    let inKey = isDiatonic(root: selectedRoot, quality: quality)
                     Button {
                         selectedQuality = quality
                     } label: {
-                        Text(quality.rawValue.isEmpty ? "Major" : quality.rawValue)
-                            .font(DesignSystem.Typography.subheadline)
-                            .foregroundStyle(selectedQuality == quality ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textSecondary)
-                            .frame(height: 44)
-                            .frame(maxWidth: .infinity)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(selectedQuality == quality ? accentColor.opacity(0.5) : DesignSystem.Colors.surfaceSecondary)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(selectedQuality == quality ? accentColor.opacity(0.6) : DesignSystem.Colors.border, lineWidth: 1)
-                                    )
-                            )
+                        ZStack(alignment: .topTrailing) {
+                            Text(quality.rawValue.isEmpty ? "Major" : quality.rawValue)
+                                .font(DesignSystem.Typography.subheadline)
+                                .foregroundStyle(isSelected ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textSecondary)
+                                .frame(height: 44)
+                                .frame(maxWidth: .infinity)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(isSelected ? accentColor.opacity(0.5) : DesignSystem.Colors.surfaceSecondary)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(
+                                                    isSelected ? accentColor.opacity(0.6) :
+                                                    (inKey ? DesignSystem.Colors.primary.opacity(0.5) : DesignSystem.Colors.border),
+                                                    lineWidth: inKey && !isSelected ? 1.5 : 1
+                                                )
+                                        )
+                                )
+                            // Teal dot marks qualities that are diatonic for the selected root
+                            if inKey && !isSelected {
+                                Circle()
+                                    .fill(DesignSystem.Colors.primary)
+                                    .frame(width: 6, height: 6)
+                                    .offset(x: -4, y: 4)
+                            }
+                        }
                     }
                 }
             }

@@ -130,6 +130,28 @@ struct LyricsSectionCard: View {
     }
 }
 
+// MARK: - Syllable counting (heuristic, English-optimized)
+
+private func syllableCount(_ text: String) -> Int {
+    let words = text.lowercased()
+        .components(separatedBy: .whitespacesAndNewlines)
+        .map { $0.filter(\.isLetter) }
+        .filter { !$0.isEmpty }
+    return words.reduce(0) { total, word in
+        let vowels: Set<Character> = ["a", "e", "i", "o", "u", "y"]
+        var count = 0
+        var prevWasVowel = false
+        for ch in word {
+            let isVowel = vowels.contains(ch)
+            if isVowel && !prevWasVowel { count += 1 }
+            prevWasVowel = isVowel
+        }
+        // Silent trailing 'e' (e.g., "time", "love") — subtract if word has multiple syllables
+        if word.last == "e" && count > 1 { count -= 1 }
+        return total + max(1, count)
+    }
+}
+
 // MARK: - Immersive Lyrics Editor
 
 struct ImmersiveLyricsEditor: View {
@@ -192,11 +214,34 @@ struct ImmersiveLyricsEditor: View {
             }
             .frame(maxHeight: .infinity)
             
-            // Bottom toolbar
+            // Bottom toolbar — syllables, words, chars
             HStack {
-                Text("\(section.lyricsText.count) characters")
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+                let text = section.lyricsText
+                let wordCount = text.split(whereSeparator: \.isWhitespace).count
+                let syllables = syllableCount(text)
+
+                HStack(spacing: DesignSystem.Spacing.xs) {
+                    Label("\(syllables) syl", systemImage: "music.note")
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundStyle(DesignSystem.Colors.primary)
+
+                    Text("·")
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundStyle(DesignSystem.Colors.textTertiary)
+
+                    Text("\(wordCount) words")
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+
+                    Text("·")
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundStyle(DesignSystem.Colors.textTertiary)
+
+                    Text("\(text.count) chars")
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                }
+
                 Spacer()
                 if isTextEditorFocused {
                     Button {

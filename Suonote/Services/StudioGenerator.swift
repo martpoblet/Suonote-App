@@ -650,8 +650,16 @@ struct StudioGenerator {
             generated = []
         }
 
-        let humanized = applyNaturalness(
+        // Apply swing/groove feel before humanization so jitter sits on top of groove.
+        let swung = applySwingFeel(
             to: generated,
+            style: style,
+            instrument: instrument,
+            totalBars: totalBars,
+            beatsPerBar: beatsPerBar
+        )
+        let humanized = applyNaturalness(
+            to: swung,
             totalBars: totalBars,
             beatsPerBar: beatsPerBar,
             timeBottom: timeBottom,
@@ -1067,6 +1075,63 @@ struct StudioGenerator {
                 duration: note.duration + gap,
                 pitch: note.pitch,
                 velocity: note.velocity
+            )
+        }
+    }
+
+    // MARK: - Swing / Groove feel
+
+    /// Returns the swing shift amount (beats) and grain size for styles that require groove.
+    /// - shift: how many beats to push an upbeat note later (0 = no swing)
+    /// - grain: subdivision size being swung (1.0 = 8th-note swing, 0.5 = 16th-note shuffle)
+    private static func swingConfig(
+        for style: StudioStyle,
+        instrument: StudioInstrument
+    ) -> (shift: Double, grain: Double)? {
+        switch style {
+        case .jazz:
+            // Standard jazz triplet swing: upbeats land at ~62% of beat instead of 50%.
+            // Drums get a slightly smaller shift for natural feel.
+            return (instrument == .drums ? 0.10 : 0.12, 1.0)
+        case .hiphop:
+            // Laid-back 8th-note swing, subtle (56% feel).
+            return (0.06, 1.0)
+        case .funk:
+            // 16th-note shuffle: "e" and "ah" subdivisions pushed slightly later.
+            return (0.04, 0.5)
+        default:
+            return nil
+        }
+    }
+
+    /// Push notes landing on upbeat subdivisions later to create swing/groove feel.
+    /// Called before `applyNaturalness` so random jitter rides on top of the groove.
+    private static func applySwingFeel(
+        to notes: [StudioNote],
+        style: StudioStyle,
+        instrument: StudioInstrument,
+        totalBars: Int,
+        beatsPerBar: Int
+    ) -> [StudioNote] {
+        guard let (shift, grain) = swingConfig(for: style, instrument: instrument),
+              !notes.isEmpty else { return notes }
+
+        let upbeat = grain / 2
+        // Tolerance: 6% of grain (accounts for small floating-point offsets in generated hits)
+        let tolerance = grain * 0.06
+        let timelineBeats = Double(totalBars * beatsPerBar)
+
+        return notes.map { note in
+            let phase = note.startBeat.truncatingRemainder(dividingBy: grain)
+            guard abs(phase - upbeat) < tolerance else { return note }
+            let newStart = min(note.startBeat + shift, timelineBeats - 0.05)
+            // Upbeats are played slightly softer — standard jazz/funk articulation.
+            let newVelocity = max(1, note.velocity - 5)
+            return StudioNote(
+                startBeat: newStart,
+                duration: note.duration,
+                pitch: note.pitch,
+                velocity: newVelocity
             )
         }
     }
