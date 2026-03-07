@@ -2463,7 +2463,7 @@ struct StudioNoteEditor: View {
                     Text("Note Editor")
                         .font(DesignSystem.Typography.headline)
                         .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    Text("Tap to add · Double tap to delete · Hold note for velocity")
+                    Text("Tap to add · Double tap to delete · Drag up/down for pitch · Hold to cycle velocity")
                         .font(DesignSystem.Typography.caption2)
                         .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
@@ -2570,9 +2570,11 @@ struct StudioNoteEditor: View {
                                             maxBeats: Double(totalBars * beatsPerBar),
                                             color: track.instrument.color,
                                             isSelected: selectedNoteId == note.id,
+                                            pitchRows: pitchRows,
                                             onSelect: { selectedNoteId = note.id },
                                             onDelete: { deleteNote(note) },
                                             onCycleVelocity: { cycleVelocity(for: note) },
+                                            onPitchChanged: { newPitch in note.pitch = newPitch },
                                             onNotesChanged: onNotesChanged
                                         )
                                     }
@@ -2914,13 +2916,17 @@ struct StudioNoteBlock: View {
     let maxBeats: Double
     let color: Color
     let isSelected: Bool
+    let pitchRows: [PitchRow]
     let onSelect: () -> Void
     let onDelete: () -> Void
     let onCycleVelocity: () -> Void
+    let onPitchChanged: (Int) -> Void
     let onNotesChanged: () -> Void
 
     @State private var resizeStartDuration: Double = 0
     @State private var isResizing = false
+    /// Row index captured at the start of a pitch-drag gesture.
+    @State private var pitchDragStartRow: Int? = nil
 
     private var x: CGFloat {
         CGFloat(note.startBeat / stepLength) * cellWidth
@@ -2993,6 +2999,27 @@ struct StudioNoteBlock: View {
         .onTapGesture(perform: onSelect)
         .onTapGesture(count: 2, perform: onDelete)
         .onLongPressGesture(minimumDuration: 0.25, perform: onCycleVelocity)
+        // Vertical drag to change pitch. simultaneousGesture lets tap/long-press still fire.
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 6)
+                .onChanged { value in
+                    // Only respond to predominantly vertical movement
+                    guard abs(value.translation.height) > abs(value.translation.width) * 1.2 else { return }
+                    // Capture starting row once per drag
+                    let startRow = pitchDragStartRow ?? rowIndex
+                    if pitchDragStartRow == nil { pitchDragStartRow = rowIndex }
+                    let rowDelta = Int(round(value.translation.height / cellHeight))
+                    let newRow = max(0, min(pitchRows.count - 1, startRow + rowDelta))
+                    let newPitch = pitchRows[newRow].pitch
+                    if newPitch != note.pitch {
+                        onPitchChanged(newPitch)
+                    }
+                }
+                .onEnded { _ in
+                    pitchDragStartRow = nil
+                    onNotesChanged()
+                }
+        )
         .contextMenu {
             Button {
                 onCycleVelocity()
