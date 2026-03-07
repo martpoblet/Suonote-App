@@ -1929,7 +1929,7 @@ struct StudioGenerator {
         case .guitar:
             switch variant {
             case .acousticNylonGuitar:
-                return 3
+                return 4
             case .acousticSteelGuitar:
                 return 1
             default:
@@ -1982,7 +1982,7 @@ struct StudioGenerator {
         case .guitar:
             switch variant {
             case .acousticNylonGuitar:
-                return 2...4
+                return 3...5
             case .acousticSteelGuitar:
                 return 0...2
             default:
