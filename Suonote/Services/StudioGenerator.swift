@@ -135,6 +135,10 @@ struct StudioGenerator {
                 track.drumPreset = defaultDrumPreset
             }
             track.octaveShift = defaultOctaveShift(for: instrument, variant: track.variant)
+            // Set per-instrument humanization defaults so freshly generated tracks
+            // feel played rather than quantized. The applyNaturalness pass already
+            // knows to apply less timing jitter to drums than melodic instruments.
+            track.regenerateNaturalness = defaultNaturalness(for: instrument)
 
             let notes = notesForInstrument(
                 instrument,
@@ -1084,6 +1088,24 @@ struct StudioGenerator {
     /// Returns the swing shift amount (beats) and grain size for styles that require groove.
     /// - shift: how many beats to push an upbeat note later (0 = no swing)
     /// - grain: subdivision size being swung (1.0 = 8th-note swing, 0.5 = 16th-note shuffle)
+    /// Per-instrument humanization level applied when tracks are first generated.
+    /// Keeps drums tighter to the grid while letting melodic instruments breathe.
+    private static func defaultNaturalness(for instrument: StudioInstrument) -> Double {
+        switch instrument {
+        case .drums:      return 0.30   // Tight but not robotic — slight velocity scatter
+        case .bass:       return 0.40   // Slightly laid-back feel
+        case .guitar:     return 0.42   // Strummy, imprecise timing is musical
+        case .piano:      return 0.45   // Most expressive — widest timing/velocity range
+        case .synth:      return 0.28   // Synths can be tighter
+        case .strings:    return 0.20   // Pads / long notes — timing variation less audible
+        case .brass:      return 0.25
+        case .woodwinds:  return 0.28
+        case .organ:      return 0.18   // Organ is typically tight / locked to grid
+        case .mallets:    return 0.32
+        case .audio:      return 0.0
+        }
+    }
+
     private static func swingConfig(
         for style: StudioStyle,
         instrument: StudioInstrument

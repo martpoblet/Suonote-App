@@ -76,32 +76,57 @@ final class ChordPreviewPlayer: ObservableObject {
         }
     }
     
-    /// Play a chord preview
+    /// Play a chord preview with voice spread, per-voice velocity, and bass octave doubling.
     func playChord(root: String, quality: ChordQuality, duration: TimeInterval = 0.8) {
         let notes = ChordUtils.getChordNotes(root: root, quality: quality)
-        let midiNotes = notes.compactMap { noteNameToMIDI($0) }
-        
-        guard !midiNotes.isEmpty else { return }
-        
-        // Play all notes simultaneously
-        let velocity: UInt8 = 80 // Medium velocity
-        for midiNote in midiNotes {
-            sampler.startNote(midiNote, withVelocity: velocity, onChannel: 0)
+        guard !notes.isEmpty else { return }
+
+        // Build voiced notes: bass (octave 3) + chord voicing (octave 4), low→high
+        var midiNotes: [UInt8] = []
+        if let rootMidi = noteNameToMIDI(notes[0], octave: 3) {
+            midiNotes.append(rootMidi)  // bass note, one octave lower
         }
-        
-        // Stop notes after duration
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
-            for midiNote in midiNotes {
+        for name in notes {
+            if let m = noteNameToMIDI(name, octave: 4) {
+                midiNotes.append(m)
+            }
+        }
+        guard !midiNotes.isEmpty else { return }
+
+        // Velocity per voice: bass loudest, inner voices softer, soprano medium.
+        let lastIndex = midiNotes.count - 1
+        let velocities: [UInt8] = midiNotes.indices.map { index in
+            if index == 0               { return 92 }  // bass — punchy anchor
+            if index == lastIndex       { return 78 }  // soprano — slightly above inner
+            if index == 1               { return 70 }  // lowest chord tone
+            return 65                                   // inner voices — sit back
+        }
+
+        // Staggered note-on: 14ms per voice — like a real piano arpeggiation
+        for (i, midiNote) in midiNotes.enumerated() {
+            let delay = Double(i) * 0.014
+            let vel = velocities[i]
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.sampler.startNote(midiNote, withVelocity: vel, onChannel: 0)
+            }
+        }
+
+        // Staggered note-off: bass lingers, upper voices release earlier — natural decay
+        let bassRelease = duration + 0.15
+        let upperRelease = duration - 0.05
+
+        for (i, midiNote) in midiNotes.enumerated() {
+            let releaseTime = i == 0 ? bassRelease : upperRelease
+            DispatchQueue.main.asyncAfter(deadline: .now() + releaseTime) { [weak self] in
                 self?.sampler.stopNote(midiNote, onChannel: 0)
             }
         }
-        
-        print("🎹 Playing chord: \(root) \(quality.displayName) - Notes: \(notes.joined(separator: ", "))")
+
+        print("🎹 Playing chord: \(root) \(quality.displayName) — \(midiNotes.count) voices")
     }
     
-    /// Convert note name (e.g., "C", "C#", "Db") to MIDI number
-    private func noteNameToMIDI(_ noteName: String) -> UInt8? {
-        let octave: Int = 4 // Middle octave
+    /// Convert note name (e.g., "C", "C#", "Db") to MIDI number at the given octave.
+    private func noteNameToMIDI(_ noteName: String, octave: Int = 4) -> UInt8? {
         let noteMap: [String: Int] = [
             "C": 0, "C#": 1, "Db": 1,
             "D": 2, "D#": 3, "Eb": 3,
@@ -111,9 +136,9 @@ final class ChordPreviewPlayer: ObservableObject {
             "A": 9, "A#": 10, "Bb": 10,
             "B": 11
         ]
-        
         guard let semitone = noteMap[noteName] else { return nil }
         let midiNote = (octave + 1) * 12 + semitone
+        guard midiNote >= 0, midiNote <= 127 else { return nil }
         return UInt8(midiNote)
     }
 }

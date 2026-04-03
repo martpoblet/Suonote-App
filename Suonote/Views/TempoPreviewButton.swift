@@ -41,9 +41,14 @@ final class TempoPreviewer: ObservableObject {
 
     private func scheduleTimer() {
         let interval = timeSignature.secondsPerTempoBeat(bpm: bpm)
-        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+        // Use Timer(timeInterval:) + .common mode so the timer keeps firing
+        // during scroll tracking (.UITrackingRunLoopMode), preventing the
+        // click bursts / tempo drift that occur with .scheduledTimer.
+        let t = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             self?.handleTick()
         }
+        RunLoop.main.add(t, forMode: .common)
+        timer = t
     }
 
     private func handleTick() {

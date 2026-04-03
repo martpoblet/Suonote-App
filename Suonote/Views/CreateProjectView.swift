@@ -11,6 +11,8 @@ struct CreateProjectView: View {
     @State private var tagInput = ""
     @State private var bpm = 120
     @State private var showingBPMPicker = false
+    @State private var selectedTimeSignature: TimeSignaturePreset = .fourFour
+    @State private var tapTempo = TapTempo()
     @StateObject private var tempoPreviewer = TempoPreviewer()
     @FocusState private var isTitleFocused: Bool
     private let bpmRange = 40...240
@@ -142,11 +144,52 @@ struct CreateProjectView: View {
                                 ), in: Double(bpmRange.lowerBound)...Double(bpmRange.upperBound), step: Double(bpmStep))
                                 .tint(DesignSystem.Colors.primary)
                                 
+                                // Tap Tempo button + dot feedback
+                                HStack(spacing: 16) {
+                                    Button {
+                                        tapTempo.tap()
+                                        if tapTempo.tapCount >= 2 {
+                                            withAnimation(.spring(response: 0.2)) {
+                                                bpm = tapTempo.currentBPM
+                                            }
+                                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                        }
+                                    } label: {
+                                        Text("TAP")
+                                            .font(DesignSystem.Typography.headline)
+                                            .fontWeight(.bold)
+                                            .foregroundStyle(DesignSystem.Colors.textPrimary)
+                                            .frame(width: 72, height: 44)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 14)
+                                                    .fill(DesignSystem.Colors.primary.opacity(0.2))
+                                                    .overlay(
+                                                        RoundedRectangle(cornerRadius: 14)
+                                                            .stroke(DesignSystem.Colors.primary, lineWidth: 1.5)
+                                                    )
+                                            )
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    // Tap accumulation dots (●●●○)
+                                    HStack(spacing: 6) {
+                                        ForEach(0..<4, id: \.self) { i in
+                                            Circle()
+                                                .fill(i < min(tapTempo.tapCount, 4)
+                                                      ? DesignSystem.Colors.primary
+                                                      : DesignSystem.Colors.border)
+                                                .frame(width: 8, height: 8)
+                                                .animation(.spring(response: 0.2), value: tapTempo.tapCount)
+                                        }
+                                    }
+                                }
+
                                 HStack {
                                     ForEach([60, 90, 120, 140, 180], id: \.self) { preset in
                                         Button {
                                             withAnimation(.spring(response: 0.3)) {
                                                 bpm = preset
+                                                tapTempo.reset()
                                             }
                                         } label: {
                                             Text("\(preset)")
@@ -165,8 +208,8 @@ struct CreateProjectView: View {
                                 TempoPreviewButton(
                                     previewer: tempoPreviewer,
                                     bpm: bpm,
-                                    timeTop: 4,
-                                    timeBottom: 4,
+                                    timeTop: selectedTimeSignature.top,
+                                    timeBottom: selectedTimeSignature.bottom,
                                     tint: DesignSystem.Colors.info
                                 )
                             }
@@ -181,6 +224,55 @@ struct CreateProjectView: View {
                             )
                         }
                         
+                        // Time Signature Section
+                        VStack(alignment: .leading, spacing: 12) {
+                            Label("Time Signature", systemImage: "music.note.list")
+                                .font(DesignSystem.Typography.caption)
+                                .foregroundStyle(DesignSystem.Colors.textSecondary)
+                                .textCase(.uppercase)
+
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(TimeSignaturePreset.allCases) { preset in
+                                        Button {
+                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                                selectedTimeSignature = preset
+                                            }
+                                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                        } label: {
+                                            Text(preset.rawValue)
+                                                .font(DesignSystem.Typography.headline)
+                                                .fontWeight(selectedTimeSignature == preset ? .bold : .regular)
+                                                .foregroundStyle(
+                                                    selectedTimeSignature == preset
+                                                    ? DesignSystem.Colors.textPrimary
+                                                    : DesignSystem.Colors.textSecondary
+                                                )
+                                                .padding(.horizontal, 18)
+                                                .padding(.vertical, 10)
+                                                .background(
+                                                    RoundedRectangle(cornerRadius: 14)
+                                                        .fill(selectedTimeSignature == preset
+                                                              ? DesignSystem.Colors.primary.opacity(0.2)
+                                                              : DesignSystem.Colors.surfaceSecondary.opacity(0.5))
+                                                        .overlay(
+                                                            RoundedRectangle(cornerRadius: 14)
+                                                                .stroke(
+                                                                    selectedTimeSignature == preset
+                                                                    ? DesignSystem.Colors.primary
+                                                                    : DesignSystem.Colors.border,
+                                                                    lineWidth: selectedTimeSignature == preset ? 1.5 : 1
+                                                                )
+                                                        )
+                                                )
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                                .padding(.horizontal, 1)
+                            }
+                        }
+
                         // Tags Section
                         VStack(alignment: .leading, spacing: 12) {
                             Label("Tags", systemImage: "tag.fill")
@@ -286,6 +378,8 @@ struct CreateProjectView: View {
             tags: tags,
             bpm: bpm
         )
+        project.timeTop = selectedTimeSignature.top
+        project.timeBottom = selectedTimeSignature.bottom
         
         // Update timestamp to ensure it appears at top
         project.updatedAt = Date()
