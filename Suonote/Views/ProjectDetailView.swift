@@ -731,31 +731,73 @@ struct BPMSelector: View {
     let timeTop: Int
     let timeBottom: Int
     @StateObject private var tempoPreviewer = TempoPreviewer()
-    
+    @State private var tapTempo = TapTempo()
+
     private let presets = [60, 90, 120, 140, 180]
     private let bpmRange = 40...240
     private let bpmStep = 1
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Tempo")
                 .font(DesignSystem.Typography.subheadline)
                 .foregroundStyle(DesignSystem.Colors.textPrimary)
-            
+
             VStack(spacing: 16) {
                 bpmDisplay
                 bpmSlider
-                    TempoPreviewButton(
-                        previewer: tempoPreviewer,
-                        bpm: bpm,
-                        timeTop: timeTop,
-                        timeBottom: timeBottom,
-                        tint: DesignSystem.Colors.info
-                    )
+                tapTempoRow
+                TempoPreviewButton(
+                    previewer: tempoPreviewer,
+                    bpm: bpm,
+                    timeTop: timeTop,
+                    timeBottom: timeBottom,
+                    tint: DesignSystem.Colors.info
+                )
                 bpmPresets
             }
             .padding(20)
             .background(bpmBackground)
+        }
+    }
+
+    private var tapTempoRow: some View {
+        HStack(spacing: 16) {
+            Button {
+                tapTempo.tap()
+                if tapTempo.tapCount >= 2 {
+                    withAnimation(.spring(response: 0.2)) {
+                        bpm = tapTempo.currentBPM
+                    }
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                }
+            } label: {
+                Text("TAP")
+                    .font(DesignSystem.Typography.headline)
+                    .fontWeight(.bold)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+                    .frame(width: 72, height: 44)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(DesignSystem.Colors.primary.opacity(0.2))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(DesignSystem.Colors.primary, lineWidth: 1.5)
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+
+            HStack(spacing: 6) {
+                ForEach(0..<4, id: \.self) { i in
+                    Circle()
+                        .fill(i < min(tapTempo.tapCount, 4)
+                              ? DesignSystem.Colors.primary
+                              : DesignSystem.Colors.border)
+                        .frame(width: 8, height: 8)
+                        .animation(.spring(response: 0.2), value: tapTempo.tapCount)
+                }
+            }
         }
     }
     
@@ -802,6 +844,7 @@ struct BPMSelector: View {
         Button {
             withAnimation(.spring(response: 0.3)) {
                 bpm = preset
+                tapTempo.reset()
             }
         } label: {
             Text("\(preset)")
