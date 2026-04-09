@@ -9,6 +9,7 @@ struct ProjectsListView: View {
     @State private var selectedStatus: ProjectStatus?
     @State private var selectedTag: String?
     @State private var showingCreateSheet = false
+    @State private var showingQuickCapture = false
     @State private var scrollOffset: CGFloat = 0
     @State private var projectToDelete: Project?
     @State private var showDeleteConfirmation = false
@@ -118,20 +119,48 @@ struct ProjectsListView: View {
                 }
             }
             
-            // Floating action button
+            // Floating action buttons
             VStack {
                 Spacer()
                 HStack {
+                    // Quick Capture button
+                    Button {
+                        showingQuickCapture = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "bolt.fill")
+                                .font(.system(size: 14, weight: .bold))
+                            Text("Quick Capture")
+                                .font(DesignSystem.Typography.calloutBold)
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(
+                            Capsule()
+                                .fill(DesignSystem.Colors.accent)
+                                .shadow(color: DesignSystem.Colors.accent.opacity(0.4), radius: 8, y: 4)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .animatedPress()
+                    .padding(.leading, 24)
+
                     Spacer()
+
                     FloatingActionButton {
                         showingCreateSheet = true
                     }
-                    .padding(24)
+                    .padding(.trailing, 24)
                 }
+                .padding(.bottom, 24)
             }
         }
         .sheet(isPresented: $showingCreateSheet) {
             CreateProjectView()
+        }
+        .sheet(isPresented: $showingQuickCapture) {
+            QuickCaptureView()
         }
         .sheet(isPresented: $showingSoundFontCredits) {
             SoundFontCreditsView()

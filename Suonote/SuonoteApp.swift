@@ -87,7 +87,7 @@ struct SuonoteApp: App {
     }
 
     var sharedModelContainer: ModelContainer = {
-        let schema = Schema([Project.self])
+        let schema = Schema([Project.self, ProjectSnapshot.self])
         let cloudKitContainerId = "iCloud.Suonote"
         let modelConfiguration = ModelConfiguration(
             "Cloud",

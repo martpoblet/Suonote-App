@@ -34,6 +34,14 @@ struct ComposeTabView: View {
     // View mode: true = all sections, false = single section
     @State private var showAllSections = true
     @State private var expandedRecordingSections: Set<UUID> = []
+
+    // MARK: - New Feature States (audit improvements)
+    @State private var showingHarmonicTools = false
+    @State private var showingMelodySketch = false
+    @State private var showingSnapshots = false
+    @State private var showingAnalysis = false
+    @State private var nashvilleMode = false
+    @State private var melodySketchSection: SectionTemplate? = nil
     
     private func recordingsBySectionId() -> [UUID: [Recording]] {
         var map: [UUID: [Recording]] = [:]
@@ -174,6 +182,41 @@ struct ComposeTabView: View {
             SectionEditorSheet(section: section)
                 .studioModalStyle()
         }
+        // MARK: New Feature Sheets
+        .sheet(isPresented: $showingHarmonicTools) {
+            HarmonicToolsSheet(project: project)
+                .presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $showingAnalysis) {
+            NavigationStack {
+                SongAnalysisDashboardView(project: project)
+                    .navigationTitle("Song Analysis")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") { showingAnalysis = false }
+                        }
+                    }
+            }
+            .presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $showingSnapshots) {
+            ProjectSnapshotsView(project: project)
+                .presentationDetents([.medium, .large])
+        }
+        .sheet(item: $melodySketchSection) { section in
+            NavigationStack {
+                MelodySketchView(section: section)
+                    .navigationTitle("Melody Sketch · \(section.name)")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") { melodySketchSection = nil }
+                        }
+                    }
+            }
+            .presentationDetents([.large])
+        }
     }
     
     private var topControlsBar: some View {
@@ -223,7 +266,76 @@ struct ComposeTabView: View {
             .buttonStyle(.haptic(.light))
             
             Spacer()
-            
+
+            // Nashville toggle
+            Button {
+                haptic(.selection)
+                nashvilleMode.toggle()
+            } label: {
+                Text(nashvilleMode ? "1-4-5" : "I-IV")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundStyle(nashvilleMode ? DesignSystem.Colors.primaryDark : DesignSystem.Colors.textSecondary)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(nashvilleMode ?
+                                  DesignSystem.Colors.primary.opacity(0.15) :
+                                  DesignSystem.Colors.surfaceSecondary)
+                    )
+            }
+            .buttonStyle(.haptic(.light))
+
+            // Harmonic tools button
+            Button {
+                haptic(.light)
+                showingHarmonicTools = true
+            } label: {
+                Image(systemName: "waveform.path.ecg")
+                    .font(DesignSystem.Typography.subheadline)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+                    .padding(DesignSystem.Spacing.xs)
+                    .background(
+                        Circle()
+                            .fill(DesignSystem.Colors.surfaceSecondary)
+                            .overlay(Circle().stroke(DesignSystem.Colors.border, lineWidth: 1))
+                    )
+            }
+            .buttonStyle(.haptic(.light))
+
+            // Analysis button
+            Button {
+                haptic(.light)
+                showingAnalysis = true
+            } label: {
+                Image(systemName: "chart.bar.xaxis")
+                    .font(DesignSystem.Typography.subheadline)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+                    .padding(DesignSystem.Spacing.xs)
+                    .background(
+                        Circle()
+                            .fill(DesignSystem.Colors.surfaceSecondary)
+                            .overlay(Circle().stroke(DesignSystem.Colors.border, lineWidth: 1))
+                    )
+            }
+            .buttonStyle(.haptic(.light))
+
+            // Snapshots button
+            Button {
+                haptic(.light)
+                showingSnapshots = true
+            } label: {
+                Image(systemName: "camera.badge.clock")
+                    .font(DesignSystem.Typography.subheadline)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+                    .padding(DesignSystem.Spacing.xs)
+                    .background(
+                        Circle()
+                            .fill(DesignSystem.Colors.surfaceSecondary)
+                            .overlay(Circle().stroke(DesignSystem.Colors.border, lineWidth: 1))
+                    )
+            }
+            .buttonStyle(.haptic(.light))
+
             // Export button
             Button {
                 haptic(.light)
@@ -240,7 +352,7 @@ struct ComposeTabView: View {
                     )
             }
             .buttonStyle(.haptic(.light))
-            
+
             // Add section button
             Button {
                 haptic(.medium)
@@ -484,13 +596,29 @@ struct ComposeTabView: View {
                         .foregroundStyle(sectionColor)
                 }
                 .buttonStyle(.haptic(.light))
+
+                // Melody Sketch button
+                Button {
+                    haptic(.light)
+                    melodySketchSection = section
+                } label: {
+                    Image(systemName: "pianokeys")
+                        .font(DesignSystem.Typography.title2)
+                        .foregroundStyle(DesignSystem.Colors.primary)
+                }
+                .buttonStyle(.haptic(.light))
             }
-            
+
+            // Nashville / Roman numeral label strip
+            if nashvilleMode, !section.chordEvents.filter({ !$0.isRest }).isEmpty {
+                nashvilleStrip(for: section)
+            }
+
             // Linked recordings section (collapsible)
             if !recordings.isEmpty {
                 linkedRecordingsSection(recordings: recordings, section: section)
             }
-            
+
             ChordGridView(
                 section: section,
                 project: project,
@@ -3777,4 +3905,163 @@ struct SmartSuggestionsModal: View {
             )
     }
 
+}
+
+// MARK: - Nashville Strip helper (H5)
+extension ComposeTabView {
+    @ViewBuilder
+    func nashvilleStrip(for section: SectionTemplate) -> some View {
+        let keyRoot = section.effectiveKeyRoot
+        let mode = section.effectiveKeyMode
+        let chords = section.chordEvents
+            .filter { !$0.isRest }
+            .sorted { $0.barIndex * 100 + Int($0.beatOffset * 10) <
+                      $1.barIndex * 100 + Int($1.beatOffset * 10) }
+
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(chords) { chord in
+                    VStack(spacing: 2) {
+                        Text(TempoUtils.nashvilleNumber(root: chord.root, quality: chord.quality, keyRoot: keyRoot))
+                            .font(DesignSystem.Typography.calloutBold)
+                            .foregroundStyle(DesignSystem.Colors.primary)
+                        Text(TempoUtils.romanNumeral(root: chord.root, quality: chord.quality, keyRoot: keyRoot, mode: mode))
+                            .font(DesignSystem.Typography.caption2)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    }
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(DesignSystem.Colors.primary.opacity(0.08))
+                    )
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Harmonic Tools Sheet (H1 + H2 + H4)
+
+struct HarmonicToolsSheet: View {
+    let project: Project
+    @State private var selectedTab: HarmonicTab = .tension
+    @State private var selectedSection: SectionTemplate? = nil
+
+    enum HarmonicTab: String, CaseIterable {
+        case tension = "Tension"
+        case voiceLeading = "Voice Leading"
+        case cadence = "Cadence"
+
+        var icon: String {
+            switch self {
+            case .tension: return "waveform"
+            case .voiceLeading: return "arrow.up.arrow.down"
+            case .cadence: return "music.quarternote.3"
+            }
+        }
+    }
+
+    private var sections: [SectionTemplate] {
+        var seen = Set<UUID>()
+        return project.arrangementItems.compactMap { item in
+            guard let s = item.sectionTemplate, seen.insert(s.id).inserted else { return nil }
+            return s
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                // Tab picker
+                Picker("Tool", selection: $selectedTab) {
+                    ForEach(HarmonicTab.allCases, id: \.rawValue) { tab in
+                        Label(tab.rawValue, systemImage: tab.icon).tag(tab)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .padding(DesignSystem.Spacing.md)
+
+                Divider().overlay(DesignSystem.Colors.border)
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+                        switch selectedTab {
+                        case .tension:
+                            Text("Harmonic Tension Arc")
+                                .font(DesignSystem.Typography.bodyBold)
+                                .foregroundStyle(DesignSystem.Colors.textPrimary)
+                                .padding(.horizontal, DesignSystem.Spacing.md)
+                                .padding(.top, DesignSystem.Spacing.sm)
+
+                            HarmonicTensionGraphView(project: project)
+                                .padding(.horizontal, DesignSystem.Spacing.md)
+
+                        case .voiceLeading:
+                            Text("Voice Leading Analysis")
+                                .font(DesignSystem.Typography.bodyBold)
+                                .foregroundStyle(DesignSystem.Colors.textPrimary)
+                                .padding(.horizontal, DesignSystem.Spacing.md)
+                                .padding(.top, DesignSystem.Spacing.sm)
+
+                            if sections.isEmpty {
+                                Text("Add sections with chords first.")
+                                    .font(DesignSystem.Typography.callout)
+                                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+                                    .padding(.horizontal, DesignSystem.Spacing.md)
+                            } else {
+                                // Section picker
+                                Picker("Section", selection: $selectedSection) {
+                                    Text("Select section").tag(SectionTemplate?.none)
+                                    ForEach(sections) { s in
+                                        Text(s.name).tag(SectionTemplate?.some(s))
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .padding(.horizontal, DesignSystem.Spacing.md)
+
+                                if let section = selectedSection {
+                                    VoiceLeadingView(section: section)
+                                        .padding(.horizontal, DesignSystem.Spacing.md)
+                                }
+                            }
+
+                        case .cadence:
+                            Text("Cadence Analysis")
+                                .font(DesignSystem.Typography.bodyBold)
+                                .foregroundStyle(DesignSystem.Colors.textPrimary)
+                                .padding(.horizontal, DesignSystem.Spacing.md)
+                                .padding(.top, DesignSystem.Spacing.sm)
+
+                            if sections.isEmpty {
+                                Text("Add sections with chords first.")
+                                    .font(DesignSystem.Typography.callout)
+                                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+                                    .padding(.horizontal, DesignSystem.Spacing.md)
+                            } else {
+                                Picker("Section", selection: $selectedSection) {
+                                    Text("Select section").tag(SectionTemplate?.none)
+                                    ForEach(sections) { s in
+                                        Text(s.name).tag(SectionTemplate?.some(s))
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .padding(.horizontal, DesignSystem.Spacing.md)
+
+                                if let section = selectedSection {
+                                    CadenceAnalysisView(section: section)
+                                        .padding(.horizontal, DesignSystem.Spacing.xs)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.bottom, DesignSystem.Spacing.xxl)
+                }
+            }
+            .navigationTitle("Harmonic Tools")
+            .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                selectedSection = sections.first
+            }
+        }
+    }
 }

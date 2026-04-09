@@ -20,6 +20,7 @@ struct RecordingsTabView: View {
     @State private var recordingToDelete: Recording?
     @State private var showDeleteConfirmation = false
     @State private var playingRecordingId: UUID?
+    @State private var showingPolyrhythm = false
     
     enum RecordingSortOrder: String, CaseIterable {
         case dateDescending = "Newest First"
@@ -195,6 +196,36 @@ struct RecordingsTabView: View {
                 )
             }
             .animatedPress()
+
+            // Polyrhythm Metronome toggle
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showingPolyrhythm.toggle()
+                }
+            } label: {
+                HStack {
+                    Image(systemName: "metronome")
+                        .font(DesignSystem.Typography.callout)
+                    Text("Polyrhythm Metronome")
+                        .font(DesignSystem.Typography.callout)
+                    Spacer()
+                    Image(systemName: showingPolyrhythm ? "chevron.up" : "chevron.down")
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                }
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
+                .padding(DesignSystem.Spacing.sm)
+                .background(
+                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
+                        .fill(DesignSystem.Colors.surfaceSecondary)
+                )
+            }
+            .buttonStyle(.plain)
+
+            if showingPolyrhythm {
+                PolyrhythmMetronomeView(bpm: project.bpm)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
         .padding(.horizontal, DesignSystem.Spacing.xl)
         .padding(.top, DesignSystem.Spacing.xl)
@@ -607,6 +638,20 @@ struct ModernTakeCard: View {
                     }
                 }
                 
+                // Waveform display (S1)
+                let audioURL: URL? = {
+                    let fn = recording.fileName
+                    guard !fn.isEmpty else { return nil }
+                    let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+                    return docs.appendingPathComponent(fn)
+                }()
+                WaveformView(
+                    url: audioURL,
+                    height: 28,
+                    foregroundColor: isPlaying ? DesignSystem.Colors.accent : DesignSystem.Colors.primary.opacity(0.7)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+
                 HStack(spacing: 8) {
                     HStack(spacing: 4) {
                         Image(systemName: "clock")
@@ -614,16 +659,16 @@ struct ModernTakeCard: View {
                         Text(formatDuration(recording.duration))
                             .font(DesignSystem.Typography.caption)
                     }
-                    
+
                     Text("•")
                         .font(DesignSystem.Typography.caption2)
-                    
+
                     Text(recording.createdAt.formatted(date: .abbreviated, time: .shortened))
                         .font(DesignSystem.Typography.caption)
                 }
                 .foregroundStyle(DesignSystem.Colors.textSecondary)
             }
-            
+
             Spacer()
         }
         .padding(16)

@@ -4,7 +4,7 @@ import SwiftData
 struct LyricsTabView: View {
     @Bindable var project: Project
     @State private var selectedSection: SectionTemplate?
-    
+
     var uniqueSections: [SectionTemplate] {
         var seen = Set<UUID>()
         return project.arrangementItems.compactMap { item in
@@ -14,7 +14,7 @@ struct LyricsTabView: View {
             return section
         }
     }
-    
+
     var body: some View {
         VStack(spacing: 0) {
             if uniqueSections.isEmpty {
@@ -38,12 +38,12 @@ struct LyricsTabView: View {
             }
         }
         .fullScreenCover(item: $selectedSection) { section in
-            ImmersiveLyricsEditor(section: section) {
+            ImmersiveLyricsEditor(section: section, project: project) {
                 selectedSection = nil
             }
         }
     }
-    
+
     private var emptyStateView: some View {
         EmptyStateView(
             icon: "text.quote",
@@ -51,7 +51,7 @@ struct LyricsTabView: View {
             message: "Add sections in the Compose tab first"
         )
     }
-    
+
     private func usageCount(for section: SectionTemplate) -> Int {
         project.arrangementItems.filter { $0.sectionTemplate?.id == section.id }.count
     }
@@ -63,7 +63,11 @@ struct LyricsSectionCard: View {
     let section: SectionTemplate
     let usageCount: Int
     let onTap: () -> Void
-    
+
+    private var analysis: LyricAnalysis {
+        LyricAssistant.analyze(section.lyricsText)
+    }
+
     var body: some View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
@@ -74,21 +78,37 @@ struct LyricsSectionCard: View {
                         Text(section.name)
                             .font(DesignSystem.Typography.title3)
                             .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        
+
                         if usageCount > 1 {
                             Text("Used \(usageCount) times")
                                 .font(DesignSystem.Typography.caption)
                                 .foregroundStyle(DesignSystem.Colors.textSecondary)
                         }
                     }
-                    
+
                     Spacer()
-                    
+
+                    // Lyric stats badges
+                    if !section.lyricsText.isEmpty {
+                        HStack(spacing: 6) {
+                            if !analysis.rhymeScheme.isEmpty {
+                                Text(analysis.rhymeScheme.prefix(4))
+                                    .font(DesignSystem.Typography.caption2)
+                                    .foregroundStyle(DesignSystem.Colors.primary)
+                                    .padding(.horizontal, 6).padding(.vertical, 2)
+                                    .background(Capsule().fill(DesignSystem.Colors.primary.opacity(0.12)))
+                            }
+                            Text("\(analysis.totalSyllables)syl")
+                                .font(DesignSystem.Typography.caption2)
+                                .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        }
+                    }
+
                     Image(systemName: "chevron.right")
                         .font(DesignSystem.Typography.caption)
                         .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
-                
+
                 // Lyrics preview
                 if !section.lyricsText.isEmpty {
                     Text(section.lyricsText)
@@ -106,7 +126,7 @@ struct LyricsSectionCard: View {
                         Image(systemName: "text.cursor")
                             .font(DesignSystem.Typography.title2)
                             .foregroundStyle(DesignSystem.Colors.textSecondary)
-                        
+
                         Text("No lyrics yet")
                             .font(DesignSystem.Typography.callout)
                             .foregroundStyle(DesignSystem.Colors.textSecondary)
@@ -130,43 +150,47 @@ struct LyricsSectionCard: View {
     }
 }
 
-// MARK: - Immersive Lyrics Editor
+// MARK: - Immersive Lyrics Editor (enhanced with L1, L2, L3, L4)
 
 struct ImmersiveLyricsEditor: View {
     @Bindable var section: SectionTemplate
+    let project: Project
     var onDismiss: () -> Void
     @FocusState private var isTextEditorFocused: Bool
-    
+
+    // Tool panels
+    @State private var activePanel: LyricsPanel? = nil
+    @State private var showTemplatePicker = false
+
+    enum LyricsPanel: String, Identifiable {
+        case syllables = "Syllables"
+        case rhymes = "Rhymes"
+        case chordSync = "Chord Sync"
+
+        var id: String { rawValue }
+        var icon: String {
+            switch self {
+            case .syllables: return "number.circle"
+            case .rhymes: return "text.word.spacing"
+            case .chordSync: return "guitars"
+            }
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Header
-            ZStack {
-                // Center: dot + section name
-                HStack(spacing: DesignSystem.Spacing.xs) {
-                    SectionColorDot(section.color, size: 10)
-                    Text(section.name)
-                        .font(DesignSystem.Typography.title3)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                }
-                
-                // Leading: back chevron
-                HStack {
-                    Button {
-                        isTextEditorFocused = false
-                        onDismiss()
-                    } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(DesignSystem.Colors.primaryDark)
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
-                    }
-                    Spacer()
-                }
+            headerBar
+
+            Divider().overlay(DesignSystem.Colors.border)
+
+            // Tool panel (collapsed/expanded)
+            if let panel = activePanel {
+                lyricsPanelView(panel)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                Divider().overlay(DesignSystem.Colors.border)
             }
-            .padding(.horizontal, DesignSystem.Spacing.md)
-            .padding(.vertical, DesignSystem.Spacing.xs)
-            
+
             // Text Editor
             ZStack(alignment: .topLeading) {
                 if section.lyricsText.isEmpty {
@@ -181,7 +205,7 @@ struct ImmersiveLyricsEditor: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                
+
                 TextEditor(text: $section.lyricsText)
                     .font(DesignSystem.Typography.title3)
                     .foregroundStyle(DesignSystem.Colors.textPrimary)
@@ -191,34 +215,239 @@ struct ImmersiveLyricsEditor: View {
                     .padding(.vertical, DesignSystem.Spacing.lg)
             }
             .frame(maxHeight: .infinity)
-            
+
+            Divider().overlay(DesignSystem.Colors.border)
+
             // Bottom toolbar
-            HStack {
-                Text("\(section.lyricsText.count) characters")
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundStyle(DesignSystem.Colors.textSecondary)
-                Spacer()
-                if isTextEditorFocused {
-                    Button {
-                        isTextEditorFocused = false
-                    } label: {
-                        Text("Done")
-                            .font(DesignSystem.Typography.bodyBold)
-                            .foregroundStyle(DesignSystem.Colors.primaryDark)
-                    }
-                }
-            }
-            .padding(.horizontal, DesignSystem.Spacing.xl)
-            .padding(.vertical, DesignSystem.Spacing.sm)
+            bottomToolbar
         }
         .background(DesignSystem.Colors.background.ignoresSafeArea())
+        .animation(.easeInOut(duration: 0.2), value: activePanel)
+        .sheet(isPresented: $showTemplatePicker) {
+            LyricTemplatePicker { template in
+                applyTemplate(template)
+            }
+        }
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 isTextEditorFocused = true
             }
         }
     }
+
+    // MARK: - Header Bar
+
+    private var headerBar: some View {
+        ZStack {
+            HStack(spacing: DesignSystem.Spacing.xs) {
+                SectionColorDot(section.color, size: 10)
+                Text(section.name)
+                    .font(DesignSystem.Typography.title3)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+            }
+
+            HStack {
+                Button {
+                    isTextEditorFocused = false
+                    onDismiss()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(DesignSystem.Colors.primaryDark)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                Spacer()
+                // Template button
+                Button {
+                    isTextEditorFocused = false
+                    showTemplatePicker = true
+                } label: {
+                    Image(systemName: "text.insert")
+                        .font(.system(size: 17))
+                        .foregroundStyle(DesignSystem.Colors.primary)
+                        .frame(width: 44, height: 44)
+                }
+            }
+        }
+        .padding(.horizontal, DesignSystem.Spacing.md)
+        .padding(.vertical, DesignSystem.Spacing.xs)
+    }
+
+    // MARK: - Tool Panels
+
+    @ViewBuilder
+    private func lyricsPanelView(_ panel: LyricsPanel) -> some View {
+        ScrollView {
+            switch panel {
+            case .syllables:
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+                    let analysis = LyricAssistant.analyze(section.lyricsText)
+                    HStack {
+                        Text(analysis.meter)
+                            .font(DesignSystem.Typography.calloutBold)
+                            .foregroundStyle(DesignSystem.Colors.primary)
+                        Spacer()
+                        Text("\(analysis.totalSyllables) total · \(analysis.wordCount) words")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    }
+                    .padding(.horizontal, DesignSystem.Spacing.md)
+
+                    SyllableCounterView(text: section.lyricsText)
+                        .padding(.horizontal, DesignSystem.Spacing.md)
+                }
+                .padding(.vertical, DesignSystem.Spacing.sm)
+
+            case .rhymes:
+                RhymeFinderView(text: section.lyricsText)
+
+            case .chordSync:
+                LyricChordSyncView(section: section, project: project)
+                    .padding(DesignSystem.Spacing.md)
+            }
+        }
+        .frame(maxHeight: 220)
+        .background(DesignSystem.Colors.backgroundSecondary)
+    }
+
+    // MARK: - Bottom Toolbar
+
+    private var bottomToolbar: some View {
+        HStack {
+            Text("\(section.lyricsText.count) characters")
+                .font(DesignSystem.Typography.caption)
+                .foregroundStyle(DesignSystem.Colors.textSecondary)
+
+            Spacer()
+
+            // Tool panel toggles
+            HStack(spacing: DesignSystem.Spacing.sm) {
+                ForEach([LyricsPanel.syllables, .rhymes, .chordSync]) { panel in
+                    Button {
+                        withAnimation {
+                            if activePanel == panel { activePanel = nil }
+                            else { activePanel = panel; isTextEditorFocused = false }
+                        }
+                    } label: {
+                        Image(systemName: panel.icon)
+                            .font(.system(size: 16))
+                            .foregroundStyle(activePanel == panel ?
+                                             DesignSystem.Colors.primary : DesignSystem.Colors.textSecondary)
+                    }
+                }
+            }
+
+            if isTextEditorFocused {
+                Button {
+                    isTextEditorFocused = false
+                } label: {
+                    Text("Done")
+                        .font(DesignSystem.Typography.bodyBold)
+                        .foregroundStyle(DesignSystem.Colors.primaryDark)
+                }
+            }
+        }
+        .padding(.horizontal, DesignSystem.Spacing.xl)
+        .padding(.vertical, DesignSystem.Spacing.sm)
+    }
+
+    // MARK: - Template Application
+
+    private func applyTemplate(_ template: LyricAssistant.LyricTemplate) {
+        if section.lyricsText.isEmpty {
+            section.lyricsText = template.example.joined(separator: "\n")
+        } else {
+            section.lyricsText += "\n\n" + template.example.joined(separator: "\n")
+        }
+    }
 }
+
+// MARK: - L3: Lyric + Chord Sync View
+
+struct LyricChordSyncView: View {
+    let section: SectionTemplate
+    let project: Project
+
+    private var chords: [ChordEvent] {
+        section.chordEvents
+            .filter { !$0.isRest }
+            .sorted { $0.barIndex * 100 + Int($0.beatOffset * 10) <
+                      $1.barIndex * 100 + Int($1.beatOffset * 10) }
+    }
+
+    private var lyricLines: [String] {
+        section.lyricsText.components(separatedBy: "\n").filter {
+            !$0.trimmingCharacters(in: .whitespaces).isEmpty
+        }
+    }
+
+    private var keyRoot: String { section.effectiveKeyRoot }
+    private var mode: KeyMode { section.effectiveKeyMode }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+            if chords.isEmpty && lyricLines.isEmpty {
+                Text("Add chords and lyrics to see the sync view.")
+                    .font(DesignSystem.Typography.callout)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+            } else {
+                // Chord row
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: DesignSystem.Spacing.sm) {
+                        ForEach(chords) { chord in
+                            VStack(spacing: 2) {
+                                Text(chord.display)
+                                    .font(DesignSystem.Typography.calloutBold)
+                                    .foregroundStyle(DesignSystem.Colors.primaryDark)
+                                    .padding(.horizontal, 8).padding(.vertical, 3)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(DesignSystem.Colors.primary.opacity(0.12))
+                                    )
+                                Text("Bar \(chord.barIndex + 1)")
+                                    .font(DesignSystem.Typography.caption2)
+                                    .foregroundStyle(DesignSystem.Colors.textTertiary)
+                            }
+                        }
+                    }
+                }
+
+                Divider().overlay(DesignSystem.Colors.border)
+
+                // Lyrics with chord alignment
+                VStack(alignment: .leading, spacing: 4) {
+                    let chordPerLine = chords.count > 0 && lyricLines.count > 0
+                        ? chords.count / max(1, lyricLines.count) : 0
+
+                    ForEach(Array(lyricLines.enumerated()), id: \.offset) { i, line in
+                        VStack(alignment: .leading, spacing: 2) {
+                            // Chord aligned to this lyric line
+                            if chordPerLine > 0 {
+                                let startChord = i * chordPerLine
+                                let endChord = min(startChord + chordPerLine, chords.count)
+                                if startChord < chords.count {
+                                    HStack(spacing: 6) {
+                                        ForEach(chords[startChord..<endChord]) { chord in
+                                            Text(chord.display)
+                                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                                .foregroundStyle(DesignSystem.Colors.primary)
+                                        }
+                                    }
+                                }
+                            }
+                            Text(line)
+                                .font(DesignSystem.Typography.body)
+                                .foregroundStyle(DesignSystem.Colors.textPrimary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Preview
 
 private struct LyricsTabViewPreview: View {
     let container: ModelContainer
