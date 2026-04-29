@@ -715,6 +715,9 @@ private extension ChordSuggestionEngine {
         let extensionKey = suggestion.extensions.joined(separator: "-")
         return "\(suggestion.root)|\(suggestion.quality.rawValue)|\(extensionKey)"
     }
+}
+
+extension ChordSuggestionEngine {
     
     // MARK: - Voice Leading (M-10)
     

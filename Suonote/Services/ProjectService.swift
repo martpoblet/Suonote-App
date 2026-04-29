@@ -96,7 +96,14 @@ struct ProjectService {
             section.bars = sectionDef.bars
             section.colorHex = sectionDef.colorHex
             project.sectionTemplates.append(section)
+
+            let arrangementItem = ArrangementItem(orderIndex: project.arrangementItems.count)
+            arrangementItem.sectionTemplate = section
+            arrangementItem.project = project
+            project.arrangementItems.append(arrangementItem)
         }
+
+        project.updatedAt = Date()
         
         return project
     }

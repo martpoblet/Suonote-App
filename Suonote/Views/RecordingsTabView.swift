@@ -108,6 +108,8 @@ struct RecordingsTabView: View {
                 sections: uniqueSections,
                 onLink: { sectionId in
                     recording.linkedSectionId = sectionId
+                    project.updatedAt = Date()
+                    try? modelContext.save()
                 }
             )
             .studioModalStyle()
@@ -386,6 +388,8 @@ struct RecordingsTabView: View {
                             if recording.linkedSectionId != nil {
                                 Button {
                                     recording.linkedSectionId = nil
+                                    project.updatedAt = Date()
+                                    try? modelContext.save()
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
                                 }
@@ -417,6 +421,7 @@ struct RecordingsTabView: View {
             modelContext.delete(removed)
         }
         project.updatedAt = Date()
+        try? modelContext.save()
     }
     
     private func togglePlayback(for recording: Recording) {

@@ -19,13 +19,19 @@ class AudioRecordingManager: NSObject, ObservableObject {
     private var countInBars = 1
     private var clickEnabled = true
     private var currentRecordingType: RecordingType = .voice
+    private var currentLinkedSectionId: UUID?
     private var meterTimer: Timer?
     
     func setup(project: Project) {
         self.project = project
     }
     
-    func startRecording(countIn: Int, clickEnabled: Bool, recordingType: RecordingType = .voice) {
+    func startRecording(
+        countIn: Int,
+        clickEnabled: Bool,
+        recordingType: RecordingType = .voice,
+        linkedSectionId: UUID? = nil
+    ) {
         guard let project = project else { return }
 
         configureAudioSession(category: .playAndRecord, options: [.defaultToSpeaker])
@@ -33,6 +39,7 @@ class AudioRecordingManager: NSObject, ObservableObject {
         self.countInBars = countIn
         self.clickEnabled = clickEnabled
         self.currentRecordingType = recordingType
+        self.currentLinkedSectionId = linkedSectionId
         
         let fileName = "\(UUID().uuidString).m4a"
         let url = FileManagerUtils.recordingURL(for: fileName)
@@ -91,10 +98,12 @@ class AudioRecordingManager: NSObject, ObservableObject {
             countIn: countInBars,
             recordingType: currentRecordingType
         )
+        recording.linkedSectionId = currentLinkedSectionId
         
         recording.project = project
         project.recordings.append(recording)
         project.updatedAt = Date()
+        currentLinkedSectionId = nil
     }
     
     func playRecording(_ recording: Recording) {

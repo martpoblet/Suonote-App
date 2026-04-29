@@ -28,6 +28,7 @@ struct ComposeTabView: View {
     @State private var showingExport = false
     @State private var showingEditSheet = false
     @State private var editingSection: SectionTemplate?
+    @State private var recordingSection: SectionTemplate?
     @StateObject private var audioManager = AudioRecordingManager()
     @StateObject private var chordPreview = ChordPreviewPlayer() // ← Preview player
     
@@ -173,6 +174,14 @@ struct ComposeTabView: View {
         .sheet(item: $editingSection) { section in
             SectionEditorSheet(section: section)
                 .studioModalStyle()
+        }
+        .fullScreenCover(item: $recordingSection) { section in
+            ActiveRecordingView(
+                project: project,
+                audioManager: audioManager,
+                recordingType: .sketch,
+                initialLinkedSectionId: section.id
+            )
         }
     }
     
@@ -428,6 +437,7 @@ struct ComposeTabView: View {
 
         project.arrangementItems = ordered
         if shouldSave {
+            project.updatedAt = Date()
             try? modelContext.save()
         }
     }
@@ -465,6 +475,16 @@ struct ComposeTabView: View {
                 
                 Spacer()
                 
+                Button {
+                    haptic(.light)
+                    recordingSection = section
+                } label: {
+                    Image(systemName: "mic.circle.fill")
+                        .font(DesignSystem.Typography.title2)
+                        .foregroundStyle(sectionColor)
+                }
+                .buttonStyle(.haptic(.light))
+
                 Button {
                     haptic(.light)
                     editingSection = section
@@ -615,6 +635,7 @@ struct ComposeTabView: View {
         let arrangementItem = ArrangementItem(orderIndex: project.arrangementItems.count)
         arrangementItem.sectionTemplate = newSection
         project.arrangementItems.append(arrangementItem)
+        project.updatedAt = Date()
         
         try? modelContext.save()
         
@@ -637,6 +658,7 @@ struct ComposeTabView: View {
                     selectedSection = nil
                 }
                 
+                project.updatedAt = Date()
                 try? modelContext.save()
             }
         }
@@ -870,6 +892,7 @@ struct ChordDragInfo: Equatable {
 struct ChordGridView: View {
     let section: SectionTemplate
     let project: Project
+    @Environment(\.modelContext) private var modelContext
     @Binding var selectedChordSlot: ChordSlot?
     @Binding var draggingChord: ChordDragInfo?
     @Namespace private var barRowNamespace
@@ -935,6 +958,7 @@ struct ChordGridView: View {
                 haptic(.light)
                 insertBarId(at: section.bars)
                 section.bars += 1
+                markProjectEdited()
             } label: {
                 HStack(spacing: DesignSystem.Spacing.xxs) {
                     Image(systemName: "plus.circle.fill")
@@ -1024,6 +1048,12 @@ struct ChordGridView: View {
                 }
             }
         }
+        markProjectEdited()
+    }
+
+    private func markProjectEdited() {
+        project.updatedAt = Date()
+        try? modelContext.save()
     }
 }
 
@@ -1266,6 +1296,7 @@ struct HorizontalPanGesture: UIGestureRecognizerRepresentable {
 struct BarRow: View {
     let section: SectionTemplate
     let project: Project
+    @Environment(\.modelContext) private var modelContext
     let barIndex: Int
     let beatsPerBar: Int
     @Binding var selectedChordSlot: ChordSlot?
@@ -1394,6 +1425,7 @@ struct BarRow: View {
             )
             section.chordEvents.append(clonedChord)
         }
+        markProjectEdited()
     }
     
     private func deleteBar() {
@@ -1410,6 +1442,7 @@ struct BarRow: View {
         
         // Decrease bar count
         section.bars -= 1
+        markProjectEdited()
     }
     
     private func barContent(
@@ -1613,13 +1646,20 @@ struct BarRow: View {
         )
         clonedChord.sectionTemplate = section
         section.chordEvents.append(clonedChord)
+        markProjectEdited()
     }
     
     private func deleteChord(_ chord: ChordEvent) {
         if let index = section.chordEvents.firstIndex(where: { $0.id == chord.id }) {
             section.chordEvents.remove(at: index)
             compactBarChords(in: section, barIndex: barIndex)
+            markProjectEdited()
         }
+    }
+
+    private func markProjectEdited() {
+        project.updatedAt = Date()
+        try? modelContext.save()
     }
     
     private func canDuplicateChord(_ chord: ChordEvent) -> Bool {
@@ -1670,6 +1710,7 @@ struct BarRow: View {
                 sourceSectionId: payload.sourceSectionId,
                 targetBeatOffset: targetBeatOffset
             )
+            markProjectEdited()
             draggingChord = nil
         }
     }
@@ -1686,6 +1727,7 @@ struct BarRow: View {
                 onBarMoved(payload.barIndex, barIndex)
                 moveBar(from: payload.barIndex, to: barIndex)
             }
+            markProjectEdited()
         }
     }
 
@@ -1783,11 +1825,14 @@ struct BarRow: View {
         targetChord: ChordEvent
     ) -> Bool {
         let handled = loadChordPayload(from: providers) { payload in
-            _ = moveChordToTargetIndex(
+            let didMove = moveChordToTargetIndex(
                 sourceSectionId: payload.sourceSectionId,
                 chordId: payload.chordId,
                 targetChordId: targetChord.id
             )
+            if didMove {
+                markProjectEdited()
+            }
             draggingChord = nil
             lastChordReorderTargetId = nil
         }
@@ -2146,7 +2191,7 @@ struct SectionCreatorView: View {
                                 onSelect: {
                                     selectedTemplate = preset
                                     sectionName = preset.name
-                                    bars = 1
+                                    bars = preset.defaultBars
                                     // Auto-select the color for this template
                                     selectedColor = colorFromHex(preset.colorHex)
                                 }
@@ -2174,6 +2219,27 @@ struct SectionCreatorView: View {
                             )
                             .foregroundStyle(DesignSystem.Colors.textPrimary)
                     }
+
+                    HStack {
+                        Text("Length")
+                            .font(DesignSystem.Typography.subheadline)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
+
+                        Spacer()
+
+                        Stepper("\(bars) bars", value: $bars, in: 1...32)
+                            .font(DesignSystem.Typography.subheadline)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    }
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(DesignSystem.Colors.surfaceSecondary)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(DesignSystem.Colors.border, lineWidth: 1)
+                            )
+                    )
                     
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Color")
@@ -2224,13 +2290,14 @@ struct SectionCreatorView: View {
         }
         .onAppear {
             sectionName = selectedTemplate.name
+            bars = selectedTemplate.defaultBars
         }
     }
     
     private func createSection() {
         let section = SectionTemplate(
             name: sectionName,
-            bars: 1,
+            bars: bars,
             colorHex: selectedColor.hex
         )
         section.project = project
@@ -2239,6 +2306,7 @@ struct SectionCreatorView: View {
         arrangementItem.sectionTemplate = section
         
         project.arrangementItems.append(arrangementItem)
+        project.updatedAt = Date()
         
         try? modelContext.save()
         onSectionCreated(section)
@@ -2260,6 +2328,15 @@ enum SectionPreset: String, CaseIterable, Identifiable {
     
     var id: String { rawValue }
     var name: String { rawValue }
+
+    var defaultBars: Int {
+        switch self {
+        case .intro, .bridge, .outro:
+            return 4
+        case .verse, .chorus, .solo:
+            return 8
+        }
+    }
     
     
     var icon: String {
@@ -2335,6 +2412,7 @@ struct ChordPaletteSheet: View {
     @Bindable var project: Project
     var onChordSelected: ((String, ChordQuality) -> Void)? = nil  // ← Callback opcional
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     
     @State private var selectedRoot: String
     @State private var selectedQuality: ChordQuality
@@ -3070,6 +3148,9 @@ struct ChordPaletteSheet: View {
         if !isRest {
             onChordSelected?(selectedRoot, selectedQuality)
         }
+
+        project.updatedAt = Date()
+        try? modelContext.save()
         
         dismiss()
     }
@@ -3078,6 +3159,8 @@ struct ChordPaletteSheet: View {
         section.chordEvents.removeAll {
             $0.barIndex == slot.barIndex && $0.beatOffset == slot.beatOffset
         }
+        project.updatedAt = Date()
+        try? modelContext.save()
         dismiss()
     }
     

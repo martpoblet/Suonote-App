@@ -101,21 +101,24 @@ struct SuonoteApp: App {
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
-            print("⚠️ Migration failed: \(error.localizedDescription)")
-            
-            // Delete the old store as last resort
-            let url = URL.applicationSupportDirectory.appending(path: "default.store")
-            try? FileManager.default.removeItem(at: url)
-            
-            // Mark that migration happened for user notification
-            UserDefaults.standard.set(true, forKey: "didResetDatabase")
+            print("⚠️ Cloud store unavailable: \(error.localizedDescription)")
+            UserDefaults.standard.set(true, forKey: "didOpenLocalRecoveryStore")
+
+            let localConfiguration = ModelConfiguration(
+                "LocalRecovery",
+                schema: schema,
+                isStoredInMemoryOnly: false,
+                allowsSave: true,
+                groupContainer: .none,
+                cloudKitDatabase: .none
+            )
             
             do {
-                let container = try ModelContainer(for: schema, configurations: [modelConfiguration])
-                print("✅ New database created successfully")
+                let container = try ModelContainer(for: schema, configurations: [localConfiguration])
+                print("✅ Local recovery database opened successfully")
                 return container
             } catch {
-                fatalError("Could not create ModelContainer even after deleting old store: \(error)")
+                fatalError("Could not create ModelContainer after CloudKit failure: \(error)")
             }
         }
     }()
@@ -125,15 +128,15 @@ struct SuonoteApp: App {
             SplashContainerView()
                 .font(DesignSystem.Typography.body)
                 .environmentObject(cloudSyncMonitor)
-                .alert("Database Reset", isPresented: $showMigrationAlert) {
+                .alert("Using Local Storage", isPresented: $showMigrationAlert) {
                     Button("OK", role: .cancel) { }
                 } message: {
-                    Text("The app database was reset due to a data format change. Your projects stored in iCloud will sync back automatically.")
+                    Text("iCloud sync could not be opened, so Suonote started with a local recovery store. Your existing Cloud data was not deleted.")
                 }
                 .onAppear {
-                    if UserDefaults.standard.bool(forKey: "didResetDatabase") {
+                    if UserDefaults.standard.bool(forKey: "didOpenLocalRecoveryStore") {
                         showMigrationAlert = true
-                        UserDefaults.standard.set(false, forKey: "didResetDatabase")
+                        UserDefaults.standard.set(false, forKey: "didOpenLocalRecoveryStore")
                     }
                 }
         }

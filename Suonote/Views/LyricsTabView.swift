@@ -3,6 +3,7 @@ import SwiftData
 
 struct LyricsTabView: View {
     @Bindable var project: Project
+    @Environment(\.modelContext) private var modelContext
     @State private var selectedSection: SectionTemplate?
     
     var uniqueSections: [SectionTemplate] {
@@ -48,12 +49,34 @@ struct LyricsTabView: View {
         EmptyStateView(
             icon: "text.quote",
             title: "No sections yet",
-            message: "Add sections in the Compose tab first"
-        )
+            message: "Start with lyrics and Suonote will create the first section for you",
+            actionTitle: "Start Lyrics"
+        ) {
+            startLyricsSection()
+        }
     }
     
     private func usageCount(for section: SectionTemplate) -> Int {
         project.arrangementItems.filter { $0.sectionTemplate?.id == section.id }.count
+    }
+
+    private func startLyricsSection() {
+        let section = SectionTemplate(
+            name: "Verse 1",
+            bars: 8,
+            colorHex: SectionColor.sky.hex
+        )
+        section.project = project
+        project.sectionTemplates.append(section)
+
+        let item = ArrangementItem(orderIndex: project.arrangementItems.count)
+        item.sectionTemplate = section
+        item.project = project
+        project.arrangementItems.append(item)
+        project.updatedAt = Date()
+
+        try? modelContext.save()
+        selectedSection = section
     }
 }
 

@@ -10,6 +10,7 @@
 		11A613852F3D4F4B0055F55B /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 11A613682F3D4E320055F55B /* WidgetKit.framework */; };
 		11A613862F3D4F4B0055F55B /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 11A6136A2F3D4E320055F55B /* SwiftUI.framework */; };
 		11A613932F3D4F4C0055F55B /* SuonoteWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 11A613842F3D4F4B0055F55B /* SuonoteWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		24C0DE012F5A000000000001 /* MusicTheoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24C0DE002F5A000000000001 /* MusicTheoryTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -19,6 +20,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 11A613832F3D4F4B0055F55B;
 			remoteInfo = SuonoteWidgetExtension;
+		};
+		24C0DE092F5A000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1140AAD02F08098700874DF3 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1140AAD72F08098700874DF3;
+			remoteInfo = Suonote;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -42,6 +50,8 @@
 		11A6136A2F3D4E320055F55B /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		11A613842F3D4F4B0055F55B /* SuonoteWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SuonoteWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		11A613A02F3D4FBD0055F55B /* SuonoteWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SuonoteWidgetExtension.entitlements; sourceTree = "<group>"; };
+		24C0DE002F5A000000000001 /* MusicTheoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicTheoryTests.swift; sourceTree = "<group>"; };
+		24C0DE022F5A000000000001 /* SuonoteTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SuonoteTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -92,6 +102,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		24C0DE032F5A000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -100,6 +117,7 @@
 			children = (
 				11A613A02F3D4FBD0055F55B /* SuonoteWidgetExtension.entitlements */,
 				1140AADA2F08098700874DF3 /* Suonote */,
+				24C0DE082F5A000000000001 /* SuonoteTests */,
 				11A6136C2F3D4E320055F55B /* SuonoteWidget */,
 				11A613872F3D4F4B0055F55B /* SuonoteWidget */,
 				11A613672F3D4E320055F55B /* Frameworks */,
@@ -112,8 +130,17 @@
 			children = (
 				1140AAD82F08098700874DF3 /* Suonote.app */,
 				11A613842F3D4F4B0055F55B /* SuonoteWidgetExtension.appex */,
+				24C0DE022F5A000000000001 /* SuonoteTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		24C0DE082F5A000000000001 /* SuonoteTests */ = {
+			isa = PBXGroup;
+			children = (
+				24C0DE002F5A000000000001 /* MusicTheoryTests.swift */,
+			);
+			path = SuonoteTests;
 			sourceTree = "<group>";
 		};
 		11A613672F3D4E320055F55B /* Frameworks */ = {
@@ -174,6 +201,26 @@
 			productReference = 11A613842F3D4F4B0055F55B /* SuonoteWidgetExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		24C0DE072F5A000000000001 /* SuonoteTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 24C0DE0C2F5A000000000001 /* Build configuration list for PBXNativeTarget "SuonoteTests" */;
+			buildPhases = (
+				24C0DE042F5A000000000001 /* Sources */,
+				24C0DE032F5A000000000001 /* Frameworks */,
+				24C0DE052F5A000000000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				24C0DE0A2F5A000000000001 /* PBXTargetDependency */,
+			);
+			name = SuonoteTests;
+			packageProductDependencies = (
+			);
+			productName = SuonoteTests;
+			productReference = 24C0DE022F5A000000000001 /* SuonoteTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -189,6 +236,10 @@
 					};
 					11A613832F3D4F4B0055F55B = {
 						CreatedOnToolsVersion = 26.2;
+					};
+					24C0DE072F5A000000000001 = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = 1140AAD72F08098700874DF3;
 					};
 				};
 			};
@@ -208,6 +259,7 @@
 			targets = (
 				1140AAD72F08098700874DF3 /* Suonote */,
 				11A613832F3D4F4B0055F55B /* SuonoteWidgetExtension */,
+				24C0DE072F5A000000000001 /* SuonoteTests */,
 			);
 		};
 /* End PBXProject section */
@@ -221,6 +273,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		11A613822F3D4F4B0055F55B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		24C0DE052F5A000000000001 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -244,6 +303,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		24C0DE042F5A000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				24C0DE012F5A000000000001 /* MusicTheoryTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -251,6 +318,11 @@
 			isa = PBXTargetDependency;
 			target = 11A613832F3D4F4B0055F55B /* SuonoteWidgetExtension */;
 			targetProxy = 11A613912F3D4F4C0055F55B /* PBXContainerItemProxy */;
+		};
+		24C0DE0A2F5A000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1140AAD72F08098700874DF3 /* Suonote */;
+			targetProxy = 24C0DE092F5A000000000001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -520,6 +592,56 @@
 			};
 			name = Release;
 		};
+		24C0DE0D2F5A000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 22;
+				DEVELOPMENT_TEAM = D5PUN7TTK6;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.6.5;
+				PRODUCT_BUNDLE_IDENTIFIER = MartinCode.SuonoteTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Suonote.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Suonote";
+			};
+			name = Debug;
+		};
+		24C0DE0E2F5A000000000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 22;
+				DEVELOPMENT_TEAM = D5PUN7TTK6;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.6.5;
+				PRODUCT_BUNDLE_IDENTIFIER = MartinCode.SuonoteTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Suonote.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Suonote";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -546,6 +668,15 @@
 			buildConfigurations = (
 				11A613962F3D4F4C0055F55B /* Debug */,
 				11A613972F3D4F4C0055F55B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		24C0DE0C2F5A000000000001 /* Build configuration list for PBXNativeTarget "SuonoteTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				24C0DE0D2F5A000000000001 /* Debug */,
+				24C0DE0E2F5A000000000001 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -229,6 +229,11 @@ struct TempoUtils {
         let secondsPerBeat = 60.0 / Double(bpm)
         return secondsPerBeat * Double(timeSignatureTop)
     }
+}
+
+// MARK: - Music Theory Utilities
+
+struct MusicTheoryUtils {
     
     // MARK: - Roman Numeral Analysis (M-04)
     
