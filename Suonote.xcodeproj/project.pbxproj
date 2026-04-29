@@ -135,14 +135,6 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		24C0DE082F5A000000000001 /* SuonoteTests */ = {
-			isa = PBXGroup;
-			children = (
-				24C0DE002F5A000000000001 /* MusicTheoryTests.swift */,
-			);
-			path = SuonoteTests;
-			sourceTree = "<group>";
-		};
 		11A613672F3D4E320055F55B /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
@@ -150,6 +142,14 @@
 				11A6136A2F3D4E320055F55B /* SwiftUI.framework */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		24C0DE082F5A000000000001 /* SuonoteTests */ = {
+			isa = PBXGroup;
+			children = (
+				24C0DE002F5A000000000001 /* MusicTheoryTests.swift */,
+			);
+			path = SuonoteTests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -473,7 +473,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.6.5;
+				MARKETING_VERSION = 1.7;
 				PRODUCT_BUNDLE_IDENTIFIER = MartinCode.Suonote;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -513,7 +513,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.6.5;
+				MARKETING_VERSION = 1.7;
 				PRODUCT_BUNDLE_IDENTIFIER = MartinCode.Suonote;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -535,7 +535,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = SuonoteWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 22;
+				CURRENT_PROJECT_VERSION = 23;
 				DEVELOPMENT_TEAM = D5PUN7TTK6;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SuonoteWidget/Info.plist;
@@ -547,7 +547,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.6.5;
+				MARKETING_VERSION = 1.7;
 				PRODUCT_BUNDLE_IDENTIFIER = MartinCode.Suonote.SuonoteWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -567,7 +567,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = SuonoteWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 22;
+				CURRENT_PROJECT_VERSION = 23;
 				DEVELOPMENT_TEAM = D5PUN7TTK6;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SuonoteWidget/Info.plist;
@@ -579,7 +579,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.6.5;
+				MARKETING_VERSION = 1.7;
 				PRODUCT_BUNDLE_IDENTIFIER = MartinCode.Suonote.SuonoteWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
