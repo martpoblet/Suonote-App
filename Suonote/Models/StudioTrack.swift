@@ -499,13 +499,15 @@ final class StudioTrack {
     var audioRecordingId: UUID? = nil
     var audioStartBeat: Double = 0
 
-    // Per-track effects
+    // Per-track effects.
+    // Defaults are conservative — tracks are expected to dial wet up rather than
+    // start swampy. Reverb is now a send into a shared bus, so a little goes far.
     var reverbEnabled: Bool = false
-    var reverbMix: Float = 0.3
+    var reverbMix: Float = 0.2
     private var _reverbPreset: String = "medium"
     var delayEnabled: Bool = false
     var delayTime: Float = 0.25
-    var delayMix: Float = 0.2
+    var delayMix: Float = 0.15
     private var _delaySyncMode: String = "free"
     var eqEnabled: Bool = false
     var eqLowGain: Float = 0.0
@@ -583,6 +585,8 @@ final class StudioTrack {
         self.audioRecordingId = audioRecordingId
         self.audioStartBeat = audioStartBeat
         self.notesStore = []
+        self.reverbMix = 0.2
+        self.delayMix = 0.15
     }
 
     var notes: [StudioNote] {

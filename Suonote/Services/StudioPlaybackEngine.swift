@@ -48,10 +48,18 @@ final class StudioPlaybackEngine: ObservableObject {
     private var samplerNodes: [UUID: AVAudioUnitSampler] = [:]
     private var audioNodes: [UUID: AVAudioPlayerNode] = [:]
     private var mixerNodes: [UUID: AVAudioMixerNode] = [:]
-    private var reverbNodes: [UUID: AVAudioUnitReverb] = [:]
     private var delayNodes: [UUID: AVAudioUnitDelay] = [:]
     private var eqNodes: [UUID: AVAudioUnitEQ] = [:]
+    private var saturationNodes: [UUID: AVAudioUnitDistortion] = [:]
+    private var reverbSendNodes: [UUID: AVAudioMixerNode] = [:]
     private var compressorNodes: [UUID: AVAudioUnitEffect] = [:]
+    // Global send-reverb bus (shared room) — pre-delay → reverb → main mixer
+    private var reverbBus: AVAudioMixerNode?
+    private var reverbBusPreDelay: AVAudioUnitDelay?
+    private var reverbBusUnit: AVAudioUnitReverb?
+    // Master chain — masterEQ tilt → glue compressor → limiter → output
+    private var masterEQ: AVAudioUnitEQ?
+    private var masterGlue: AVAudioUnitEffect?
     private var masterLimiter: AVAudioUnitEffect?
     private var metronomePlayer: AVAudioPlayerNode?
     private var metronomeBuffer: AVAudioPCMBuffer?
@@ -76,6 +84,7 @@ final class StudioPlaybackEngine: ObservableObject {
 
     func prepare(project: Project) {
         updateBeatClock(for: project)
+        currentStyle = project.studioStyle
         totalBeats = timelineBeats(for: project)
         if sequencer == nil {
             rebuildSequence(project: project)
@@ -88,6 +97,7 @@ final class StudioPlaybackEngine: ObservableObject {
         teardownEngine()
         drumBankMode.removeAll()
 
+        currentStyle = project.studioStyle
         updateBeatClock(for: project)
         totalBeats = timelineBeats(for: project)
         currentBeat = min(currentBeat, totalBeats)
@@ -238,11 +248,15 @@ final class StudioPlaybackEngine: ObservableObject {
 
     private func applyEffects(for track: StudioTrack) {
         let trackId = track.id
-        if let reverb = reverbNodes[trackId] {
-            if let preset = AVAudioUnitReverbPreset(rawValue: track.reverbPreset.avPreset) {
-                reverb.loadFactoryPreset(preset)
-            }
-            reverb.wetDryMix = track.reverbEnabled ? track.reverbMix * 100 : 0
+        // Per-track reverb preset is now the bus preset (one global "room" per project).
+        // We honour the user's choice by re-pointing the bus reverb when a track changes it.
+        if let busReverb = reverbBusUnit,
+           let preset = AVAudioUnitReverbPreset(rawValue: track.reverbPreset.avPreset),
+           track.reverbEnabled {
+            busReverb.loadFactoryPreset(preset)
+        }
+        if let send = reverbSendNodes[trackId] {
+            send.outputVolume = reverbSendLevel(for: track)
         }
         if let delay = delayNodes[trackId] {
             delay.wetDryMix = track.delayEnabled ? track.delayMix * 100 : 0
@@ -255,12 +269,15 @@ final class StudioPlaybackEngine: ObservableObject {
         if let eq = eqNodes[trackId] {
             configureEQ(eq, track: track)
         }
+        if let sat = saturationNodes[trackId] {
+            sat.wetDryMix = saturationWetMix(for: track.instrument)
+        }
     }
 
-    // Legacy compatibility
+    // Legacy compatibility — old call sites that still pass a flat reverb wet value.
     func updateTrackEffects(trackId: UUID, reverbEnabled: Bool, reverbMix: Float, delayEnabled: Bool, delayTime: Float, delayMix: Float) {
-        if let reverb = reverbNodes[trackId] {
-            reverb.wetDryMix = reverbEnabled ? reverbMix * 100 : 0
+        if let send = reverbSendNodes[trackId] {
+            send.outputVolume = reverbEnabled ? max(0, min(1, reverbMix)) * 0.6 : 0
         }
         if let delay = delayNodes[trackId] {
             delay.wetDryMix = delayEnabled ? delayMix * 100 : 0
@@ -270,6 +287,7 @@ final class StudioPlaybackEngine: ObservableObject {
 
     func updateProject(_ project: Project) {
         updateBeatClock(for: project)
+        currentStyle = project.studioStyle
         totalBeats = timelineBeats(for: project)
         applyMixState(project: project)
     }
@@ -296,19 +314,26 @@ final class StudioPlaybackEngine: ObservableObject {
         engine.stop()
         samplerNodes.values.forEach { engine.detach($0) }
         audioNodes.values.forEach { engine.detach($0) }
-        reverbNodes.values.forEach { engine.detach($0) }
         delayNodes.values.forEach { engine.detach($0) }
         eqNodes.values.forEach { engine.detach($0) }
+        saturationNodes.values.forEach { engine.detach($0) }
+        reverbSendNodes.values.forEach { engine.detach($0) }
         compressorNodes.values.forEach { engine.detach($0) }
         mixerNodes.values.forEach { engine.detach($0) }
+        if let bus = reverbBus { engine.detach(bus); reverbBus = nil }
+        if let pre = reverbBusPreDelay { engine.detach(pre); reverbBusPreDelay = nil }
+        if let rv = reverbBusUnit { engine.detach(rv); reverbBusUnit = nil }
+        if let mEQ = masterEQ { engine.detach(mEQ); masterEQ = nil }
+        if let glue = masterGlue { engine.detach(glue); masterGlue = nil }
         if let limiter = masterLimiter { engine.detach(limiter); masterLimiter = nil }
         if let metro = metronomePlayer { engine.detach(metro); metronomePlayer = nil }
         engine.reset()
         samplerNodes.removeAll()
         audioNodes.removeAll()
-        reverbNodes.removeAll()
         delayNodes.removeAll()
         eqNodes.removeAll()
+        saturationNodes.removeAll()
+        reverbSendNodes.removeAll()
         compressorNodes.removeAll()
         mixerNodes.removeAll()
         audioTrackInfo.removeAll()
@@ -323,32 +348,39 @@ final class StudioPlaybackEngine: ObservableObject {
     }
 
     private func attachSamplers(for tracks: [StudioTrack]) {
+        // Build the global reverb send bus first so per-track sends have a destination.
+        setupReverbBus(style: currentStyle)
+
         for track in tracks where !track.instrument.isAudio {
             let sampler = AVAudioUnitSampler()
             let mixer = AVAudioMixerNode()
-            let reverb = AVAudioUnitReverb()
             let delay = AVAudioUnitDelay()
-            let eq = AVAudioUnitEQ(numberOfBands: 3)
-            
+            let eq = AVAudioUnitEQ(numberOfBands: 4)
+            let saturation = AVAudioUnitDistortion()
+            let reverbSend = AVAudioMixerNode()
+
             engine.attach(sampler)
             engine.attach(eq)
-            engine.attach(reverb)
+            engine.attach(saturation)
             engine.attach(delay)
             engine.attach(mixer)
-            
-            // Chain: sampler -> EQ -> reverb -> delay -> mixer -> main
+            engine.attach(reverbSend)
+
+            // Per-track dry chain: sampler → EQ (HP+3-band) → saturation → delay → mixer
+            // Mixer output is split: one path goes dry to mainMixer, another feeds the
+            // shared reverb bus through `reverbSend` (whose volume is the wet send level).
             engine.connect(sampler, to: eq, format: nil)
-            engine.connect(eq, to: reverb, format: nil)
-            engine.connect(reverb, to: delay, format: nil)
+            engine.connect(eq, to: saturation, format: nil)
+            engine.connect(saturation, to: delay, format: nil)
             engine.connect(delay, to: mixer, format: nil)
-            engine.connect(mixer, to: engine.mainMixerNode, format: nil)
-            
-            // Configure reverb
-            if let preset = AVAudioUnitReverbPreset(rawValue: track.reverbPreset.avPreset) {
-                reverb.loadFactoryPreset(preset)
+
+            let dryPoint = AVAudioConnectionPoint(node: engine.mainMixerNode, bus: 0)
+            let sendPoint = AVAudioConnectionPoint(node: reverbSend, bus: 0)
+            engine.connect(mixer, to: [dryPoint, sendPoint], fromBus: 0, format: nil)
+            if let bus = reverbBus {
+                engine.connect(reverbSend, to: bus, format: nil)
             }
-            reverb.wetDryMix = track.reverbEnabled ? track.reverbMix * 100 : 0
-            
+
             // Configure delay
             let effectiveDelayTime: TimeInterval
             if track.delaySyncMode == .free {
@@ -358,20 +390,28 @@ final class StudioPlaybackEngine: ObservableObject {
             }
             delay.wetDryMix = track.delayEnabled ? track.delayMix * 100 : 0
             delay.delayTime = effectiveDelayTime
-            delay.feedback = 30
-            
-            // Configure 3-band EQ (low 250Hz, mid 1kHz, high 4kHz)
+            // Lower default feedback than before (was 30) — too much repetition muddied the mix.
+            delay.feedback = 18
+
+            // 4-band EQ: HP (auto), low shelf, mid parametric, high shelf
             configureEQ(eq, track: track)
-            
-            // Apply volume and pan
+
+            // Subtle warmth saturation — tuned per instrument family
+            configureSaturation(saturation, track: track)
+
+            // Per-track wet send to global reverb bus
+            reverbSend.outputVolume = reverbSendLevel(for: track)
+
+            // Apply volume and pan on per-track mixer (also affects the wet send pre-bus)
             mixer.outputVolume = track.volume
             mixer.pan = track.pan
-            
+
             samplerNodes[track.id] = sampler
             mixerNodes[track.id] = mixer
-            reverbNodes[track.id] = reverb
             delayNodes[track.id] = delay
             eqNodes[track.id] = eq
+            saturationNodes[track.id] = saturation
+            reverbSendNodes[track.id] = reverbSend
             trackMixState[track.id] = TrackMixState(
                 volume: track.volume,
                 pan: track.pan,
@@ -380,47 +420,279 @@ final class StudioPlaybackEngine: ObservableObject {
             )
             loadInstrument(for: track, sampler: sampler)
         }
-        // Attach master limiter
-        setupMasterLimiter()
+        // Attach master chain (EQ tilt → glue compressor → limiter) once
+        setupMasterChain(style: currentStyle)
     }
 
     private func configureEQ(_ eq: AVAudioUnitEQ, track: StudioTrack) {
         let bands = eq.bands
-        guard bands.count >= 3 else { return }
-        bands[0].filterType = .lowShelf
-        bands[0].frequency = 250
-        bands[0].gain = track.eqEnabled ? track.eqLowGain : 0
-        bands[0].bypass = false
-        bands[1].filterType = .parametric
-        bands[1].frequency = 1000
-        bands[1].bandwidth = 1.0
-        bands[1].gain = track.eqEnabled ? track.eqMidGain : 0
+        guard bands.count >= 4 else { return }
+
+        // Band 0 — automatic high-pass to clean low-end mud.
+        // Bypassed for bass + drums so kick/sub stay intact.
+        let hpEnabled = !skipHighPass(for: track.instrument)
+        bands[0].filterType = .highPass
+        bands[0].frequency = highPassFrequency(for: track.instrument)
+        bands[0].bandwidth = 0.5
+        bands[0].bypass = !hpEnabled
+
+        // Band 1 — low shelf @ 250 Hz (user EQ low gain)
+        bands[1].filterType = .lowShelf
+        bands[1].frequency = 250
+        bands[1].gain = track.eqEnabled ? track.eqLowGain : 0
         bands[1].bypass = false
-        bands[2].filterType = .highShelf
-        bands[2].frequency = 4000
-        bands[2].gain = track.eqEnabled ? track.eqHighGain : 0
+
+        // Band 2 — parametric mid @ 1 kHz
+        bands[2].filterType = .parametric
+        bands[2].frequency = 1000
+        bands[2].bandwidth = 1.0
+        bands[2].gain = track.eqEnabled ? track.eqMidGain : 0
         bands[2].bypass = false
+
+        // Band 3 — high shelf @ 4 kHz
+        bands[3].filterType = .highShelf
+        bands[3].frequency = 4000
+        bands[3].gain = track.eqEnabled ? track.eqHighGain : 0
+        bands[3].bypass = false
     }
 
-    private func setupMasterLimiter() {
-        guard masterLimiter == nil else { return }
-        // Use AudioComponentDescription for a dynamics processor configured as limiter
-        let desc = AudioComponentDescription(
+    /// Instruments whose low-end is musical content (bass + drum kick).
+    private func skipHighPass(for instrument: StudioInstrument) -> Bool {
+        switch instrument {
+        case .bass, .drums: return true
+        default: return false
+        }
+    }
+
+    /// Per-instrument HP cutoff. Lower = preserves more low-mid body.
+    private func highPassFrequency(for instrument: StudioInstrument) -> Float {
+        switch instrument {
+        case .piano:     return 55
+        case .guitar:    return 80
+        case .synth:     return 50
+        case .strings:   return 70
+        case .brass:     return 80
+        case .woodwinds: return 110
+        case .organ:     return 60
+        case .mallets:   return 90
+        default:         return 60
+        }
+    }
+
+    private func configureSaturation(_ sat: AVAudioUnitDistortion, track: StudioTrack) {
+        // `multiDecimated1` gives a soft, analogue-leaning warmth at very low wet mix
+        // — nothing audibly distorted at <12% wet. Higher values are reserved for
+        // organ/guitar where some grit is wanted.
+        sat.loadFactoryPreset(.multiDecimated1)
+        sat.preGain = -6  // tame the input so the wet path stays gentle
+        sat.wetDryMix = saturationWetMix(for: track.instrument)
+    }
+
+    /// Per-instrument saturation wet mix (0–100). Tuned to add body without colour.
+    private func saturationWetMix(for instrument: StudioInstrument) -> Float {
+        switch instrument {
+        case .piano:     return 8
+        case .synth:     return 5
+        case .guitar:    return 12
+        case .bass:      return 10
+        case .strings:   return 4
+        case .brass:     return 10
+        case .woodwinds: return 4
+        case .organ:     return 12
+        case .mallets:   return 3
+        case .drums:     return 8
+        case .audio:     return 0
+        }
+    }
+
+    /// Map the per-track reverb settings to a wet-send level on the shared reverb bus.
+    /// The bus itself supplies the room tail; per-track this is just "how much reverb".
+    private func reverbSendLevel(for track: StudioTrack) -> Float {
+        guard track.reverbEnabled else { return 0 }
+        // `reverbMix` is 0–1 from the data model. Halve it because the bus already
+        // applies wet character — full sends sounded swampy in the previous engine.
+        return max(0, min(1, track.reverbMix)) * 0.6
+    }
+
+    /// Set up the parallel reverb bus: send mixer → pre-delay → reverb → mainMixer.
+    /// Style-aware preset & wet character keeps every track sitting in the same room.
+    private func setupReverbBus(style: StudioStyle?) {
+        let busExists = reverbBus != nil && reverbBusUnit != nil && reverbBusPreDelay != nil
+        if busExists { return }
+
+        let cfg = busConfig(for: style)
+        let bus = AVAudioMixerNode()
+        let preDelay = AVAudioUnitDelay()
+        let reverb = AVAudioUnitReverb()
+
+        engine.attach(bus)
+        engine.attach(preDelay)
+        engine.attach(reverb)
+
+        // Pre-delay: tiny dry delay before the reverb tail so transients stay defined.
+        preDelay.delayTime = TimeInterval(cfg.preDelayMs / 1000.0)
+        preDelay.feedback = 0
+        preDelay.wetDryMix = 100  // pre-delay path is fully wet — reverb does the dry/wet
+
+        if let preset = AVAudioUnitReverbPreset(rawValue: cfg.reverbPreset) {
+            reverb.loadFactoryPreset(preset)
+        }
+        reverb.wetDryMix = cfg.reverbWetMix
+
+        engine.connect(bus, to: preDelay, format: nil)
+        engine.connect(preDelay, to: reverb, format: nil)
+        engine.connect(reverb, to: engine.mainMixerNode, format: nil)
+
+        // Slightly attenuate the bus so the wet tail blends rather than shouts.
+        bus.outputVolume = 0.85
+
+        reverbBus = bus
+        reverbBusPreDelay = preDelay
+        reverbBusUnit = reverb
+    }
+
+    /// Build the master chain: mainMixer → masterEQ tilt → glue compressor → limiter → output.
+    /// Replaces the simpler limiter-only chain used previously.
+    private func setupMasterChain(style: StudioStyle?) {
+        let alreadyBuilt = masterEQ != nil && masterGlue != nil && masterLimiter != nil
+        if alreadyBuilt { return }
+
+        let cfg = busConfig(for: style)
+
+        // Master EQ — gentle tilt for warmth/air. Two-band shelf only, no surgery.
+        let mEQ = AVAudioUnitEQ(numberOfBands: 2)
+        if mEQ.bands.count >= 2 {
+            mEQ.bands[0].filterType = .lowShelf
+            mEQ.bands[0].frequency = 200
+            mEQ.bands[0].gain = cfg.masterTiltLowDb
+            mEQ.bands[0].bypass = false
+            mEQ.bands[1].filterType = .highShelf
+            mEQ.bands[1].frequency = 9000
+            mEQ.bands[1].gain = cfg.masterTiltHighDb
+            mEQ.bands[1].bypass = false
+        }
+
+        // Glue compressor — Apple DynamicsProcessor with gentle bus settings.
+        let glueDesc = AudioComponentDescription(
+            componentType: kAudioUnitType_Effect,
+            componentSubType: kAudioUnitSubType_DynamicsProcessor,
+            componentManufacturer: kAudioUnitManufacturer_Apple,
+            componentFlags: 0,
+            componentFlagsMask: 0
+        )
+        let glue = AVAudioUnitEffect(audioComponentDescription: glueDesc)
+
+        let limiterDesc = AudioComponentDescription(
             componentType: kAudioUnitType_Effect,
             componentSubType: kAudioUnitSubType_PeakLimiter,
             componentManufacturer: kAudioUnitManufacturer_Apple,
             componentFlags: 0,
             componentFlagsMask: 0
         )
-        let limiter = AVAudioUnitEffect(audioComponentDescription: desc)
+        let limiter = AVAudioUnitEffect(audioComponentDescription: limiterDesc)
+
+        engine.attach(mEQ)
+        engine.attach(glue)
         engine.attach(limiter)
-        // Insert between mainMixer and output
+
+        // Insert between mainMixer and output:
+        //   mainMixer → mEQ → glue → limiter → output
         let format = engine.mainMixerNode.outputFormat(forBus: 0)
         engine.disconnectNodeOutput(engine.mainMixerNode)
-        engine.connect(engine.mainMixerNode, to: limiter, format: format)
+        engine.connect(engine.mainMixerNode, to: mEQ, format: format)
+        engine.connect(mEQ, to: glue, format: format)
+        engine.connect(glue, to: limiter, format: format)
         engine.connect(limiter, to: engine.outputNode, format: format)
+
+        configureGlueCompressor(glue, style: style)
+
+        masterEQ = mEQ
+        masterGlue = glue
         masterLimiter = limiter
     }
+
+    /// Apply DynamicsProcessor parameters via raw AudioUnit calls.
+    private func configureGlueCompressor(_ effect: AVAudioUnitEffect, style: StudioStyle?) {
+        let cfg = busConfig(for: style)
+        let unit = effect.audioUnit
+        // kDynamicsProcessorParam_Threshold (0) — dB
+        AudioUnitSetParameter(unit, 0, kAudioUnitScope_Global, 0, AudioUnitParameterValue(cfg.glueThresholdDb), 0)
+        // kDynamicsProcessorParam_HeadRoom (1) — dB above threshold before full compression
+        AudioUnitSetParameter(unit, 1, kAudioUnitScope_Global, 0, 5, 0)
+        // kDynamicsProcessorParam_AttackTime (4) — seconds
+        AudioUnitSetParameter(unit, 4, kAudioUnitScope_Global, 0, AudioUnitParameterValue(cfg.glueAttackMs / 1000.0), 0)
+        // kDynamicsProcessorParam_ReleaseTime (5) — seconds
+        AudioUnitSetParameter(unit, 5, kAudioUnitScope_Global, 0, AudioUnitParameterValue(cfg.glueReleaseMs / 1000.0), 0)
+        // kDynamicsProcessorParam_MasterGain (6) — dB makeup gain
+        AudioUnitSetParameter(unit, 6, kAudioUnitScope_Global, 0, AudioUnitParameterValue(cfg.glueMakeupDb), 0)
+    }
+
+    // MARK: - Style → bus configuration
+
+    private struct StyleBusConfig {
+        let reverbPreset: Int      // AVAudioUnitReverbPreset rawValue
+        let reverbWetMix: Float    // 0–100, wet of the bus reverb itself
+        let preDelayMs: Float
+        let glueThresholdDb: Float
+        let glueAttackMs: Float
+        let glueReleaseMs: Float
+        let glueMakeupDb: Float
+        let masterTiltLowDb: Float
+        let masterTiltHighDb: Float
+    }
+
+    private func busConfig(for style: StudioStyle?) -> StyleBusConfig {
+        // AVAudioUnitReverbPreset rawValues:
+        //   0 smallRoom · 1 mediumRoom · 2 largeRoom · 3 mediumHall · 4 largeHall
+        //   5 plate · 6 mediumChamber · 7 largeChamber · 8 cathedral
+        switch style ?? .pop {
+        case .pop:
+            return StyleBusConfig(reverbPreset: 3 /* mediumHall */, reverbWetMix: 35,
+                                  preDelayMs: 25,
+                                  glueThresholdDb: -14, glueAttackMs: 10, glueReleaseMs: 80, glueMakeupDb: 1.5,
+                                  masterTiltLowDb: 1.0, masterTiltHighDb: 1.5)
+        case .rock:
+            return StyleBusConfig(reverbPreset: 3, reverbWetMix: 28,
+                                  preDelayMs: 15,
+                                  glueThresholdDb: -12, glueAttackMs: 5, glueReleaseMs: 40, glueMakeupDb: 1.5,
+                                  masterTiltLowDb: 1.0, masterTiltHighDb: 0.5)
+        case .lofi:
+            return StyleBusConfig(reverbPreset: 6 /* mediumChamber */, reverbWetMix: 45,
+                                  preDelayMs: 35,
+                                  glueThresholdDb: -16, glueAttackMs: 20, glueReleaseMs: 200, glueMakeupDb: 1.0,
+                                  masterTiltLowDb: 0.5, masterTiltHighDb: -1.0)
+        case .edm:
+            return StyleBusConfig(reverbPreset: 4 /* largeHall */, reverbWetMix: 32,
+                                  preDelayMs: 20,
+                                  glueThresholdDb: -10, glueAttackMs: 5, glueReleaseMs: 50, glueMakeupDb: 2.0,
+                                  masterTiltLowDb: 1.0, masterTiltHighDb: 2.5)
+        case .jazz:
+            return StyleBusConfig(reverbPreset: 6 /* mediumChamber */, reverbWetMix: 40,
+                                  preDelayMs: 20,
+                                  glueThresholdDb: -18, glueAttackMs: 25, glueReleaseMs: 250, glueMakeupDb: 1.0,
+                                  masterTiltLowDb: 1.5, masterTiltHighDb: 1.0)
+        case .hiphop:
+            return StyleBusConfig(reverbPreset: 0 /* smallRoom */, reverbWetMix: 22,
+                                  preDelayMs: 12,
+                                  glueThresholdDb: -10, glueAttackMs: 5, glueReleaseMs: 30, glueMakeupDb: 1.5,
+                                  masterTiltLowDb: 0.0, masterTiltHighDb: 1.5)
+        case .funk:
+            return StyleBusConfig(reverbPreset: 0 /* smallRoom */, reverbWetMix: 25,
+                                  preDelayMs: 10,
+                                  glueThresholdDb: -14, glueAttackMs: 8, glueReleaseMs: 60, glueMakeupDb: 1.5,
+                                  masterTiltLowDb: 0.5, masterTiltHighDb: 1.0)
+        case .ambient:
+            return StyleBusConfig(reverbPreset: 8 /* cathedral */, reverbWetMix: 60,
+                                  preDelayMs: 40,
+                                  glueThresholdDb: -18, glueAttackMs: 25, glueReleaseMs: 300, glueMakeupDb: 0.5,
+                                  masterTiltLowDb: 1.0, masterTiltHighDb: 2.0)
+        }
+    }
+
+    /// Convenience: read the project's current style if a project has been prepared.
+    /// `prepare(project:)` and `rebuildSequence(project:)` set this so the master/bus
+    /// builders know which preset to use.
+    private var currentStyle: StudioStyle?
 
     private func attachAudioNodes(for tracks: [StudioTrack], project: Project) {
         for track in tracks where track.instrument.isAudio {
@@ -650,7 +922,10 @@ final class StudioPlaybackEngine: ObservableObject {
 
     private func loadInstrument(for track: StudioTrack, sampler: AVAudioUnitSampler) {
         let fallbackProgram = track.variant?.midiProgram ?? programNumber(for: track.instrument)
-        if let url = SoundFontManager.soundFontURL(for: track.instrument, variant: track.variant) {
+        let candidates = SoundFontManager.candidatePacks(for: track.instrument, variant: track.variant)
+
+        for pack in candidates {
+            guard let url = SoundFontManager.bundleURL(for: pack) else { continue }
             let logFailure: Bool
             if case .unknown = customBankStatus {
                 logFailure = true
@@ -672,15 +947,13 @@ final class StudioPlaybackEngine: ObservableObject {
                 logFailure: logFailure
             ) {
                 if track.instrument == .drums {
-                    if primaryBankMSB == UInt8(kAUSampler_DefaultMelodicBankMSB) {
-                        drumBankMode[track.id] = true
-                    } else {
-                        drumBankMode[track.id] = false
-                    }
+                    drumBankMode[track.id] = primaryBankMSB == UInt8(kAUSampler_DefaultMelodicBankMSB)
                 }
                 customBankStatus = .available(url)
                 return
             }
+            // Drums: some kits live on melodic banks. Try the alternate bank before
+            // moving on to the next candidate pack.
             if track.instrument == .drums {
                 let fallbackBankMSB = primaryBankMSB == UInt8(kAUSampler_DefaultPercussionBankMSB)
                     ? UInt8(kAUSampler_DefaultMelodicBankMSB)
@@ -693,23 +966,15 @@ final class StudioPlaybackEngine: ObservableObject {
                     bankLSB: UInt8(kAUSampler_DefaultBankLSB),
                     logFailure: logFailure
                 ) {
-                    if fallbackBankMSB == UInt8(kAUSampler_DefaultMelodicBankMSB) {
-                        drumBankMode[track.id] = true
-                    } else {
-                        drumBankMode[track.id] = false
-                    }
+                    drumBankMode[track.id] = fallbackBankMSB == UInt8(kAUSampler_DefaultMelodicBankMSB)
                     customBankStatus = .available(url)
                     return
                 }
             }
-            if track.instrument == .drums {
-                #if DEBUG
-                print("❌ Drum soundfont failed to load: \(url.lastPathComponent)")
-                #endif
-            }
-            if case .unknown = customBankStatus {
-                customBankStatus = .unavailable
-            }
+        }
+
+        if case .unknown = customBankStatus {
+            customBankStatus = .unavailable
         }
 
         if let systemURL = systemSoundBankURL() {
