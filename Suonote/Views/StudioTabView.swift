@@ -21,6 +21,7 @@ struct StudioTabView: View {
     @State private var lastTotalBars = 0
     @StateObject private var playback = StudioPlaybackEngine()
     @State private var showingNoSectionsAlert = false
+    @State private var showingMixer = false
 
     private var sortedTracks: [StudioTrack] {
         project.studioTracks.sorted { $0.orderIndex < $1.orderIndex }
@@ -156,6 +157,7 @@ struct StudioTabView: View {
                             isPlaying: playback.isPlaying,
                             accentColor: project.studioStyle?.accentColor ?? SectionColor.purple.color,
                             isMetronomeEnabled: $playback.isMetronomeEnabled,
+                            isLooping: $playback.isLooping,
                             onPlay: handlePlay,
                             onPause: playback.pause,
                             onStop: handleStop,
@@ -271,6 +273,14 @@ struct StudioTabView: View {
                 }
             )
         }
+        .sheet(isPresented: $showingMixer) {
+            StudioMixerView(
+                project: project,
+                onMixChange: applyMixState,
+                onEffectsChange: applyEffects,
+                onTrackStructureChange: { needsRebuild = true }
+            )
+        }
         .confirmationDialog(
             "Regenerate tracks?",
             isPresented: $showingRegenerateDialog,
@@ -319,6 +329,25 @@ struct StudioTabView: View {
             .animatedPress()
 
             Spacer()
+
+            // Mixer Button — opens the global console with all faders on one screen.
+            if hasGeneratedTracks {
+                Button {
+                    showingMixer = true
+                } label: {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
+                        .frame(width: 30, height: 30)
+                        .background(
+                            Circle()
+                                .fill(DesignSystem.Colors.surface)
+                                .overlay(Circle().stroke(DesignSystem.Colors.border, lineWidth: 1))
+                        )
+                }
+                .animatedPress()
+                .accessibilityLabel("Open mixer")
+            }
 
             // Add Track Button
             Button {
@@ -373,6 +402,11 @@ struct StudioTabView: View {
         track.project = project
         project.studioTracks.append(track)
         modelContext.insert(track)
+
+        // Auto-mix template — pan, volume, reverb send and a light EQ tilt by
+        // family + style. Applied on creation only so user tweaks are preserved
+        // across later style changes.
+        StudioMixDefaults.apply(to: track, style: style)
 
         // Set the musically correct default octave for this instrument before generating.
         track.octaveShift = StudioGenerator.defaultOctaveShift(for: instrument, variant: track.variant)
@@ -794,6 +828,7 @@ struct StudioTimelineView: View {
     let isPlaying: Bool
     let accentColor: Color
     @Binding var isMetronomeEnabled: Bool
+    @Binding var isLooping: Bool
     let onPlay: () -> Void
     let onPause: () -> Void
     let onStop: () -> Void
@@ -842,6 +877,24 @@ struct StudioTimelineView: View {
                 Spacer()
 
                 HStack(spacing: 8) {
+                    Button {
+                        isLooping.toggle()
+                    } label: {
+                        Image(systemName: "repeat")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundStyle(isLooping ? .white : DesignSystem.Colors.textSecondary)
+                            .frame(width: 28, height: 28)
+                            .background(
+                                Circle()
+                                    .fill(isLooping ? accentColor : DesignSystem.Colors.surfaceSecondary)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(isLooping ? accentColor : DesignSystem.Colors.border, lineWidth: 1)
+                                    )
+                            )
+                    }
+                    .accessibilityLabel(isLooping ? "Disable loop" : "Loop arrangement")
+
                     Button {
                         isMetronomeEnabled.toggle()
                     } label: {

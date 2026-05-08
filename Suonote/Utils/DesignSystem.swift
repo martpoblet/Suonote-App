@@ -158,10 +158,12 @@ struct DesignSystem {
     // MARK: - Shadows
 
     struct Shadows {
-        static let sm = Shadow(color: .clear, radius: 0, x: 0, y: 0)
-        static let md = Shadow(color: .clear, radius: 0, x: 0, y: 0)
-        static let lg = Shadow(color: .clear, radius: 0, x: 0, y: 0)
-        static let card = Shadow(color: .clear, radius: 0, x: 0, y: 0)
+        // Soft, low-elevation shadows. Tuned for the pastel palette so cards
+        // gain depth without breaking the airy, paper-like aesthetic.
+        static let sm = Shadow(color: Color.black.opacity(0.04), radius: 4,  x: 0, y: 1)
+        static let md = Shadow(color: Color.black.opacity(0.06), radius: 8,  x: 0, y: 2)
+        static let lg = Shadow(color: Color.black.opacity(0.08), radius: 14, x: 0, y: 4)
+        static let card = Shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 2)
     }
 
     struct Shadow {

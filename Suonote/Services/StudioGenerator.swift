@@ -131,6 +131,9 @@ struct StudioGenerator {
             )
             track.project = project
             modelContext.insert(track)
+            // Auto-mix template (volume/pan/reverb send/EQ tilt) so the bulk-
+            // generated arrangement lands in a balanced mix without user tweaks.
+            StudioMixDefaults.apply(to: track, style: style)
             if instrument == .drums {
                 track.drumPreset = defaultDrumPreset
             }

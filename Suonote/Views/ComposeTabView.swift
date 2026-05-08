@@ -187,7 +187,7 @@ struct ComposeTabView: View {
     
     private var topControlsBar: some View {
         HStack(spacing: DesignSystem.Spacing.xs) {
-            // Key button
+            // Key button — tap opens picker, long-press exposes quick transpose.
             Button {
                 haptic(.selection)
                 showingKeyPicker = true
@@ -200,6 +200,22 @@ struct ComposeTabView: View {
                 )
             }
             .buttonStyle(.haptic(.light))
+            .contextMenu {
+                Section("Transpose") {
+                    Button { transposeProject(by: 1) } label: {
+                        Label("Up 1 semitone", systemImage: "arrow.up")
+                    }
+                    Button { transposeProject(by: -1) } label: {
+                        Label("Down 1 semitone", systemImage: "arrow.down")
+                    }
+                    Button { transposeProject(by: 12) } label: {
+                        Label("Up 1 octave", systemImage: "arrow.up.to.line")
+                    }
+                    Button { transposeProject(by: -12) } label: {
+                        Label("Down 1 octave", systemImage: "arrow.down.to.line")
+                    }
+                }
+            }
             
             // Time signature button
             Button {
@@ -665,10 +681,27 @@ struct ComposeTabView: View {
     }
     
     // MARK: - Chord Preview
-    
+
     /// Reproduce un preview sonoro del acorde seleccionado
     private func playChordPreview(root: String, quality: ChordQuality) {
         chordPreview.playChord(root: root, quality: quality)
+    }
+
+    // MARK: - Transpose
+
+    /// Shift the project's key by the given number of semitones, transposing
+    /// every chord (and slash bass) in place. Wraps via the existing
+    /// `applyKeyChange` so the rest of the project (recordings, signatures)
+    /// stays in sync.
+    private func transposeProject(by semitones: Int) {
+        guard semitones != 0 else { return }
+        let oldRoot = project.keyRoot
+        let newRoot = NoteUtils.transpose(note: oldRoot, semitones: semitones)
+        guard newRoot != oldRoot else { return }
+        project.keyRoot = newRoot
+        project.applyKeyChange(oldRoot: oldRoot, newRoot: newRoot)
+        project.updatedAt = Date()
+        haptic(.success)
     }
 }
 

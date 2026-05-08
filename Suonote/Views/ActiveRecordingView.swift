@@ -720,21 +720,33 @@ struct RecordingTypePickerSheet: View {
 struct RealTimeWaveformView: View {
     let levels: [Float]
     let accentColor: Color
-    
+
+    private var barGradient: LinearGradient {
+        LinearGradient(
+            colors: [accentColor.opacity(0.7), accentColor],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+
     var body: some View {
         GeometryReader { geometry in
             let barWidth = (geometry.size.width / CGFloat(levels.count)) - 1
             let midLine = geometry.size.height / 2
-            
+
             HStack(spacing: 1) {
                 ForEach(Array(levels.enumerated()), id: \.offset) { index, level in
+                    // Soft attack envelope so individual frames don't snap.
+                    // Recent frames get the full vibrant gradient; older ones fade.
                     let barHeight = max(6, CGFloat(level) * geometry.size.height * 0.9)
-                    let isRecent = index > levels.count - 10
-                    
+                    let recentRatio = max(0.0, min(1.0, Double(index) / Double(max(1, levels.count - 1))))
+                    let opacity = 0.45 + 0.55 * recentRatio
                     RoundedRectangle(cornerRadius: barWidth / 2)
-                        .fill(isRecent ? accentColor : accentColor.opacity(0.6))
+                        .fill(barGradient)
+                        .opacity(opacity)
                         .frame(width: barWidth, height: barHeight)
                         .offset(y: midLine - (barHeight / 2))
+                        .animation(.easeOut(duration: 0.12), value: level)
                 }
             }
             .overlay(

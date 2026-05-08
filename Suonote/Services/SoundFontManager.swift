@@ -3,16 +3,16 @@ import AudioToolbox
 
 /// Describes one SoundFont file the app can load.
 /// Packs are tried in priority order (most specific first); the first one whose
-/// file is present in the app bundle is used. The Arachno Lite pack is always
-/// available as a fallback so the engine never has zero candidates.
+/// file is present in the app bundle is used. GeneralUser GS is the broad
+/// fallback so the engine never has zero candidates.
 struct SoundFontPack: Equatable {
     /// Folder relative to `SoundFonts/` (e.g. "Piano", "Drums", "Arachno").
     let subdirectory: String
-    /// File name without extension (e.g. "Salamander_Grand_V3").
+    /// File name without extension (e.g. "GeneralUser-GS").
     let fileName: String
     /// User-visible label, used in attribution.
     let displayName: String
-    /// License tag (e.g. "CC0", "CC-BY 3.0", "MIT"). Empty for bundled-by-author packs.
+    /// License tag (e.g. "CC0", "CC-BY 3.0", "MIT").
     let licenseTag: String
 
     /// Build a search list of bundle subdirectories to look in. Allows files
@@ -27,24 +27,28 @@ struct SoundFontPack: Equatable {
 enum SoundFontManager {
     static let folderName = "SoundFonts"
 
-    /// The always-bundled fallback. Ships with every build and covers every GM program.
-    static let arachnoLite = SoundFontPack(
+    /// The primary, broadly-compatible SoundFont. CC-BY 3.0, ~30 MB, full GM map
+    /// (128 melodic instruments + percussion bank with multiple kits). Drop the
+    /// file at `Suonote/SoundFonts/Arachno/GeneralUser-GS.sf2` and Xcode bundles
+    /// it automatically thanks to the folder reference.
+    static let generalUserGS = SoundFontPack(
         subdirectory: "Arachno",
-        fileName: "Arachno_Lite",
-        displayName: "Arachno Lite",
-        licenseTag: "Used with permission (Arachnosoft)"
+        fileName: "GeneralUser-GS",
+        displayName: "GeneralUser GS",
+        licenseTag: "CC-BY 3.0 (S. Christian Collins)"
     )
 
     // MARK: - Optional dedicated packs (multi-SoundFont registry)
     //
-    // These describe the file names the engine will look for FIRST when loading a
-    // given instrument family. If the file isn't bundled the engine falls back to
-    // Arachno Lite, so the registry is safe to populate before the asset exists.
+    // Per-family packs are tried before the broad pack. If a dedicated file
+    // isn't bundled the engine falls back to GeneralUser GS — no crashes, no
+    // breakage when a family-specific upgrade hasn't been added yet.
     //
     // To upgrade an instrument family, drop a CC-licensed `.sf2` at:
     //     Suonote/SoundFonts/<Subdirectory>/<FileName>.sf2
-    // Xcode includes the SoundFonts folder by reference so no project edit is required.
-    // Update `Resources/THIRD_PARTY_NOTICES.md` with the attribution.
+    // Xcode includes the SoundFonts folder by reference so no project edit
+    // is required. Update `Resources/THIRD_PARTY_NOTICES.md` with the
+    // attribution.
 
     static let pianoPack = SoundFontPack(
         subdirectory: "Piano",
@@ -111,7 +115,7 @@ enum SoundFontManager {
         case .synth, .woodwinds, .organ, .mallets, .audio:
             dedicated = []
         }
-        return dedicated + [arachnoLite]
+        return dedicated + [generalUserGS]
     }
 
     /// Resolve a pack to a bundle URL. Returns nil if no matching file is bundled.
@@ -127,25 +131,41 @@ enum SoundFontManager {
     static func supportedVariants(for instrument: StudioInstrument) -> [InstrumentVariant] {
         switch instrument {
         case .piano:
-            return [.acousticPiano, .brightPiano, .electricPiano]
+            // GeneralUser GS exposes the full GM piano family — surface them all
+            // so users can A/B between Steinway-flavoured grand, EP1, EP2, etc.
+            return [.acousticPiano, .brightPiano, .electricPiano, .electricPiano2,
+                    .honkyTonkPiano, .harpsichord, .clavinet, .harp]
         case .drums:
-            return [.standardDrumKit, .electronicDrumKit, .tr808DrumKit]
+            return [.standardDrumKit, .roomDrumKit, .powerDrumKit,
+                    .electronicDrumKit, .tr808DrumKit, .jazzDrumKit, .brushDrumKit]
         case .synth:
-            return [.leadBass, .padWarm]
+            return [.leadSquare, .leadSaw, .leadCalliope, .leadVoice,
+                    .leadBass, .padNewAge, .padWarm, .padPolysynth,
+                    .padChoir, .padBowed, .padHalo, .padSweep]
         case .guitar:
-            return [.acousticNylonGuitar, .acousticSteelGuitar, .cleanGuitar, .overdriveGuitar]
+            return [.acousticNylonGuitar, .acousticSteelGuitar, .jazzGuitar,
+                    .cleanGuitar, .mutedGuitar, .overdriveGuitar, .distortionGuitar,
+                    .harmonicsGuitar]
         case .bass:
-            return [.fingerBass, .synthBass]
+            return [.acousticBass, .fingerBass, .pickBass, .fretlessBass,
+                    .slapBass1, .synthBass, .synthBass2]
         case .strings:
-            return [.stringEnsemble, .synthStrings1, .synthStrings2]
+            return [.stringEnsemble, .slowStrings, .tremoloStrings,
+                    .pizzicatoStrings, .synthStrings1, .synthStrings2,
+                    .choirAahs, .voiceOohs]
         case .brass:
-            return [.synthBrass1, .synthBrass2]
+            return [.trumpet, .trombone, .tuba, .mutedTrumpet, .frenchHorn,
+                    .brassSection, .synthBrass1, .synthBrass2]
         case .woodwinds:
-            return [.flute, .clarinet, .tenorSax]
+            return [.sopranoSax, .altoSax, .tenorSax, .baritoneSax,
+                    .oboe, .englishHorn, .clarinet, .flute, .piccolo,
+                    .panFlute, .recorder, .ocarina]
         case .organ:
-            return [.drawbarOrgan, .churchOrgan]
+            return [.drawbarOrgan, .percussiveOrgan, .rockOrgan, .churchOrgan,
+                    .reedOrgan, .accordion, .harmonica]
         case .mallets:
-            return [.xylophone, .tubularBells]
+            return [.celesta, .glockenspiel, .musicBox, .vibraphone,
+                    .marimba, .xylophone, .tubularBells, .dulcimer, .kalimba]
         case .audio:
             return []
         }
