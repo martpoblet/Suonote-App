@@ -487,6 +487,13 @@ final class StudioTrack {
     var octaveShift: Int = 2
     var isMuted: Bool = false
     var isSolo: Bool = false
+    /// When true the track is excluded from any regenerate/append/replace pass.
+    /// Lets users protect a hand-edited or "good take" track while regenerating others.
+    var isLocked: Bool = false
+    /// Snapshot of the notes BEFORE the most recent regenerate, encoded as JSON.
+    /// Cleared once the user accepts the regenerated result. Enables a single-step
+    /// "undo regenerate" / A-B compare experience.
+    var regenerateSnapshotJSON: String? = nil
     var volume: Float = 0.75
     var pan: Float = 0.0
     var regenerateIntensity: Double = 0.5
@@ -629,5 +636,76 @@ final class StudioNote {
         self.duration = duration
         self.pitch = pitch
         self.velocity = velocity
+    }
+}
+
+// MARK: - Snapshot support (A/B regenerate)
+
+/// Plain Codable shape used to serialize a track's notes for undo. Kept outside
+/// the `@Model` so SwiftData's persistence layer never sees the encoded blob as
+/// a relationship — it's just stored as a JSON string on the track.
+struct StudioNoteSnapshotEntry: Codable {
+    let startBeat: Double
+    let duration: Double
+    let pitch: Int
+    let velocity: Int
+}
+
+extension StudioTrack {
+    /// True when a snapshot from the previous regenerate is still available to restore.
+    var hasRegenerateSnapshot: Bool {
+        guard let json = regenerateSnapshotJSON else { return false }
+        return !json.isEmpty
+    }
+
+    /// Encode the current notes as the "before" snapshot. Idempotent: multiple
+    /// calls overwrite the previous snapshot (we only keep one undo level).
+    func captureRegenerateSnapshot() {
+        let entries = notes.map {
+            StudioNoteSnapshotEntry(
+                startBeat: $0.startBeat,
+                duration: $0.duration,
+                pitch: $0.pitch,
+                velocity: $0.velocity
+            )
+        }
+        if let data = try? JSONEncoder().encode(entries),
+           let json = String(data: data, encoding: .utf8) {
+            regenerateSnapshotJSON = json
+        }
+    }
+
+    /// Replace the current notes with the snapshot. Returns true when a snapshot
+    /// was found and applied; the snapshot is then cleared so undo can't loop.
+    @discardableResult
+    func restoreRegenerateSnapshot(modelContext: ModelContext) -> Bool {
+        guard let json = regenerateSnapshotJSON,
+              let data = json.data(using: .utf8),
+              let entries = try? JSONDecoder().decode([StudioNoteSnapshotEntry].self, from: data) else {
+            return false
+        }
+        for note in notes {
+            modelContext.delete(note)
+        }
+        notes.removeAll()
+        for entry in entries {
+            let note = StudioNote(
+                startBeat: entry.startBeat,
+                duration: entry.duration,
+                pitch: entry.pitch,
+                velocity: entry.velocity
+            )
+            note.track = self
+            notes.append(note)
+            modelContext.insert(note)
+        }
+        regenerateSnapshotJSON = nil
+        return true
+    }
+
+    /// Drop the snapshot without restoring — used when the user accepts the
+    /// regenerated result and wants the undo cleared.
+    func clearRegenerateSnapshot() {
+        regenerateSnapshotJSON = nil
     }
 }

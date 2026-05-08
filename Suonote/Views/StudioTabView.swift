@@ -1720,6 +1720,8 @@ struct StudioTrackEditorView: View {
     private func executeRegenerate() {
         guard let style else { return }
 
+        // Capture an undo snapshot before tearing the existing notes down.
+        track.captureRegenerateSnapshot()
         for note in track.notes {
             modelContext.delete(note)
         }
@@ -2155,6 +2157,54 @@ struct StudioTrackRow: View {
                         )
                 }
                 .buttonStyle(.plain)
+
+                if !track.instrument.isAudio {
+                    Button {
+                        track.isLocked.toggle()
+                        HapticFeedback.medium.trigger()
+                    } label: {
+                        Image(systemName: track.isLocked ? "lock.fill" : "lock.open")
+                            .font(DesignSystem.Typography.caption2)
+                            .foregroundStyle(track.isLocked ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
+                            .frame(width: 26, height: 26)
+                            .background(
+                                Circle()
+                                    .fill(track.isLocked ? track.instrument.color : DesignSystem.Colors.surfaceSecondary)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(DesignSystem.Colors.border, lineWidth: 1)
+                                    )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(track.isLocked ? "Unlock track" : "Lock track")
+                    .accessibilityHint("Locked tracks are skipped when regenerating")
+                }
+
+                if track.hasRegenerateSnapshot {
+                    Button {
+                        track.restoreRegenerateSnapshot(modelContext: modelContext)
+                        try? modelContext.save()
+                        onTrackStructureChange()
+                        HapticFeedback.success.trigger()
+                    } label: {
+                        Image(systemName: "arrow.uturn.backward")
+                            .font(DesignSystem.Typography.caption2)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
+                            .frame(width: 26, height: 26)
+                            .background(
+                                Circle()
+                                    .fill(DesignSystem.Colors.warning.opacity(0.18))
+                                    .overlay(
+                                        Circle()
+                                            .stroke(DesignSystem.Colors.warning.opacity(0.45), lineWidth: 1)
+                                    )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Undo regenerate")
+                    .accessibilityHint("Restore the previous take")
+                }
 
                 Button {
                     onOpenEditor()

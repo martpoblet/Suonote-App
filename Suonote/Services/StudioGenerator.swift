@@ -194,6 +194,9 @@ struct StudioGenerator {
             if track.instrument == .drums, !includeDrums {
                 continue
             }
+            // Locked tracks are protected from regenerate.
+            if track.isLocked { continue }
+            track.captureRegenerateSnapshot()
             for note in track.notes {
                 modelContext.delete(note)
             }
@@ -261,6 +264,8 @@ struct StudioGenerator {
         var didAppend = false
 
         for track in project.studioTracks where !track.instrument.isAudio {
+            // Locked tracks: don't append any auto-generated material.
+            if track.isLocked { continue }
             if track.instrument == .drums {
                 guard timeline.totalBars > previousTotalBars else { continue }
                 let preset = track.drumPreset ?? defaultDrumPreset
@@ -354,6 +359,9 @@ struct StudioGenerator {
         var didChange = false
 
         for track in project.studioTracks where !track.instrument.isAudio && track.instrument != .drums {
+            // Locked tracks: section replace is a destructive op, skip them entirely.
+            if track.isLocked { continue }
+            track.captureRegenerateSnapshot()
             let removed = removeNotes(in: ranges, from: track, modelContext: modelContext)
             didChange = removed || didChange
 
@@ -704,6 +712,11 @@ struct StudioGenerator {
         let range = chordRange(for: instrument, variant: variant, style: style, octaveShift: octaveShift)
         let tonicTarget = anchorPitch(for: keyRoot, in: range)
         var lastCenter = tonicTarget
+        // Memo for voice leading — last rendered chord's pitches in actual MIDI
+        // numbers. Empty for the first chord (we fall back to the simple
+        // nearest-pitch heuristic). Updated AFTER all voicing transforms so
+        // every chord smoothly leads from whatever finally got played.
+        var lastChordPitches: [Int] = []
         var notes: [StudioNote] = []
 
         for span in chords {
@@ -734,7 +747,15 @@ struct StudioGenerator {
             }
             pitches = uniqueSorted(pitches)
             pitches = fitPitches(pitches, in: range)
-            
+
+            // Voice leading — pick the octave for each pitch that minimises
+            // motion from the previous chord. Skipped for monophonic voices
+            // (handled below as melodic line) and for the first chord.
+            let isPolyphonicVoice = !(instrument == .woodwinds || voicingProfile.monophonic)
+            if isPolyphonicVoice, !lastChordPitches.isEmpty, !pitches.isEmpty {
+                pitches = voiceLead(from: lastChordPitches, to: pitches, range: range)
+            }
+
             // Monophonic instruments or variants: pick a single melodic pitch
             if (instrument == .woodwinds || voicingProfile.monophonic), let pitch = pitches.last {
                 pitches = [pitch]
@@ -766,9 +787,12 @@ struct StudioGenerator {
             if let maxNotes = voicingProfile.maxNotes, pitches.count > maxNotes {
                 pitches = Array(pitches.prefix(maxNotes))
             }
-            
+
             let center = pitches.reduce(0, +) / max(1, pitches.count)
             lastCenter = center
+            // Memo for next iteration's voice leading. We track the rendered
+            // pitches (post-voicing transforms) so the link is musically real.
+            if !pitches.isEmpty { lastChordPitches = pitches }
             
             // Apply intensity to velocity with instrument-specific curve
             let baseVelocity = chordVelocity(for: instrument, style: style)
@@ -1524,6 +1548,21 @@ struct StudioGenerator {
                     pitch: pitchMap.crash,
                     velocity: scaledVelocity(base: crashVelocityBase + 8, intensity: intensity, range: 16)
                 ))
+                // Section-start kick drop — guarantees a punchy "1" on every
+                // section change. Suppressed for soft kits (brush/orchestra/sfx)
+                // to keep their character, and skipped if a kick already lands
+                // on this step (avoids stacked-on-top duplicates).
+                let supportsKickDrop = !(resolvedVariant == .brushDrumKit
+                                         || resolvedVariant == .orchestraDrumKit
+                                         || resolvedVariant == .sfxDrumKit)
+                if supportsKickDrop && !kickSteps.contains(0) {
+                    notes.append(StudioNote(
+                        startBeat: barStart,
+                        duration: stepLength,
+                        pitch: pitchMap.kick,
+                        velocity: scaledVelocity(base: kickVelocityBase + 10, intensity: intensity, range: 18)
+                    ))
+                }
             }
 
             // Auto-fill on last bar before section transition
@@ -1561,9 +1600,10 @@ struct StudioGenerator {
                 )
             }
             for step in snareSteps {
+                let mainBeat = barStart + Double(step) * stepLength
                 notes.append(
                     StudioNote(
-                        startBeat: barStart + Double(step) * stepLength,
+                        startBeat: mainBeat,
                         duration: stepLength,
                         pitch: pitchMap.snare,
                         velocity: scaledVelocity(
@@ -1573,6 +1613,25 @@ struct StudioGenerator {
                         )
                     )
                 )
+                // Occasional flam on backbeat snares — a tiny grace note ~25 ms
+                // before the main hit, at ~55% velocity. Suppressed on jazz-brush
+                // kits where flams collide with brush sweeps.
+                let flamCapable = density > 0.55
+                    && resolvedVariant != .brushDrumKit
+                    && resolvedVariant != .sfxDrumKit
+                if flamCapable && Int.random(in: 0..<100) < 7 {
+                    let flamLead = max(0.02, stepLength * 0.18)
+                    let flamStart = mainBeat - flamLead
+                    if flamStart >= 0 {
+                        let flamVelocity = max(20, Int(Float(snareVelocityBase) * 0.55))
+                        notes.append(StudioNote(
+                            startBeat: flamStart,
+                            duration: flamLead,
+                            pitch: pitchMap.snare,
+                            velocity: flamVelocity
+                        ))
+                    }
+                }
             }
             // Ghost notes on snare — low velocity hits on off-beat 16ths
             if density > 0.45 && !isBeforeSectionChange {
@@ -1623,9 +1682,29 @@ struct StudioGenerator {
             }
             let closedHatSteps = hatClosedSteps.filter { !effectiveOpenHatSteps.contains($0) }
             for step in closedHatSteps {
-                let velocity = accentSteps.contains(step)
-                    ? scaledVelocity(base: hatVelocityBase + 8, intensity: intensity, range: 18)
-                    : scaledVelocity(base: hatVelocityBase, intensity: intensity, range: 16)
+                // Within-beat dynamics curve. Position 0 (downbeat) gets a
+                // small boost, "e"/"a" sit back, "and" stays neutral. Combined
+                // with the existing accentSteps (full-beat pulses) this gives
+                // hats a more human, swung-feel without changing the pattern.
+                let withinBeat = step % stepsPerBeat
+                let curveOffset: Int
+                if stepsPerBeat >= 4 {
+                    switch withinBeat {
+                    case 0: curveOffset = 4   // on
+                    case 1: curveOffset = -8  // e — softer
+                    case 2: curveOffset = 0   // and — neutral
+                    default: curveOffset = -4 // a — softer than "and"
+                    }
+                } else {
+                    // 8th-note grids: simpler on/off contrast
+                    curveOffset = withinBeat == 0 ? 3 : -5
+                }
+                let accentBase = accentSteps.contains(step) ? hatVelocityBase + 8 : hatVelocityBase
+                let velocity = scaledVelocity(
+                    base: accentBase + curveOffset,
+                    intensity: intensity,
+                    range: 18
+                )
                 notes.append(
                     StudioNote(
                         startBeat: barStart + Double(step) * stepLength,
@@ -2277,6 +2356,52 @@ struct StudioGenerator {
         }
         if shift == 0 { return pitches }
         return pitches.map { $0 + shift }
+    }
+
+    /// Re-octavate the new chord's pitches so the total motion from the
+    /// previous voicing is minimised. For each input pitch the algorithm picks
+    /// the octave (within `range`) whose distance to the nearest previous
+    /// pitch is smallest, while avoiding collisions with already-chosen output
+    /// pitches. Pitch classes are preserved — only octaves change.
+    private static func voiceLead(
+        from previous: [Int],
+        to pitches: [Int],
+        range: ClosedRange<Int>
+    ) -> [Int] {
+        guard !previous.isEmpty, !pitches.isEmpty else { return pitches }
+        let previousSorted = previous.sorted()
+        // Process input pitches low → high so doublings naturally cascade upward.
+        let inputSorted = pitches.sorted()
+        var used = Set<Int>()
+        var result: [Int] = []
+        result.reserveCapacity(inputSorted.count)
+
+        for p in inputSorted {
+            let pc = ((p % 12) + 12) % 12
+            // Try every octave that lands within (or right beside) the range.
+            let lowOct = (range.lowerBound - 12) / 12
+            let highOct = (range.upperBound + 12) / 12
+            var best: Int? = nil
+            var bestDist = Int.max
+            for oct in lowOct...highOct {
+                let candidate = oct * 12 + pc
+                if candidate < range.lowerBound || candidate > range.upperBound { continue }
+                if used.contains(candidate) { continue }
+                let dist = previousSorted.map { abs($0 - candidate) }.min() ?? Int.max
+                if dist < bestDist {
+                    bestDist = dist
+                    best = candidate
+                }
+            }
+            if let best {
+                used.insert(best)
+                result.append(best)
+            } else {
+                // No legal slot — preserve the original pitch as a fallback.
+                result.append(p)
+            }
+        }
+        return result.sorted()
     }
 
     private static func chordIntervals(for chord: ChordEvent) -> [Int] {
