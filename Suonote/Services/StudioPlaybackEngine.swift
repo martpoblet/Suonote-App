@@ -1,3 +1,4 @@
+import os
 import Foundation
 import AVFoundation
 import AudioToolbox
@@ -74,6 +75,139 @@ final class StudioPlaybackEngine: ObservableObject {
         case unavailable
     }
 
+    private var sessionObservers: [Any] = []
+    private var wasPlayingBeforeInterruption = false
+
+    // MARK: - Track level metering
+    /// Smoothed RMS level per track (0...1), published on the playhead tick.
+    @Published private(set) var trackLevels: [UUID: Float] = [:]
+    private let levelStore = TrackLevelStore()
+
+    /// Thread-safe store written from the audio render tap.
+    private final class TrackLevelStore: @unchecked Sendable {
+        private var levels: [UUID: Float] = [:]
+        private let lock = NSLock()
+
+        func set(_ level: Float, for id: UUID) {
+            lock.lock()
+            levels[id] = level
+            lock.unlock()
+        }
+
+        func snapshot() -> [UUID: Float] {
+            lock.lock()
+            defer { lock.unlock() }
+            return levels
+        }
+
+        func clear() {
+            lock.lock()
+            levels = [:]
+            lock.unlock()
+        }
+    }
+
+    private func installMeterTaps() {
+        for (id, mixer) in mixerNodes {
+            let format = mixer.outputFormat(forBus: 0)
+            guard format.channelCount > 0, format.sampleRate > 0 else { continue }
+            mixer.removeTap(onBus: 0)
+            mixer.installTap(onBus: 0, bufferSize: 1024, format: format) { [levelStore] buffer, _ in
+                guard let data = buffer.floatChannelData else { return }
+                let frames = Int(buffer.frameLength)
+                guard frames > 0 else { return }
+                let samples = data[0]
+                var sum: Float = 0
+                var count = 0
+                for index in stride(from: 0, to: frames, by: 8) {
+                    sum += samples[index] * samples[index]
+                    count += 1
+                }
+                let rms = sqrt(sum / Float(max(1, count)))
+                levelStore.set(min(1, rms * 2.5), for: id)
+            }
+        }
+    }
+
+    private func removeMeterTaps() {
+        for mixer in mixerNodes.values {
+            mixer.removeTap(onBus: 0)
+        }
+        levelStore.clear()
+        trackLevels = [:]
+    }
+
+    init() {
+        observeAudioSessionNotifications()
+    }
+
+    deinit {
+        for observer in sessionObservers {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+
+    // MARK: - Audio session interruptions / route changes (A-02)
+
+    private func observeAudioSessionNotifications() {
+        let center = NotificationCenter.default
+        sessionObservers.append(center.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: nil,
+            queue: .main
+        ) { notification in
+            // Extract Sendable values before hopping to the main actor.
+            let typeValue = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
+            let optionsValue = notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt
+            Task { @MainActor [weak self] in
+                self?.handleInterruption(typeValue: typeValue, optionsValue: optionsValue)
+            }
+        })
+        sessionObservers.append(center.addObserver(
+            forName: AVAudioSession.routeChangeNotification,
+            object: nil,
+            queue: .main
+        ) { notification in
+            let reasonValue = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
+            Task { @MainActor [weak self] in
+                self?.handleRouteChange(reasonValue: reasonValue)
+            }
+        })
+    }
+
+    private func handleInterruption(typeValue: UInt?, optionsValue: UInt?) {
+        guard let typeValue,
+              let type = AVAudioSession.InterruptionType(rawValue: typeValue) else { return }
+
+        switch type {
+        case .began:
+            wasPlayingBeforeInterruption = isPlaying
+            if isPlaying {
+                pause()
+            }
+        case .ended:
+            let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue ?? 0)
+            if options.contains(.shouldResume), wasPlayingBeforeInterruption {
+                configureAudioSession()
+                play()
+            }
+            wasPlayingBeforeInterruption = false
+        @unknown default:
+            break
+        }
+    }
+
+    private func handleRouteChange(reasonValue: UInt?) {
+        guard let reasonValue,
+              let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue) else { return }
+
+        // Pause when the output device disappears (e.g. headphones unplugged)
+        // so playback doesn't blast from the speaker mid-session.
+        if reason == .oldDeviceUnavailable, isPlaying {
+            pause()
+        }
+    }
+
     func prepare(project: Project) {
         updateBeatClock(for: project)
         totalBeats = timelineBeats(for: project)
@@ -96,7 +230,7 @@ final class StudioPlaybackEngine: ObservableObject {
         engine = AVAudioEngine()
         let outputFormat = engine.outputNode.inputFormat(forBus: 0)
         guard outputFormat.sampleRate > 0, outputFormat.channelCount > 0 else {
-            print("Studio playback output unavailable.")
+            AppLog.studio.error("Studio playback output unavailable.")
             return
         }
 
@@ -108,7 +242,7 @@ final class StudioPlaybackEngine: ObservableObject {
         do {
             try engine.start()
         } catch {
-            print("Studio playback engine failed to start: \(error)")
+            AppLog.studio.error("Studio playback engine failed to start: \(String(describing: error))")
             return
         }
 
@@ -151,15 +285,27 @@ final class StudioPlaybackEngine: ObservableObject {
     }
 
     func play() {
-        guard let sequencer else { return }
+        guard sequencer != nil else { return }
 
         if !engine.isRunning {
             do {
                 try engine.start()
             } catch {
-                print("Studio playback engine failed to start: \(error)")
+                AppLog.studio.error("Studio playback engine failed to start: \(String(describing: error))")
             }
         }
+
+        if countInBars > 0, !isCountingIn {
+            startCountIn { [weak self] in
+                self?.beginPlayback()
+            }
+        } else {
+            beginPlayback()
+        }
+    }
+
+    private func beginPlayback() {
+        guard let sequencer else { return }
 
         scheduleAudioTracks(startBeat: currentBeat)
         sequencer.currentPositionInBeats = beatClock.uiBeatToSequencerBeat(currentBeat)
@@ -167,10 +313,92 @@ final class StudioPlaybackEngine: ObservableObject {
         do {
             try sequencer.start()
             isPlaying = true
+            installMeterTaps()
             startPlayheadTimer()
         } catch {
-            print("Failed to start sequencer: \(error)")
+            AppLog.studio.error("Failed to start sequencer: \(String(describing: error))")
         }
+    }
+
+    // MARK: - Count-in (A-04)
+
+    @Published private(set) var isCountingIn = false
+    private var countInWorkItems: [DispatchWorkItem] = []
+    private var countInSampler: AVAudioUnitSampler?
+
+    private func ensureCountInSampler() -> AVAudioUnitSampler? {
+        if let countInSampler { return countInSampler }
+        let sampler = AVAudioUnitSampler()
+        engine.attach(sampler)
+        engine.connect(sampler, to: engine.mainMixerNode, format: nil)
+
+        var loaded = false
+        if let sfURL = SoundFontManager.soundFontURL(for: .drums, variant: nil) {
+            loaded = attemptLoad(
+                sampler, url: sfURL, program: 0,
+                bankMSB: UInt8(kAUSampler_DefaultPercussionBankMSB),
+                bankLSB: UInt8(kAUSampler_DefaultBankLSB), logFailure: false
+            )
+        }
+        if !loaded, let sysURL = systemSoundBankURL() {
+            loaded = attemptLoad(
+                sampler, url: sysURL, program: 0,
+                bankMSB: UInt8(kAUSampler_DefaultPercussionBankMSB),
+                bankLSB: UInt8(kAUSampler_DefaultBankLSB), logFailure: false
+            )
+        }
+        guard loaded else {
+            engine.detach(sampler)
+            return nil
+        }
+        countInSampler = sampler
+        return sampler
+    }
+
+    private func startCountIn(completion: @escaping () -> Void) {
+        guard let sampler = ensureCountInSampler() else {
+            completion()
+            return
+        }
+
+        isCountingIn = true
+        let beatSeconds = beatClock.uiBeatSeconds
+        let beatsPerBar = max(1, currentBeatsPerBar)
+        let totalClicks = countInBars * beatsPerBar
+
+        // GM percussion: 76 = Hi Wood Block (accent), 77 = Lo Wood Block
+        for index in 0..<totalClicks {
+            let isDownbeat = index % beatsPerBar == 0
+            let item = DispatchWorkItem {
+                let note: UInt8 = isDownbeat ? 76 : 77
+                let velocity: UInt8 = isDownbeat ? 110 : 80
+                sampler.startNote(note, withVelocity: velocity, onChannel: 9)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    sampler.stopNote(note, onChannel: 9)
+                }
+            }
+            countInWorkItems.append(item)
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * beatSeconds, execute: item)
+        }
+
+        let finish = DispatchWorkItem { [weak self] in
+            self?.isCountingIn = false
+            self?.countInWorkItems.removeAll()
+            completion()
+        }
+        countInWorkItems.append(finish)
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + Double(totalClicks) * beatSeconds,
+            execute: finish
+        )
+    }
+
+    private func cancelCountIn() {
+        for item in countInWorkItems {
+            item.cancel()
+        }
+        countInWorkItems.removeAll()
+        isCountingIn = false
     }
 
     func pause() {
@@ -178,7 +406,9 @@ final class StudioPlaybackEngine: ObservableObject {
     }
 
     func stop(resetPosition: Bool = false) {
+        cancelCountIn()
         stopPlayheadTimer()
+        removeMeterTaps()
         isPlaying = false
         
         if resetPosition {
@@ -284,7 +514,7 @@ final class StudioPlaybackEngine: ObservableObject {
             try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
             try session.setActive(true)
         } catch {
-            print("Failed to configure audio session: \(error)")
+            AppLog.audio.error("Failed to configure audio session: \(String(describing: error))")
         }
     }
 
@@ -303,6 +533,8 @@ final class StudioPlaybackEngine: ObservableObject {
         mixerNodes.values.forEach { engine.detach($0) }
         if let limiter = masterLimiter { engine.detach(limiter); masterLimiter = nil }
         if let metro = metronomePlayer { engine.detach(metro); metronomePlayer = nil }
+        if let countIn = countInSampler { engine.detach(countIn); countInSampler = nil }
+        cancelCountIn()
         engine.reset()
         samplerNodes.removeAll()
         audioNodes.removeAll()
@@ -461,7 +693,7 @@ final class StudioPlaybackEngine: ObservableObject {
                         )
                     }
                 } else {
-                    print("Recording file not found for: \(recording.fileName)")
+                    AppLog.studio.error("Recording file not found for: \(recording.fileName)")
                 }
             }
 
@@ -598,6 +830,14 @@ final class StudioPlaybackEngine: ObservableObject {
         }
     }
 
+    /// Live sequencer position in UI beats, for frame-rate playhead rendering
+    /// (the published `currentBeat` only updates on the coarse logic timer).
+    func livePositionBeats() -> Double {
+        guard isPlaying, let sequencer else { return currentBeat }
+        let beats = beatClock.sequencerBeatToUiBeat(sequencer.currentPositionInBeats)
+        return max(0, min(beats, totalBeats))
+    }
+
     /// Re-attach playhead timer if playing but timer was lost (e.g. view reappeared)
     func ensurePlayheadTimer() {
         guard isPlaying, playheadTimer == nil else { return }
@@ -624,13 +864,14 @@ final class StudioPlaybackEngine: ObservableObject {
 
     private func handlePlayheadTick() {
         guard let sequencer, isPlaying else { return }
-        
+
         let position: Double
         do {
             let raw = sequencer.currentPositionInBeats
             position = beatClock.sequencerBeatToUiBeat(raw)
         }
         currentBeat = position
+        trackLevels = levelStore.snapshot()
         
         // Loop/Cycle support (P-06)
         if isLooping {
@@ -704,7 +945,7 @@ final class StudioPlaybackEngine: ObservableObject {
             }
             if track.instrument == .drums {
                 #if DEBUG
-                print("❌ Drum soundfont failed to load: \(url.lastPathComponent)")
+                AppLog.audio.error("Drum soundfont failed to load: \(url.lastPathComponent)")
                 #endif
             }
             if case .unknown = customBankStatus {
@@ -773,7 +1014,7 @@ final class StudioPlaybackEngine: ObservableObject {
             return true
         } catch {
             if logFailure {
-                print("Failed to load sound bank \(url.lastPathComponent): \(error)")
+                AppLog.audio.error("Failed to load sound bank \(url.lastPathComponent): \(String(describing: error))")
             }
             return false
         }
@@ -834,10 +1075,11 @@ final class StudioPlaybackEngine: ObservableObject {
     }
 
     private func hostTime(after delaySeconds: Double) -> AVAudioTime? {
-        guard let nodeTime = engine.outputNode.lastRenderTime else { return nil }
-        let hostTime = nodeTime.hostTime + AVAudioTime.hostTime(forSeconds: delaySeconds)
-        // Host-time scheduling keeps audio start sample-accurate.
-        return AVAudioTime(hostTime: hostTime)
+        // Host-time scheduling keeps audio start sample-accurate. Right after
+        // engine start `lastRenderTime` can still be nil; fall back to the
+        // current host clock so future-start tracks keep their offset (A-08).
+        let baseHostTime = engine.outputNode.lastRenderTime?.hostTime ?? mach_absolute_time()
+        return AVAudioTime(hostTime: baseHostTime + AVAudioTime.hostTime(forSeconds: max(0, delaySeconds)))
     }
 
     private func play(_ node: AVAudioPlayerNode, at time: AVAudioTime?) {
@@ -859,19 +1101,43 @@ final class StudioPlaybackEngine: ObservableObject {
         var musicSequence: MusicSequence?
         guard NewMusicSequence(&musicSequence) == noErr, let seq = musicSequence else { return nil }
 
-        // Tempo track
+        // Tempo track: tempo + time signature meta event (A-05)
         var tempoTrack: MusicTrack?
         MusicSequenceGetTempoTrack(seq, &tempoTrack)
         if let tempoTrack {
             MusicTrackNewExtendedTempoEvent(tempoTrack, 0, Float64(bpm))
+            addTimeSignatureMeta(to: tempoTrack, beatsPerBar: currentBeatsPerBar, timeBottom: beatClock.timeBottom)
         }
 
+        // Channel assignment: drums on the GM percussion channel (9),
+        // melodic tracks on sequential channels skipping 9.
+        var nextMelodicChannel: UInt8 = 0
         for track in tracks {
             var mTrack: MusicTrack?
             MusicSequenceNewTrack(seq, &mTrack)
             guard let mTrack else { continue }
 
-            let channel: UInt8 = track.instrument == .drums ? 9 : UInt8(track.orderIndex % 16)
+            let channel: UInt8
+            if track.instrument == .drums {
+                channel = 9
+            } else {
+                if nextMelodicChannel == 9 { nextMelodicChannel += 1 }
+                channel = nextMelodicChannel % 16
+                nextMelodicChannel += 1
+            }
+
+            // Program change so DAWs load the right GM instrument (A-05).
+            if track.instrument != .drums {
+                let program = track.variant?.midiProgram ?? programNumber(for: track.instrument)
+                var programMessage = MIDIChannelMessage(
+                    status: 0xC0 | channel,
+                    data1: program,
+                    data2: 0,
+                    reserved: 0
+                )
+                MusicTrackNewMIDIChannelEvent(mTrack, 0, &programMessage)
+            }
+
             for note in track.notes {
                 var msg = MIDINoteMessage(
                     channel: channel,
@@ -894,5 +1160,32 @@ final class StudioPlaybackEngine: ObservableObject {
         }
         DisposeMusicSequence(seq)
         return url
+    }
+
+    /// Writes a standard MIDI time-signature meta event (FF 58).
+    private func addTimeSignatureMeta(to track: MusicTrack, beatsPerBar: Int, timeBottom: Int) {
+        let denominatorPower = UInt8(max(0, Int(log2(Double(max(1, timeBottom))).rounded())))
+        let payload: [UInt8] = [
+            UInt8(max(1, min(255, beatsPerBar))),
+            denominatorPower,
+            24, // MIDI clocks per metronome click
+            8   // 32nd notes per quarter note
+        ]
+
+        let size = MemoryLayout<MIDIMetaEvent>.size + payload.count - 1
+        let memory = UnsafeMutableRawPointer.allocate(byteCount: size, alignment: MemoryLayout<MIDIMetaEvent>.alignment)
+        defer { memory.deallocate() }
+
+        let event = memory.bindMemory(to: MIDIMetaEvent.self, capacity: 1)
+        event.pointee.metaEventType = 0x58
+        event.pointee.dataLength = UInt32(payload.count)
+        withUnsafeMutablePointer(to: &event.pointee.data) { dataPointer in
+            dataPointer.withMemoryRebound(to: UInt8.self, capacity: payload.count) { bytes in
+                for (index, byte) in payload.enumerated() {
+                    bytes[index] = byte
+                }
+            }
+        }
+        MusicTrackNewMetaEvent(track, 0, event)
     }
 }

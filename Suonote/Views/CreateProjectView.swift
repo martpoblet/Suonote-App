@@ -333,7 +333,6 @@ struct CreateProjectView: View {
             isTitleFocused = true
         }
         .presentationBackground(DesignSystem.Colors.backgroundSecondary)
-        .preferredColorScheme(.light)
             }
     
     private func addTag() {

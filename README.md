@@ -307,7 +307,7 @@ Supporting enums/models cover:
 - `AVFoundation` for recording/playback/audio engine composition.
 - `AudioToolbox` integrations for metronome and low-level audio utilities.
 - `CloudKit` for sync.
-- SoundFont-based playback using `Arachno_Lite.sf2`.
+- SoundFont-based playback using `MS_Basic.sf2` (MuseScore General, MIT license).
 
 ## Repository Structure
 

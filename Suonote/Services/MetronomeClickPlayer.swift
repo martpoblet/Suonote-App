@@ -1,3 +1,4 @@
+import os
 import AVFoundation
 
 final class MetronomeClickPlayer {
@@ -52,7 +53,7 @@ final class MetronomeClickPlayer {
             try engine.start()
             isReady = true
         } catch {
-            print("Metronome engine failed to start: \(error)")
+            AppLog.audio.error("Metronome engine failed to start: \(String(describing: error))")
         }
     }
 

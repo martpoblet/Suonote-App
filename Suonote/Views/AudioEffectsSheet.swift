@@ -154,9 +154,7 @@ struct AudioEffectsSheet: View {
         }
         .toolbarBackground(DesignSystem.Colors.backgroundSecondary, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.light, for: .navigationBar)
         .presentationBackground(DesignSystem.Colors.backgroundSecondary)
-        .preferredColorScheme(.light)
         
     }
     

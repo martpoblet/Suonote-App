@@ -704,6 +704,7 @@ struct StudioGenerator {
         let range = chordRange(for: instrument, variant: variant, style: style, octaveShift: octaveShift)
         let tonicTarget = anchorPitch(for: keyRoot, in: range)
         var lastCenter = tonicTarget
+        var lastVoicing: [Int] = []
         var notes: [StudioNote] = []
 
         for span in chords {
@@ -744,11 +745,9 @@ struct StudioGenerator {
             if instrument == .guitar {
                 let maxNotes = complexity > 0.8 ? 6 : (complexity > 0.6 ? 5 : (complexity > 0.4 ? 4 : (complexity > 0.2 ? 3 : 2)))
                 let cappedNotes = min(maxNotes, voicingProfile.maxNotes ?? maxNotes)
-                if pitches.count > cappedNotes {
-                    pitches = Array(pitches.prefix(cappedNotes))
-                }
+                pitches = trimVoices(pitches, keep: cappedNotes)
             }
-            
+
             if voicingProfile.preferOpenVoicing {
                 pitches = openVoicing(pitches)
             }
@@ -763,10 +762,16 @@ struct StudioGenerator {
                 pitches = drop2Voicing(pitches, range: range)
             }
 
-            if let maxNotes = voicingProfile.maxNotes, pitches.count > maxNotes {
-                pitches = Array(pitches.prefix(maxNotes))
+            if let maxNotes = voicingProfile.maxNotes {
+                pitches = trimVoices(pitches, keep: maxNotes)
             }
-            
+
+            // Smooth voice leading: pick the inversion closest to the
+            // previous voicing, then clear muddy low intervals.
+            pitches = voiceLead(pitches, previous: lastVoicing, range: range)
+            pitches = avoidLowIntervalMud(pitches, range: range)
+            lastVoicing = pitches
+
             let center = pitches.reduce(0, +) / max(1, pitches.count)
             lastCenter = center
             
@@ -798,6 +803,10 @@ struct StudioGenerator {
                 )
                 let duration = min(hitDuration, max(0.25, baseDuration - offset))
                 let startBeat = span.startBeat + offset
+                let positionInBar = (span.startBeat + offset)
+                    .truncatingRemainder(dividingBy: Double(beatsPerBar))
+                let accent = metricAccent(positionInBar: positionInBar, beatsPerBar: beatsPerBar)
+
                 if arpeggioEnabled, pitches.count > 1 {
                     let orderedPitches = arpeggioOrder(
                         pitches: pitches,
@@ -813,12 +822,16 @@ struct StudioGenerator {
                             let arpOffset = step * Double(index)
                             let arpStart = startBeat + arpOffset
                             let arpDuration = min(duration, max(0.05, baseDuration - offset - arpOffset))
+                            // Alternating emphasis keeps arpeggios from sounding sequenced.
+                            let arpVelocity = velocity + accent
+                                - (index % 2 == 0 ? 0 : 5)
+                                + Int.random(in: -2...2)
                             notes.append(
                                 StudioNote(
                                     startBeat: arpStart,
                                     duration: arpDuration,
                                     pitch: pitch,
-                                    velocity: velocity
+                                    velocity: clampVelocity(arpVelocity)
                                 )
                             )
                         }
@@ -829,22 +842,40 @@ struct StudioGenerator {
                                     startBeat: startBeat,
                                     duration: duration,
                                     pitch: pitch,
-                                    velocity: velocity
+                                    velocity: clampVelocity(velocity + accent)
                                 )
                             )
                         }
                     }
                 } else {
-                    // Guitar strumming simulation — micro-delay between chord tones
-                    let strumDelay = (instrument == .guitar && pitches.count > 1) ? 0.012 : 0.0
-                    for (idx, pitch) in pitches.enumerated() {
-                        let strumOffset = strumDelay * Double(idx)
+                    // Guitar and harp roll their chords audibly; offbeat hits
+                    // become up-strokes (high→low, slightly softer), like a
+                    // real strumming hand.
+                    let isStrummed = pitches.count > 1
+                        && (instrument == .guitar || variant == .harp)
+                    let isUpstroke = isStrummed && accent < 0
+                    let strumStep = isStrummed ? (variant == .harp ? 0.05 : 0.03) : 0.0
+                    let ordered = isUpstroke ? pitches.sorted(by: >) : pitches.sorted()
+                    let lastIndex = ordered.count - 1
+
+                    for (idx, pitch) in ordered.enumerated() {
+                        var noteVelocity = velocity + accent
+                        // Outer voices define the chord; inner voices sit back.
+                        if ordered.count > 2, idx != 0, idx != lastIndex {
+                            noteVelocity -= 5
+                        }
+                        if isUpstroke {
+                            noteVelocity -= 6
+                        }
+                        noteVelocity += Int.random(in: -2...2)
+
+                        let strumOffset = strumStep * Double(idx)
                         notes.append(
                             StudioNote(
                                 startBeat: startBeat + strumOffset,
                                 duration: max(0.1, duration - strumOffset),
                                 pitch: pitch,
-                                velocity: velocity
+                                velocity: clampVelocity(noteVelocity)
                             )
                         )
                     }
@@ -1090,7 +1121,7 @@ struct StudioGenerator {
     /// - grain: subdivision size being swung (1.0 = 8th-note swing, 0.5 = 16th-note shuffle)
     /// Per-instrument humanization level applied when tracks are first generated.
     /// Keeps drums tighter to the grid while letting melodic instruments breathe.
-    private static func defaultNaturalness(for instrument: StudioInstrument) -> Double {
+    static func defaultNaturalness(for instrument: StudioInstrument) -> Double {
         switch instrument {
         case .drums:      return 0.30   // Tight but not robotic — slight velocity scatter
         case .bass:       return 0.40   // Slightly laid-back feel
@@ -2568,6 +2599,104 @@ struct StudioGenerator {
         }
     }
 
+    private static func clampVelocity(_ velocity: Int) -> Int {
+        min(127, max(25, velocity))
+    }
+
+    /// Metric accent in velocity units: downbeats push forward, offbeat
+    /// ("and") hits sit back. Position is in beats within the bar.
+    private static func metricAccent(positionInBar: Double, beatsPerBar: Int) -> Int {
+        let nearestBeat = positionInBar.rounded()
+        let isOnBeat = abs(positionInBar - nearestBeat) < 0.01
+        guard isOnBeat else { return -5 }
+        let beat = Int(nearestBeat) % max(1, beatsPerBar)
+        if beat == 0 { return 6 }
+        if beatsPerBar % 2 == 0, beat == beatsPerBar / 2 { return 2 }
+        return 0
+    }
+
+    /// Keeps the bass note plus the top voices when a chord has too many
+    /// notes. Dropping inner voices keeps the harmony clear; keeping the
+    /// lowest notes (old behavior) clustered everything in the mud register.
+    private static func trimVoices(_ pitches: [Int], keep: Int) -> [Int] {
+        let sorted = uniqueSorted(pitches)
+        guard sorted.count > keep, keep >= 1 else { return sorted }
+        guard keep > 1 else { return [sorted[0]] }
+        return [sorted[0]] + Array(sorted.suffix(keep - 1))
+    }
+
+    /// Picks the chord inversion that moves least from the previous voicing,
+    /// weighting top-voice continuity — smooth comping instead of parallel
+    /// root-position jumps.
+    private static func voiceLead(_ pitches: [Int], previous: [Int], range: ClosedRange<Int>) -> [Int] {
+        guard !previous.isEmpty, pitches.count > 1 else { return uniqueSorted(pitches) }
+
+        func cost(_ candidate: [Int]) -> Int {
+            var total = 0
+            for pitch in candidate {
+                total += previous.map { abs(pitch - $0) }.min() ?? 0
+            }
+            if let top = candidate.max(), let previousTop = previous.max() {
+                total += abs(top - previousTop) * 2
+            }
+            return total
+        }
+
+        var best = uniqueSorted(pitches)
+        var bestCost = cost(best)
+
+        var rising = best
+        for _ in 0..<max(0, best.count - 1) {
+            guard let lowest = rising.min() else { break }
+            rising = uniqueSorted(rising.filter { $0 != lowest } + [lowest + 12])
+            guard rising.allSatisfy({ range.contains($0) }) else { break }
+            let candidateCost = cost(rising)
+            if candidateCost < bestCost {
+                best = rising
+                bestCost = candidateCost
+            }
+        }
+
+        var falling = uniqueSorted(pitches)
+        for _ in 0..<max(0, falling.count - 1) {
+            guard let highest = falling.max() else { break }
+            falling = uniqueSorted(falling.filter { $0 != highest } + [highest - 12])
+            guard falling.allSatisfy({ range.contains($0) }) else { break }
+            let candidateCost = cost(falling)
+            if candidateCost < bestCost {
+                best = falling
+                bestCost = candidateCost
+            }
+        }
+
+        return best
+    }
+
+    /// Raises (or drops) voices packed tighter than a fourth below G3 —
+    /// close low intervals turn to mud with realistic samples.
+    private static func avoidLowIntervalMud(_ pitches: [Int], range: ClosedRange<Int>) -> [Int] {
+        var sorted = uniqueSorted(pitches)
+        var index = 1
+        while index < sorted.count {
+            let lower = sorted[index - 1]
+            let upper = sorted[index]
+            if lower < 55, upper - lower < 5 {
+                let raised = upper + 12
+                if raised <= range.upperBound, !sorted.contains(raised) {
+                    sorted[index] = raised
+                    sorted = uniqueSorted(sorted)
+                    index = 1
+                    continue
+                } else {
+                    sorted.remove(at: index)
+                    continue
+                }
+            }
+            index += 1
+        }
+        return sorted
+    }
+
     private static func openVoicing(_ pitches: [Int]) -> [Int] {
         guard pitches.count >= 3 else { return pitches }
         let sorted = pitches.sorted()
@@ -2647,7 +2776,9 @@ struct StudioGenerator {
         }
     }
 
-    /// Style-aware velocity curve — applies non-linear scaling per instrument.
+    /// Style-aware velocity curve — non-linear intensity response centered on
+    /// the style/instrument base velocity, so Lo-Fi stays soft and Rock stays
+    /// loud regardless of the intensity slider position.
     private static func velocityCurve(base: Int, intensity: Double, instrument: StudioInstrument) -> Int {
         let t = max(0.0, min(1.0, intensity))
         let curved: Double
@@ -2663,7 +2794,8 @@ struct StudioGenerator {
         default:
             curved = t  // Linear
         }
-        let velocity = 40.0 + curved * 87.0
+        // intensity 0.5 lands near `base`; full range swings ±25 around it.
+        let velocity = Double(base) + (curved - 0.5) * 50.0
         return Int(max(30, min(127, velocity)))
     }
 
@@ -2868,49 +3000,51 @@ struct StudioGenerator {
                 baseDurationValue = min(remaining, 1.5)
             } else if instrument == .guitar {
                 baseDurationValue = min(remaining, 1.0)
+            } else {
+                baseDurationValue = min(remaining, 1.5)
             }
-            baseDurationValue = min(remaining, 1.5)
-            
+
         case .rock:
             if instrument == .guitar {
                 baseDurationValue = min(remaining, 0.75) // Short, punchy
             } else if instrument == .piano {
                 baseDurationValue = min(remaining, 1.0)
+            } else {
+                baseDurationValue = min(remaining, 1.25)
             }
-            baseDurationValue = min(remaining, 1.25)
-            
+
         case .edm:
             if instrument == .synth {
                 baseDurationValue = min(remaining, shortHit) // Stabs
             } else if instrument == .piano {
                 baseDurationValue = min(remaining, 0.75)
+            } else {
+                baseDurationValue = min(remaining, 1.0)
             }
-            baseDurationValue = min(remaining, 1.0)
-            
+
         case .jazz:
             // Medium-short for comp feel
             if instrument == .piano {
                 baseDurationValue = min(remaining, 0.5)
             } else if instrument == .guitar {
                 baseDurationValue = min(remaining, 0.75)
+            } else {
+                baseDurationValue = min(remaining, 0.75)
             }
-            baseDurationValue = min(remaining, 0.75)
-            
+
         case .hiphop:
             // Long, sustained
-            if instrument == .piano || instrument == .synth {
-                baseDurationValue = remaining
-            }
             baseDurationValue = remaining
-            
+
         case .funk:
             if instrument == .guitar {
                 baseDurationValue = min(remaining, 0.5) // Short, percussive
             } else if instrument == .piano {
                 baseDurationValue = min(remaining, 0.25) // Very short stabs
+            } else {
+                baseDurationValue = min(remaining, 1.0)
             }
-            baseDurationValue = min(remaining, 1.0)
-            
+
         case .ambient:
             // Everything sustained
             baseDurationValue = remaining

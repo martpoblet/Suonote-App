@@ -1,3 +1,4 @@
+import os
 import Foundation
 import AVFoundation
 import SwiftData
@@ -74,7 +75,7 @@ class AudioRecordingManager: NSObject, ObservableObject {
             }
             
         } catch {
-            print("Failed to start recording: \(error)")
+            AppLog.audio.error("Failed to start recording: \(String(describing: error))")
         }
     }
     
@@ -110,7 +111,7 @@ class AudioRecordingManager: NSObject, ObservableObject {
         configureAudioSession(category: .playback, options: [.mixWithOthers])
 
         guard let url = FileManagerUtils.existingRecordingURL(for: recording.fileName) else {
-            print("Recording file not found for: \(recording.fileName)")
+            AppLog.audio.error("Recording file not found for: \(recording.fileName)")
             return
         }
         
@@ -124,7 +125,7 @@ class AudioRecordingManager: NSObject, ObservableObject {
                 currentlyPlayingRecording = nil
             }
         } catch {
-            print("Failed to play recording: \(error)")
+            AppLog.audio.error("Failed to play recording: \(String(describing: error))")
         }
     }
     
@@ -203,7 +204,7 @@ class AudioRecordingManager: NSObject, ObservableObject {
             try session.setCategory(category, mode: .default, options: options)
             try session.setActive(true)
         } catch {
-            print("Failed to configure audio session: \(error)")
+            AppLog.audio.error("Failed to configure audio session: \(String(describing: error))")
         }
     }
 }
@@ -211,7 +212,7 @@ class AudioRecordingManager: NSObject, ObservableObject {
 extension AudioRecordingManager: AVAudioRecorderDelegate {
     func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
         if !flag {
-            print("Recording failed")
+            AppLog.audio.error("Recording failed")
         }
     }
 }

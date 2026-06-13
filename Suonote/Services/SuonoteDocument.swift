@@ -1,3 +1,4 @@
+import os
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -56,9 +57,9 @@ struct ProjectShareView: View {
         ) { result in
             switch result {
             case .success(let url):
-                print("Exported to: \(url)")
+                AppLog.general.info("Exported to: \(url.path)")
             case .failure(let error):
-                print("Export failed: \(error)")
+                AppLog.general.error("Export failed: \(String(describing: error))")
             }
         }
     }

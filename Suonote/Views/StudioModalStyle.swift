@@ -1,11 +1,10 @@
 import SwiftUI
 
 extension View {
+    /// Shared chrome for app sheets. On iOS 26 the system supplies the
+    /// glass-edged sheet appearance; we only provide an adaptive background.
     func studioModalStyle() -> some View {
         self
-            .toolbarBackground(DesignSystem.Colors.backgroundSecondary, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarColorScheme(.light, for: .navigationBar)
-            .presentationBackground(DesignSystem.Colors.backgroundSecondary)
+            .presentationBackground(DesignSystem.Colors.background)
     }
 }

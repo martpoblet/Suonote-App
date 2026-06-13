@@ -11,7 +11,6 @@ struct StudioTabView: View {
     @State private var showingRecordingPicker = false
     @State private var showingRegenerateDialog = false
     @State private var showingInstrumentPicker = false
-    @State private var showingAddTrackMenu = false
     @State private var pendingAddTrackAfterStyle = false
     @State private var selectedTrackId: UUID?
     @State private var editingTrack: StudioTrack?
@@ -19,7 +18,7 @@ struct StudioTabView: View {
     @State private var lastProjectSignature = ""
     @State private var lastChordIds: Set<UUID> = []
     @State private var lastTotalBars = 0
-    @StateObject private var playback = StudioPlaybackEngine()
+    @EnvironmentObject private var playback: StudioPlaybackEngine
     @State private var showingNoSectionsAlert = false
 
     private var sortedTracks: [StudioTrack] {
@@ -105,69 +104,9 @@ struct StudioTabView: View {
             Divider().overlay(DesignSystem.Colors.border)
 
             if sortedTracks.isEmpty {
-                VStack(spacing: 0) {
-                    Spacer()
-                    
-                StudioEmptyState(
-                    project: project,
-                    accentColor: project.studioStyle?.accentColor ?? SectionColor.purple.color,
-                    onPickStyle: { showingStylePicker = true },
-                    onAddTrack: promptAddTrack
-                )
-                    .padding(.horizontal, DesignSystem.Spacing.xxl)
-                    
-                    Spacer()
-                }
+                emptyContent
             } else {
-                ScrollView {
-                    LazyVStack(spacing: DesignSystem.Spacing.xs) {
-                        StudioTrackList(
-                            tracks: sortedTracks,
-                            style: project.studioStyle,
-                            selectedTrackId: $selectedTrackId,
-                            onTrackStructureChange: { needsRebuild = true },
-                            onMixChange: applyMixState,
-                            onEffectsChange: applyEffects,
-                            onDelete: deleteTrack,
-                            onOpenEditor: { track in
-                                selectedTrackId = track.id
-                                editingTrack = track
-                            },
-                            onReorder: reorderTracks
-                        )
-                        StudioTrackEditorHint(
-                            accentColor: selectedTrack?.instrument.color
-                                ?? project.studioStyle?.accentColor
-                                ?? SectionColor.purple.color
-                        )
-                    }
-                    .padding(DesignSystem.Spacing.lg)
-                    .padding(.bottom, DesignSystem.Layout.projectTabBarClearance)
-                }
-                
-                if hasSections {
-                    // Fixed timeline at bottom
-                    VStack(spacing: 0) {                        
-                        StudioTimelineView(
-                            segments: timelineSegments,
-                            beatsPerBar: project.timeTop,
-                            totalBars: totalBars,
-                            currentBeat: playback.currentBeat,
-                            isPlaying: playback.isPlaying,
-                            accentColor: project.studioStyle?.accentColor ?? SectionColor.purple.color,
-                            isMetronomeEnabled: $playback.isMetronomeEnabled,
-                            onPlay: handlePlay,
-                            onPause: playback.pause,
-                            onStop: handleStop,
-                            onSeek: { beat in
-                                playback.seek(to: beat)
-                            }
-                        )
-                        .padding(.horizontal, DesignSystem.Spacing.md)
-                        .padding(.vertical, DesignSystem.Spacing.sm)
-                    }
-                    .padding(.bottom, DesignSystem.Layout.projectTabBarClearance + 5)
-                }
+                tracksContent
             }
         }
         .alert("Add sections first", isPresented: $showingNoSectionsAlert) {
@@ -254,23 +193,6 @@ struct StudioTabView: View {
                 }
             )
         }
-        .sheet(isPresented: $showingAddTrackMenu) {
-            AddTrackMenuView(
-                hasRecordings: !availableRecordings.isEmpty,
-                onAddInstrument: {
-                    showingAddTrackMenu = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        showingInstrumentPicker = true
-                    }
-                },
-                onAddRecording: {
-                    showingAddTrackMenu = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        showingRecordingPicker = true
-                    }
-                }
-            )
-        }
         .confirmationDialog(
             "Regenerate tracks?",
             isPresented: $showingRegenerateDialog,
@@ -303,6 +225,118 @@ struct StudioTabView: View {
         }
     }
 
+    private var emptyContent: some View {
+        VStack(spacing: 0) {
+            Spacer()
+
+            StudioEmptyState(
+                project: project,
+                accentColor: project.studioStyle?.accentColor ?? SectionColor.purple.color,
+                onPickStyle: { showingStylePicker = true },
+                onAddTrack: promptAddTrack
+            )
+            .padding(.horizontal, DesignSystem.Spacing.xxl)
+
+            Spacer()
+        }
+    }
+
+    @ViewBuilder
+    private var tracksContent: some View {
+        ScrollView {
+            LazyVStack(spacing: DesignSystem.Spacing.xs) {
+                StudioTrackList(
+                    tracks: sortedTracks,
+                    style: project.studioStyle,
+                    selectedTrackId: $selectedTrackId,
+                    onTrackStructureChange: { needsRebuild = true },
+                    onMixChange: applyMixState,
+                    onEffectsChange: applyEffects,
+                    onDelete: deleteTrack,
+                    onOpenEditor: { track in
+                        selectedTrackId = track.id
+                        editingTrack = track
+                    },
+                    onReorder: reorderTracks
+                )
+                StudioTrackEditorHint(
+                    accentColor: selectedTrack?.instrument.color
+                        ?? project.studioStyle?.accentColor
+                        ?? SectionColor.purple.color
+                )
+            }
+            .padding(DesignSystem.Spacing.lg)
+        }
+        .overlay(alignment: .bottomTrailing) {
+            addTrackFAB
+                .padding(.trailing, DesignSystem.Spacing.lg)
+                .padding(.bottom, DesignSystem.Spacing.sm)
+        }
+
+        if hasSections {
+            // Fixed timeline at bottom
+            StudioTimelineView(
+                segments: timelineSegments,
+                beatsPerBar: project.timeTop,
+                totalBars: totalBars,
+                currentBeat: playback.currentBeat,
+                isPlaying: playback.isPlaying,
+                accentColor: project.studioStyle?.accentColor ?? SectionColor.purple.color,
+                isMetronomeEnabled: $playback.isMetronomeEnabled,
+                isLooping: $playback.isLooping,
+                liveBeat: { playback.livePositionBeats() },
+                onPlay: handlePlay,
+                onPause: playback.pause,
+                onStop: handleStop,
+                onSeek: { beat in
+                    playback.seek(to: beat)
+                }
+            )
+            .padding(.horizontal, DesignSystem.Spacing.md)
+            .padding(.vertical, DesignSystem.Spacing.sm)
+        }
+    }
+
+    private var addTrackFAB: some View {
+        Menu {
+            Button {
+                guard hasSections else {
+                    showingNoSectionsAlert = true
+                    return
+                }
+                guard project.studioStyle != nil else {
+                    pendingAddTrackAfterStyle = true
+                    showingStylePicker = true
+                    return
+                }
+                showingInstrumentPicker = true
+            } label: {
+                Label("Instrument", systemImage: "pianokeys")
+            }
+
+            if !availableRecordings.isEmpty {
+                Button {
+                    showingRecordingPicker = true
+                } label: {
+                    Label("From Recording", systemImage: "waveform")
+                }
+            }
+        } label: {
+            Image(systemName: DesignSystem.Icons.add)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(DesignSystem.Colors.textWhite)
+                .frame(width: 56, height: 56)
+                .contentShape(Circle())
+        }
+        .glassEffect(
+            .regular
+                .tint((project.studioStyle?.accentColor ?? DesignSystem.Colors.primary).opacity(0.85))
+                .interactive(),
+            in: .circle
+        )
+        .accessibilityLabel("Add Track")
+    }
+
     private var studioHeader: some View {
         HStack(spacing: DesignSystem.Spacing.sm) {
             // Style Picker Button
@@ -319,20 +353,6 @@ struct StudioTabView: View {
             .animatedPress()
 
             Spacer()
-
-            // Add Track Button
-            Button {
-                promptAddTrack()
-            } label: {
-                AppChip(
-                    text: "Add Track",
-                    icon: DesignSystem.Icons.add,
-                    tint: project.studioStyle?.accentColor ?? DesignSystem.Colors.primary,
-                    font: DesignSystem.Typography.callout
-                )
-            }
-            .animatedPress()
-            .disabled(!hasSections)
         }
     }
 
@@ -356,7 +376,7 @@ struct StudioTabView: View {
             showingStylePicker = true
             return
         }
-        showingAddTrackMenu = true
+        showingInstrumentPicker = true
     }
 
     private func addInstrumentTrack(_ instrument: StudioInstrument) {
@@ -376,6 +396,9 @@ struct StudioTabView: View {
 
         // Set the musically correct default octave for this instrument before generating.
         track.octaveShift = StudioGenerator.defaultOctaveShift(for: instrument, variant: track.variant)
+        // Tracks added individually should get the same default humanization
+        // as style-generated ones (otherwise they play perfectly quantized).
+        track.regenerateNaturalness = StudioGenerator.defaultNaturalness(for: instrument)
 
         let drumPreset = instrument == .drums
             ? DrumPreset.defaultPreset(for: style, beatsPerBar: project.timeTop, timeBottom: project.timeBottom)
@@ -794,6 +817,8 @@ struct StudioTimelineView: View {
     let isPlaying: Bool
     let accentColor: Color
     @Binding var isMetronomeEnabled: Bool
+    var isLooping: Binding<Bool>? = nil
+    var liveBeat: (() -> Double)? = nil
     let onPlay: () -> Void
     let onPause: () -> Void
     let onStop: () -> Void
@@ -842,46 +867,41 @@ struct StudioTimelineView: View {
                 Spacer()
 
                 HStack(spacing: 8) {
-                    Button {
+                    TransportCircleButton(
+                        icon: "metronome.fill",
+                        isActive: isMetronomeEnabled,
+                        accentColor: accentColor
+                    ) {
                         isMetronomeEnabled.toggle()
-                    } label: {
-                        Image(systemName: "metronome.fill")
-                            .font(DesignSystem.Typography.caption)
-                            .foregroundStyle(isMetronomeEnabled ? .white : DesignSystem.Colors.textSecondary)
-                            .frame(width: 28, height: 28)
-                            .background(
-                                Circle()
-                                    .fill(isMetronomeEnabled ? accentColor : DesignSystem.Colors.surfaceSecondary)
-                                    .overlay(
-                                        Circle()
-                                            .stroke(isMetronomeEnabled ? accentColor : DesignSystem.Colors.border, lineWidth: 1)
-                                    )
-                            )
+                        haptic(.selection)
                     }
 
-                    Button {
-                        onStop()
-                    } label: {
-                        Image(systemName: "stop.fill")
-                            .font(DesignSystem.Typography.caption)
-                            .foregroundStyle(DesignSystem.Colors.textPrimary)
-                            .frame(width: 28, height: 28)
-                            .background(
-                                Circle()
-                                    .fill(DesignSystem.Colors.surfaceSecondary)
-                                    .overlay(
-                                        Circle()
-                                            .stroke(DesignSystem.Colors.border, lineWidth: 1)
-                                    )
-                            )
+                    if let isLooping {
+                        TransportCircleButton(
+                            icon: "repeat",
+                            isActive: isLooping.wrappedValue,
+                            accentColor: accentColor
+                        ) {
+                            isLooping.wrappedValue.toggle()
+                            haptic(.selection)
+                        }
                     }
+
+                    TransportCircleButton(
+                        icon: "stop.fill",
+                        isActive: false,
+                        accentColor: accentColor,
+                        action: onStop
+                    )
 
                     Button {
                         isPlaying ? onPause() : onPlay()
+                        haptic(.light)
                     } label: {
                         Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                             .font(DesignSystem.Typography.title3)
                             .foregroundStyle(DesignSystem.Colors.textWhite)
+                            .contentTransition(.symbolEffect(.replace))
                             .frame(width: 40, height: 40)
                             .background(
                                 Circle()
@@ -892,78 +912,136 @@ struct StudioTimelineView: View {
                 }
             }
 
-            GeometryReader { geo in
-                let barWidth = geo.size.width / CGFloat(max(1, totalBars))
-                let progressX = CGFloat(displayedBeat / Double(beatsPerBar)) * barWidth
-
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(DesignSystem.Colors.backgroundTertiary)
-                        .frame(height: 18)
-                        .overlay(
-                            Capsule()
-                                .stroke(DesignSystem.Colors.borderSubtle, lineWidth: 1)
-                        )
-
-                    ForEach(segments) { segment in
-                        let width = CGFloat(segment.bars) * barWidth
-                        let x = CGFloat(segment.startBar) * barWidth
-                        Capsule()
-                            .fill(segment.color.opacity(0.25))
-                            .frame(width: width, height: 18)
-                            .overlay(
-                                Capsule()
-                                    .stroke(segment.color.opacity(0.5), lineWidth: 1)
-                            )
-                            .offset(x: x)
-                    }
-
-                    Capsule()
-                        .fill(accentColor)
-                        .frame(width: max(2, progressX), height: 18)
-
-                    ZStack {
-                        Circle()
-                            .fill(DesignSystem.Colors.backgroundSecondary)
-                            .frame(width: 18, height: 18)
-                            .shadow(color: accentColor.opacity(0.25), radius: 4, x: 0, y: 2)
-                        Circle()
-                            .stroke(accentColor, lineWidth: 2)
-                            .frame(width: 18, height: 18)
-                        Circle()
-                            .fill(accentColor)
-                            .frame(width: 4, height: 4)
-                    }
-                    .offset(x: max(0, min(progressX - 9, geo.size.width - 18)))
-                }
-                .contentShape(Rectangle().inset(by: -12))
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            let clampedX = max(0, min(value.location.x, geo.size.width))
-                            let beat = Double(clampedX / barWidth) * Double(beatsPerBar)
-                            scrubBeat = min(beat, maxBeats)
-                            isScrubbing = true
-                        }
-                        .onEnded { _ in
-                            if isScrubbing {
-                                onSeek(scrubBeat)
-                            }
-                            isScrubbing = false
-                        }
-                )
+            TimelineView(.animation(minimumInterval: nil, paused: !isPlaying || isScrubbing)) { _ in
+                progressBar
             }
             .frame(height: 20)
         }
         .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 18)
-                .fill(DesignSystem.Colors.surfaceSecondary)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18)
-                        .stroke(accentColor.opacity(0.35), lineWidth: 1)
+        .glassEffect(.regular, in: .rect(cornerRadius: DesignSystem.CornerRadius.xxl))
+    }
+
+    /// Beat used to render the progress bar; reads the live sequencer
+    /// position at frame rate while playing.
+    private var renderedBeat: Double {
+        if isScrubbing { return scrubBeat }
+        if isPlaying, let liveBeat { return liveBeat() }
+        return currentBeat
+    }
+
+    private var progressBar: some View {
+        GeometryReader { geo in
+            let barWidth = geo.size.width / CGFloat(max(1, totalBars))
+            let progressX = CGFloat(renderedBeat / Double(beatsPerBar)) * barWidth
+
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(DesignSystem.Colors.backgroundTertiary.opacity(0.6))
+                    .frame(height: 18)
+                    .overlay(
+                        Capsule()
+                            .stroke(DesignSystem.Colors.borderSubtle, lineWidth: 1)
+                    )
+
+                ForEach(segments) { segment in
+                    let width = CGFloat(segment.bars) * barWidth
+                    let x = CGFloat(segment.startBar) * barWidth
+                    Capsule()
+                        .fill(segment.color.opacity(0.25))
+                        .frame(width: width, height: 18)
+                        .overlay(
+                            Capsule()
+                                .stroke(segment.color.opacity(0.5), lineWidth: 1)
+                        )
+                        .offset(x: x)
+                }
+
+                Capsule()
+                    .fill(accentColor)
+                    .frame(width: max(2, progressX), height: 18)
+
+                ZStack {
+                    Circle()
+                        .fill(DesignSystem.Colors.backgroundSecondary)
+                        .frame(width: 18, height: 18)
+                        .shadow(color: accentColor.opacity(0.25), radius: 4, x: 0, y: 2)
+                    Circle()
+                        .stroke(accentColor, lineWidth: 2)
+                        .frame(width: 18, height: 18)
+                    Circle()
+                        .fill(accentColor)
+                        .frame(width: 4, height: 4)
+                }
+                .offset(x: max(0, min(progressX - 9, geo.size.width - 18)))
+            }
+            .contentShape(Rectangle().inset(by: -12))
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        let clampedX = max(0, min(value.location.x, geo.size.width))
+                        let beat = Double(clampedX / barWidth) * Double(beatsPerBar)
+                        scrubBeat = min(beat, maxBeats)
+                        isScrubbing = true
+                    }
+                    .onEnded { _ in
+                        if isScrubbing {
+                            onSeek(scrubBeat)
+                        }
+                        isScrubbing = false
+                    }
+            )
+        }
+    }
+}
+
+/// Tiny live RMS meter shown next to the track name during playback.
+struct TrackLevelBar: View {
+    let level: Float
+    let color: Color
+
+    private var normalized: CGFloat {
+        // Square-root curve so quiet material still reads visually.
+        CGFloat(min(1, max(0, sqrt(level))))
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(color.opacity(0.15))
+                Capsule()
+                    .fill(color.opacity(0.85))
+                    .frame(width: max(2, geo.size.width * normalized))
+            }
+        }
+        .frame(width: 44, height: 4)
+        .animation(.linear(duration: 0.1), value: normalized)
+    }
+}
+
+/// Small circular transport control used inside the glass timeline bar.
+struct TransportCircleButton: View {
+    let icon: String
+    let isActive: Bool
+    let accentColor: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(DesignSystem.Typography.caption)
+                .foregroundStyle(isActive ? .white : DesignSystem.Colors.textSecondary)
+                .frame(width: 28, height: 28)
+                .background(
+                    Circle()
+                        .fill(isActive ? accentColor : DesignSystem.Colors.surfaceSecondary.opacity(0.8))
+                        .overlay(
+                            Circle()
+                                .stroke(isActive ? accentColor : DesignSystem.Colors.border, lineWidth: 1)
+                        )
                 )
-        )
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -1047,14 +1125,7 @@ struct StudioEditorTransportView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(DesignSystem.Colors.surfaceSecondary)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(accentColor.opacity(0.35), lineWidth: 1)
-                )
-        )
+        .glassEffect(.regular, in: .rect(cornerRadius: DesignSystem.CornerRadius.lg))
     }
 }
 
@@ -1483,6 +1554,7 @@ struct StudioTrackEditorView: View {
                 barSectionInfos: barSectionInfos,
                 currentBeat: playback.currentBeat,
                 isPlaying: playback.isPlaying,
+                liveBeat: { playback.livePositionBeats() },
                 onSeek: { beat in
                     playback.seek(to: beat)
                 },
@@ -2009,6 +2081,7 @@ struct StudioTrackRow: View {
     let onOpenEditor: () -> Void
     @State private var isExpanded: Bool = false
     @State private var mixDebounceTask: Task<Void, Never>?
+    @EnvironmentObject private var playback: StudioPlaybackEngine
 
     private var panLabel: String {
         if track.pan < -0.05 {
@@ -2075,9 +2148,18 @@ struct StudioTrackRow: View {
                     .frame(width: 28)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(track.name)
-                        .font(DesignSystem.Typography.subheadline)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
+                    HStack(spacing: 8) {
+                        Text(track.name)
+                            .font(DesignSystem.Typography.subheadline)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
+
+                        if playback.isPlaying {
+                            TrackLevelBar(
+                                level: playback.trackLevels[track.id] ?? 0,
+                                color: track.instrument.color
+                            )
+                        }
+                    }
 
                     // Variant selector inline
                     if !track.instrument.variants.isEmpty {
@@ -2251,6 +2333,11 @@ struct StudioTrackRow: View {
 struct StudioAudioTrackView: View {
     @Bindable var track: StudioTrack
     let project: Project
+    @State private var waveformSamples: [CGFloat] = []
+
+    private var recording: Recording? {
+        project.recordings.first(where: { $0.id == track.audioRecordingId })
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2258,12 +2345,21 @@ struct StudioAudioTrackView: View {
                 .font(DesignSystem.Typography.headline)
                 .foregroundStyle(DesignSystem.Colors.textPrimary)
 
-            if let recording = project.recordings.first(where: { $0.id == track.audioRecordingId }) {
+            if let recording {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(recording.name)
                         .font(DesignSystem.Typography.subheadline)
                         .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    Text("Starts at beat \(String(format: "%.1f", track.audioStartBeat))")
+
+                    if !waveformSamples.isEmpty {
+                        StudioWaveformView(
+                            samples: waveformSamples,
+                            color: track.instrument.color
+                        )
+                        .frame(height: 56)
+                    }
+
+                    Text("Starts at beat \(String(format: "%.1f", track.audioStartBeat)) · \(String(format: "%.1f", recording.duration))s")
                         .font(DesignSystem.Typography.caption)
                         .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
@@ -2278,10 +2374,6 @@ struct StudioAudioTrackView: View {
                     .font(DesignSystem.Typography.caption)
                     .foregroundStyle(DesignSystem.Colors.textSecondary)
             }
-
-            Text("Audio editing and playback will appear here.")
-                .font(DesignSystem.Typography.caption)
-                .foregroundStyle(DesignSystem.Colors.textSecondary)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -2293,6 +2385,38 @@ struct StudioAudioTrackView: View {
                         .stroke(track.instrument.color.opacity(0.4), lineWidth: 1)
                 )
         )
+        .task(id: track.audioRecordingId) {
+            guard let recording else { return }
+            let fileName = recording.fileName
+            let samples = await Task.detached(priority: .utility) {
+                FileManagerUtils.extractWaveform(from: fileName, samples: 80)
+            }.value
+            waveformSamples = samples
+        }
+    }
+}
+
+/// Static waveform rendering for audio tracks, built from cached peak samples.
+struct StudioWaveformView: View {
+    let samples: [CGFloat]
+    let color: Color
+
+    var body: some View {
+        GeometryReader { geo in
+            let barCount = max(1, samples.count)
+            let barWidth = geo.size.width / CGFloat(barCount)
+            HStack(alignment: .center, spacing: barWidth * 0.25) {
+                ForEach(Array(samples.enumerated()), id: \.offset) { _, sample in
+                    Capsule()
+                        .fill(color.opacity(0.7))
+                        .frame(
+                            width: barWidth * 0.75,
+                            height: max(2, sample * geo.size.height)
+                        )
+                }
+            }
+            .frame(maxHeight: .infinity, alignment: .center)
+        }
     }
 }
 
@@ -2303,6 +2427,7 @@ struct StudioNoteEditor: View {
     let barSectionInfos: [StudioBarSectionInfo]
     let currentBeat: Double
     let isPlaying: Bool
+    var liveBeat: (() -> Double)? = nil
     let onSeek: (Double) -> Void
     let style: StudioStyle?
     let onNotesChanged: () -> Void
@@ -2397,7 +2522,9 @@ struct StudioNoteEditor: View {
     }
 
     private var displayedBeat: Double {
-        isScrubbingPlayhead ? playheadScrubBeat : currentBeat
+        if isScrubbingPlayhead { return playheadScrubBeat }
+        if isPlaying, let liveBeat { return liveBeat() }
+        return currentBeat
     }
 
     private var shouldShowPlayhead: Bool {
@@ -2581,11 +2708,13 @@ struct StudioNoteEditor: View {
                                 }
 
                                 if shouldShowPlayhead {
-                                    StudioEditorPlayhead(
-                                        x: playheadX,
-                                        height: CGFloat(pitchRows.count) * cellHeight,
-                                        color: track.instrument.color
-                                    )
+                                    TimelineView(.animation(minimumInterval: nil, paused: !isPlaying || isScrubbingPlayhead)) { _ in
+                                        StudioEditorPlayhead(
+                                            x: playheadX,
+                                            height: CGFloat(pitchRows.count) * cellHeight,
+                                            color: track.instrument.color
+                                        )
+                                    }
 
                                     let playheadHandleWidth: CGFloat = 56
                                     Rectangle()
@@ -3331,7 +3460,6 @@ struct StudioStylePickerView: View {
         }
         .toolbarBackground(DesignSystem.Colors.backgroundSecondary, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.light, for: .navigationBar)
         .presentationBackground(DesignSystem.Colors.backgroundSecondary)
         .onAppear {
             currentSelection = selectedStyle
@@ -3467,125 +3595,6 @@ struct StudioRecordingPicker: View {
             }
         }
             }
-}
-
-struct AddTrackMenuView: View {
-    let hasRecordings: Bool
-    let onAddInstrument: () -> Void
-    let onAddRecording: () -> Void
-    @Environment(\.dismiss) private var dismiss
-    
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 24) {
-                Text("Choose Track Type")
-                    .font(DesignSystem.Typography.title2)
-                    .fontWeight(.bold)
-                    .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    .padding(.top, 24)
-                
-                VStack(spacing: 16) {
-                    Button {
-                        onAddInstrument()
-                    } label: {
-                        HStack(spacing: 16) {
-                            Image(systemName: "music.note")
-                                .font(DesignSystem.Typography.title2)
-                                .foregroundStyle(DesignSystem.Colors.textPrimary)
-                                .frame(width: 50, height: 50)
-                                .background(
-                                    Circle()
-                                        .fill(SectionColor.purple.color.opacity(0.3))
-                                )
-                            
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Add Instrument")
-                                    .font(DesignSystem.Typography.headline)
-                                    .foregroundStyle(DesignSystem.Colors.textPrimary)
-                                
-                                Text("Piano, Guitar, Drums, Bass, Synth")
-                                    .font(DesignSystem.Typography.caption)
-                                    .foregroundStyle(DesignSystem.Colors.textSecondary)
-                            }
-                            
-                            Spacer()
-                            
-                            Image(systemName: "chevron.right")
-                                .foregroundStyle(DesignSystem.Colors.textSecondary)
-                        }
-                        .padding(20)
-                        .frame(maxWidth: .infinity)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(DesignSystem.Colors.surfaceSecondary)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .stroke(SectionColor.purple.color.opacity(0.4), lineWidth: 1.5)
-                                )
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    
-                    Button {
-                        onAddRecording()
-                    } label: {
-                        HStack(spacing: 16) {
-                            Image(systemName: "waveform")
-                                .font(DesignSystem.Typography.title2)
-                                .foregroundStyle(DesignSystem.Colors.textPrimary)
-                                .frame(width: 50, height: 50)
-                                .background(
-                                    Circle()
-                                        .fill(DesignSystem.Colors.accent.opacity(0.3))
-                                )
-                            
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Add Recording")
-                                    .font(DesignSystem.Typography.headline)
-                                    .foregroundStyle(DesignSystem.Colors.textPrimary)
-                                
-                                Text(hasRecordings ? "Import audio from your recordings" : "No recordings available")
-                                    .font(DesignSystem.Typography.caption)
-                                    .foregroundStyle(DesignSystem.Colors.textSecondary)
-                            }
-                            
-                            Spacer()
-                            
-                            Image(systemName: "chevron.right")
-                                .foregroundStyle(DesignSystem.Colors.textSecondary)
-                        }
-                        .padding(20)
-                        .frame(maxWidth: .infinity)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(DesignSystem.Colors.surfaceSecondary)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .stroke(DesignSystem.Colors.accent.opacity(hasRecordings ? 0.4 : 0.2), lineWidth: 1.5)
-                                )
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!hasRecordings)
-                    .opacity(hasRecordings ? 1.0 : 0.5)
-                }
-                .padding(.horizontal, 24)
-                
-                Spacer()
-            }
-            .background(
-                DesignSystem.Colors.background
-            )
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                }
-            }
-        }
-                .presentationDetents([.height(350)])
-    }
 }
 
 struct RegenerateOptionsView: View {

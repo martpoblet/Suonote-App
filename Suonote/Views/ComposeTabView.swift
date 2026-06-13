@@ -2598,7 +2598,7 @@ struct ChordPaletteSheet: View {
                         .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
                 
-                // NEW: Smart Suggestions button
+                // Smart Suggestions button
                 ToolbarItem(placement: .principal) {
                     Button {
                         showingSmartSuggestionsModal = true
@@ -2609,35 +2609,21 @@ struct ChordPaletteSheet: View {
                             Text("Smart Suggestions")
                                 .font(DesignSystem.Typography.caption)
                         }
-                        .foregroundStyle(DesignSystem.Colors.primaryDark)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule()
-                                .fill(DesignSystem.Colors.primaryLight.opacity(0.35))
-                                .overlay(
-                                    Capsule()
-                                        .stroke(DesignSystem.Colors.primary.opacity(0.5), lineWidth: 1)
-                                )
-                        )
                     }
+                    .buttonStyle(.glass)
+                    .tint(DesignSystem.Colors.primaryDark)
                     .disabled(isRest)
                 }
-                
+
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
                         addChord()
                     } label: {
                         Text(existingChord == nil ? "Add" : "Save")
                             .font(DesignSystem.Typography.subheadline)
-                            .foregroundStyle(DesignSystem.Colors.textPrimary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule()
-                                    .fill(accentColor)
-                            )
                     }
+                    .buttonStyle(.glassProminent)
+                    .tint(accentColor)
                 }
             }
             .sheet(isPresented: $showingSmartSuggestionsModal) {
@@ -2659,7 +2645,6 @@ struct ChordPaletteSheet: View {
         }
         .toolbarBackground(DesignSystem.Colors.backgroundSecondary, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.light, for: .navigationBar)
         .presentationBackground(DesignSystem.Colors.backgroundSecondary)
     }
     
@@ -3622,7 +3607,6 @@ struct SmartSuggestionsModal: View {
         }
         .toolbarBackground(DesignSystem.Colors.backgroundSecondary, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.light, for: .navigationBar)
         .presentationDetents([.large])
         .presentationBackground(DesignSystem.Colors.backgroundSecondary)
     }

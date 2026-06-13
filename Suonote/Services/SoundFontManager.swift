@@ -1,31 +1,50 @@
+import os
 import Foundation
 
 enum SoundFontManager {
     static let folderName = "SoundFonts"
-    private static let arachnoLiteFilePath = "Arachno/Arachno_Lite"
+    /// MS Basic (MuseScore General) — MIT-licensed full-GM bank, so every
+    /// variant below maps to a real preset.
+    private static let bankFilePath = "MuseScore/MS_Basic"
 
     static func supportedVariants(for instrument: StudioInstrument) -> [InstrumentVariant] {
+        // First entry is the default for new tracks (and the fallback for
+        // persisted tracks whose stored variant is no longer supported).
         switch instrument {
         case .piano:
-            return [.acousticPiano, .brightPiano, .electricPiano]
+            return [.acousticPiano, .brightPiano, .electricPiano, .electricPiano2,
+                    .honkyTonkPiano, .harpsichord, .clavinet, .harp]
         case .drums:
-            return [.standardDrumKit, .electronicDrumKit, .tr808DrumKit]
+            return [.standardDrumKit, .roomDrumKit, .powerDrumKit, .electronicDrumKit,
+                    .tr808DrumKit, .jazzDrumKit, .brushDrumKit, .orchestraDrumKit]
         case .synth:
-            return [.leadBass, .padWarm]
+            return [.leadBass, .padWarm, .leadSquare, .leadSaw, .leadCalliope,
+                    .leadChiff, .leadCharang, .leadVoice, .leadFifths,
+                    .padNewAge, .padPolysynth, .padChoir, .padBowed,
+                    .padMetallic, .padHalo, .padSweep]
         case .guitar:
-            return [.acousticNylonGuitar, .acousticSteelGuitar, .cleanGuitar, .overdriveGuitar]
+            return [.acousticNylonGuitar, .acousticSteelGuitar, .cleanGuitar,
+                    .jazzGuitar, .mutedGuitar, .overdriveGuitar, .distortionGuitar,
+                    .harmonicsGuitar]
         case .bass:
-            return [.fingerBass, .synthBass]
+            return [.fingerBass, .synthBass, .acousticBass, .pickBass,
+                    .fretlessBass, .slapBass1, .slapBass2, .synthBass2]
         case .strings:
-            return [.stringEnsemble, .synthStrings1, .synthStrings2]
+            return [.stringEnsemble, .slowStrings, .tremoloStrings, .pizzicatoStrings,
+                    .synthStrings1, .synthStrings2, .choirAahs, .voiceOohs]
         case .brass:
-            return [.synthBrass1, .synthBrass2]
+            return [.brassSection, .trumpet, .trombone, .tuba, .mutedTrumpet,
+                    .frenchHorn, .synthBrass1, .synthBrass2]
         case .woodwinds:
-            return [.flute, .clarinet, .tenorSax]
+            return [.flute, .clarinet, .tenorSax, .sopranoSax, .altoSax,
+                    .baritoneSax, .oboe, .englishHorn, .bassoon, .piccolo,
+                    .recorder, .panFlute, .ocarina]
         case .organ:
-            return [.drawbarOrgan, .churchOrgan]
+            return [.drawbarOrgan, .percussiveOrgan, .rockOrgan, .churchOrgan,
+                    .reedOrgan, .accordion, .harmonica, .tangoAccordion]
         case .mallets:
-            return [.xylophone, .tubularBells]
+            return [.xylophone, .marimba, .vibraphone, .glockenspiel, .celesta,
+                    .musicBox, .tubularBells, .dulcimer, .kalimba]
         case .audio:
             return []
         }
@@ -47,8 +66,8 @@ enum SoundFontManager {
         guard resolvedVariant(for: instrument, variant: variant) != nil else {
             return nil
         }
-        let components = arachnoLiteFilePath.split(separator: "/").map(String.init)
-        let fileName = components.last ?? arachnoLiteFilePath
+        let components = bankFilePath.split(separator: "/").map(String.init)
+        let fileName = components.last ?? bankFilePath
         let subfolder = components.dropLast().joined(separator: "/")
         let subdirectory = subfolder.isEmpty ? folderName : "\(folderName)/\(subfolder)"
         let searchPaths = [
@@ -67,7 +86,7 @@ enum SoundFontManager {
                 }
                 return "\(fileName).sf2"
             }.joined(separator: " | ")
-            print("❌ Missing SoundFont in bundle. Tried: \(attempts)")
+            AppLog.audio.error("Missing SoundFont in bundle. Tried: \(attempts)")
         }
 #endif
         return url

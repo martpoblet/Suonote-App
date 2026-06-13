@@ -14,6 +14,7 @@ struct ProjectsListView: View {
     @State private var showDeleteConfirmation = false
     @State private var showingSoundFontCredits = false
     @State private var deepLinkedProject: Project?
+    @State private var settings = AppSettings.shared
     
     var filteredProjects: [Project] {
         var projects = allProjects
@@ -115,6 +116,7 @@ struct ProjectsListView: View {
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
                     .contentMargins(.top, 16, for: .scrollContent)
+                    .scrollEdgeEffectStyle(.soft, for: .top)
                 }
             }
             
@@ -164,6 +166,27 @@ struct ProjectsListView: View {
                 AppLogoView(height: 24)
                     .padding(.bottom, 2)
                 Spacer()
+
+                Menu {
+                    ForEach(AppSettings.AppTheme.allCases, id: \.self) { theme in
+                        Button {
+                            settings.theme = theme
+                        } label: {
+                            Label(theme.rawValue, systemImage: theme.icon)
+                            if settings.theme == theme {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: settings.theme.icon)
+                        .font(DesignSystem.Typography.body)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("Appearance")
+
                 Button {
                     showingSoundFontCredits = true
                 } label: {
@@ -209,7 +232,7 @@ struct ProjectsListView: View {
                 }
             }
             .padding(DesignSystem.Spacing.md)
-            .glassStyle(cornerRadius: DesignSystem.CornerRadius.lg)
+            .cardStyle(cornerRadius: DesignSystem.CornerRadius.lg)
             .padding(.top, DesignSystem.Spacing.xs)
         }
     }
@@ -550,22 +573,16 @@ struct StatusBadge: View {
 
 struct FloatingActionButton: View {
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
-            ZStack {
-                Circle()
-                    .fill(DesignSystem.Colors.primary)
-                    .frame(width: 64, height: 64)
-                
-                Image(systemName: "plus")
-                    .font(DesignSystem.Typography.sm)
-                    .fontWeight(.bold)
-                    .foregroundStyle(DesignSystem.Colors.textWhite)
-            }
+            Image(systemName: "plus")
+                .font(.system(size: 24, weight: .bold))
+                .foregroundStyle(DesignSystem.Colors.textWhite)
+                .frame(width: 60, height: 60)
         }
-        .scaleEffect(1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: UUID())
+        .buttonStyle(.plain)
+        .glassEffect(.regular.tint(DesignSystem.Colors.primary.opacity(0.85)).interactive(), in: .circle)
     }
 }
 

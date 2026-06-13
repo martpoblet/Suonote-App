@@ -47,9 +47,7 @@ struct RecordingDetailView: View {
         }
         .toolbarBackground(DesignSystem.Colors.backgroundSecondary, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.light, for: .navigationBar)
         .presentationBackground(DesignSystem.Colors.backgroundSecondary)
-        .preferredColorScheme(.light)
         .presentationDetents([.large])
         .sheet(isPresented: $showingTypePicker) {
             RecordingTypePickerSheet(selectedType: Binding(

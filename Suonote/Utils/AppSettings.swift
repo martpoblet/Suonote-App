@@ -18,6 +18,14 @@ class AppSettings {
             case .dark: return .dark
             }
         }
+
+        var icon: String {
+            switch self {
+            case .system: return "circle.lefthalf.filled"
+            case .light: return "sun.max"
+            case .dark: return "moon"
+            }
+        }
     }
     
     var theme: AppTheme {
@@ -39,8 +47,8 @@ class AppSettings {
     }
     
     private init() {
-        let themeRaw = UserDefaults.standard.string(forKey: "appTheme") ?? "light"
-        self.theme = AppTheme(rawValue: themeRaw) ?? .light
+        let themeRaw = UserDefaults.standard.string(forKey: "appTheme") ?? "System"
+        self.theme = AppTheme(rawValue: themeRaw) ?? .system
         
         let hasLaunched = UserDefaults.standard.bool(forKey: "hasLaunchedBefore")
         self.showOnboarding = !hasLaunched

@@ -54,28 +54,28 @@ struct OnboardingView: View {
             // Bottom button
             Button(action: {
                 if currentPage < pages.count - 1 {
-                    withAnimation { currentPage += 1 }
+                    withAnimation(DesignSystem.Animations.smoothSpring) { currentPage += 1 }
                 } else {
                     onComplete()
                 }
             }) {
                 Text(currentPage < pages.count - 1 ? "Next" : "Get Started")
                     .font(DesignSystem.Typography.headline)
-                    .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 54)
-                    .background(DesignSystem.Colors.primary)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .frame(height: 44)
+                    .contentTransition(.numericText())
             }
+            .buttonStyle(.glassProminent)
+            .tint(pages[currentPage].color)
             .padding(.horizontal, 24)
             .padding(.bottom, 16)
-            
+
             if currentPage < pages.count - 1 {
                 Button("Skip") {
                     onComplete()
                 }
+                .buttonStyle(.glass)
                 .font(DesignSystem.Typography.subheadline)
-                .foregroundStyle(.secondary)
                 .padding(.bottom, 24)
             } else {
                 Spacer().frame(height: 48)

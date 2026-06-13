@@ -90,7 +90,7 @@ struct EnhancedChordPaletteSheet: View {
             }
         }
         .padding(DesignSystem.Spacing.xxs)
-        .glassStyle(cornerRadius: DesignSystem.CornerRadius.lg)
+        .cardStyle(cornerRadius: DesignSystem.CornerRadius.lg)
     }
     
     private func tabButton(_ tab: PaletteTab) -> some View {
@@ -214,7 +214,7 @@ struct EnhancedChordPaletteSheet: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(DesignSystem.Spacing.sm)
-            .glassStyle(cornerRadius: DesignSystem.CornerRadius.md)
+            .cardStyle(cornerRadius: DesignSystem.CornerRadius.md)
         }
         .animatedPress()
     }
@@ -264,7 +264,7 @@ struct EnhancedChordPaletteSheet: View {
         }
         .padding(DesignSystem.Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassStyle(cornerRadius: DesignSystem.CornerRadius.sm)
+        .cardStyle(cornerRadius: DesignSystem.CornerRadius.sm)
     }
     
     private var extensionsCard: some View {
@@ -364,7 +364,7 @@ struct EnhancedChordPaletteSheet: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, DesignSystem.Spacing.md)
-            .glassStyle(cornerRadius: DesignSystem.CornerRadius.md)
+            .cardStyle(cornerRadius: DesignSystem.CornerRadius.md)
         }
         .animatedPress()
     }
@@ -429,7 +429,7 @@ struct EnhancedChordPaletteSheet: View {
                                     .foregroundStyle(DesignSystem.Colors.textPrimary)
                                     .padding(.horizontal, DesignSystem.Spacing.sm)
                                     .padding(.vertical, DesignSystem.Spacing.xxs)
-                                    .glassStyle(cornerRadius: DesignSystem.CornerRadius.sm)
+                                    .cardStyle(cornerRadius: DesignSystem.CornerRadius.sm)
                             }
                         }
                     }
@@ -453,7 +453,7 @@ struct EnhancedChordPaletteSheet: View {
         }
         .frame(maxWidth: .infinity)
         .padding(DesignSystem.Spacing.md)
-        .glassStyle(cornerRadius: DesignSystem.CornerRadius.md)
+        .cardStyle(cornerRadius: DesignSystem.CornerRadius.md)
     }
     
     private var scaleMatchCard: some View {
@@ -514,7 +514,7 @@ struct EnhancedChordPaletteSheet: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, DesignSystem.Spacing.sm)
-            .glassStyle(cornerRadius: DesignSystem.CornerRadius.sm)
+            .cardStyle(cornerRadius: DesignSystem.CornerRadius.sm)
         }
         .animatedPress()
     }

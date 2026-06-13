@@ -1,50 +1,53 @@
 import SwiftUI
 
 // MARK: - Design System
-/// Deep Amethyst Edition - Light mode with purple/violet accents
+/// Adaptive light/dark palette with Suonote teal as the brand accent.
+/// Liquid Glass (iOS 26) is used for the navigation/control layer;
+/// content surfaces stay solid for legibility.
 
 struct DesignSystem {
 
     // MARK: - Colors
 
     struct Colors {
-        // Primary Palette - Pastel Harmony
-        static let primary = Color(hexNonOptional: "00CCBE")        // Suonote teal
-        static let primaryLight = Color(hexNonOptional: "8FE9E3")   // Light teal
-        static let primaryDark = Color(hexNonOptional: "00AFA3")    // Deep teal
-        static let accent = Color(hexNonOptional: "E3A894")         // Warm peach
+        // Primary Palette
+        static let primary = Color(light: "00CCBE", dark: "1ADBCE")        // Suonote teal
+        static let primaryLight = Color(light: "8FE9E3", dark: "2E5F5B")
+        static let primaryDark = Color(light: "00AFA3", dark: "00C2B5")
+        static let accent = Color(light: "E3A894", dark: "EDB9A6")         // Warm peach
 
-        // Backgrounds - Light mode
-        static let background = Color(hexNonOptional: "FBFAFD")     // Soft warm white
-        static let backgroundSecondary = Color(hexNonOptional: "FFFFFF") // Pure white
-        static let backgroundTertiary = Color(hexNonOptional: "F3F5FA")  // Misty blue gray
+        // Backgrounds
+        static let background = Color(light: "FBFAFD", dark: "0C0D12")
+        static let backgroundSecondary = Color(light: "FFFFFF", dark: "14151C")
+        static let backgroundTertiary = Color(light: "F3F5FA", dark: "1A1C24")
 
         // Surface Colors
-        static let surface = Color.white
-        static let surfaceSecondary = Color(hexNonOptional: "F6F7FB") // Airy lavender
-        static let surfaceHover = Color(hexNonOptional: "EEF1F8")
-        static let surfaceActive = Color(hexNonOptional: "E6EBF6")
+        static let surface = Color(light: "FFFFFF", dark: "171922")
+        static let surfaceSecondary = Color(light: "F6F7FB", dark: "1D2029")
+        static let surfaceHover = Color(light: "EEF1F8", dark: "232733")
+        static let surfaceActive = Color(light: "E6EBF6", dark: "2A2F3D")
 
         // Text Colors
-        static let textPrimary = Color(hexNonOptional: "2F2E35")    // Soft charcoal (unified ink)
-        static let textSecondary = Color(hexNonOptional: "6E7480")  // Neutral gray
-        static let textTertiary = Color(hexNonOptional: "9EA5B1")   // Light gray
-        static let textWhite = Color(hexNonOptional: "FEFEFE")      // White
-        static let textMuted = Color(hexNonOptional: "B7B0D8")      // Muted lavender
+        static let textPrimary = Color(light: "2F2E35", dark: "ECECF2")
+        static let textSecondary = Color(light: "6E7480", dark: "A4A9B6")
+        static let textTertiary = Color(light: "9EA5B1", dark: "6F7582")
+        static let textWhite = Color(light: "FEFEFE", dark: "FEFEFE")
+        static let textMuted = Color(light: "B7B0D8", dark: "8E86BC")
 
         // Border Colors
-        static let border = Color(hexNonOptional: "E3E6F0")         // Light pastel border
-        static let borderActive = Color(hexNonOptional: "CBD7F2")   // Active pastel border
-        static let borderSubtle = Color(hexNonOptional: "F1F3F8")   // Very subtle
+        static let border = Color(light: "E3E6F0", dark: "2A2D3A")
+        static let borderActive = Color(light: "CBD7F2", dark: "3E4558")
+        static let borderSubtle = Color(light: "F1F3F8", dark: "222530")
 
         // Status Colors
-        static let success = Color(hexNonOptional: "7FC6A8")
-        static let warning = Color(hexNonOptional: "E1B56E")
-        static let error = Color(hexNonOptional: "D99292")
-        static let info = Color(hexNonOptional: "7AA9DE")
-        static let secondary = Color(hexNonOptional: "8F97A9")  // Gray color for secondary elements
+        static let success = Color(light: "7FC6A8", dark: "8FD6B8")
+        static let warning = Color(light: "E1B56E", dark: "EDC684")
+        static let error = Color(light: "D99292", dark: "E8A3A3")
+        static let info = Color(light: "7AA9DE", dark: "8FBCEE")
+        static let secondary = Color(light: "8F97A9", dark: "9BA3B5")
 
         // Section Palette (used across chips, tabs, and tags)
+        // Raw hex values are persisted in models; keep them stable.
         static let sectionSageHex = "8FB096"
         static let sectionOceanHex = "7A9ED3"
         static let sectionSkyHex = "7FC7CF"
@@ -54,66 +57,65 @@ struct DesignSystem {
         static let sectionBerryHex = "C18ACB"
         static let sectionLavenderHex = "A694D6"
 
-        static let sectionSage = Color(hexNonOptional: sectionSageHex)
-        static let sectionOcean = Color(hexNonOptional: sectionOceanHex)
-        static let sectionSky = Color(hexNonOptional: sectionSkyHex)
-        static let sectionMoss = Color(hexNonOptional: sectionMossHex)
-        static let sectionSand = Color(hexNonOptional: sectionSandHex)
-        static let sectionCoral = Color(hexNonOptional: sectionCoralHex)
-        static let sectionBerry = Color(hexNonOptional: sectionBerryHex)
-        static let sectionLavender = Color(hexNonOptional: sectionLavenderHex)
+        static let sectionSage = Color(light: sectionSageHex, dark: "9DC4A6")
+        static let sectionOcean = Color(light: sectionOceanHex, dark: "8FB3E8")
+        static let sectionSky = Color(light: sectionSkyHex, dark: "8FD9E2")
+        static let sectionMoss = Color(light: sectionMossHex, dark: "A1D4AA")
+        static let sectionSand = Color(light: sectionSandHex, dark: "E2CB9D")
+        static let sectionCoral = Color(light: sectionCoralHex, dark: "EFA796")
+        static let sectionBerry = Color(light: sectionBerryHex, dark: "D29FDC")
+        static let sectionLavender = Color(light: sectionLavenderHex, dark: "B8A7E6")
 
         // Tab Bar
-        static let tabBarBackground = Color(hexNonOptional: "FBFAFD")
+        static let tabBarBackground = background
         static let tabBarActive = primaryDark
         static let tabBarInactive = textSecondary
-
     }
 
     // MARK: - Typography
 
     struct Typography {
-        // Display (Erode) - Increased weights for prominence
-        static let display = Font.erode(42).weight(.semibold)
-        static let displayLarge = Font.erode(50).weight(.semibold)
+        // Display (Erode)
+        static let display = Font.erode(42, relativeTo: .largeTitle).weight(.semibold)
+        static let displayLarge = Font.erode(50, relativeTo: .largeTitle).weight(.semibold)
 
-        // Headings (Erode) - Enhanced weights
-        static let largeTitle = Font.erode(36).weight(.semibold)
-        static let title = Font.erode(30).weight(.semibold)
-        static let title2 = Font.erode(24).weight(.semibold)
-        static let title3 = Font.erode(22).weight(.semibold)
+        // Headings (Erode)
+        static let largeTitle = Font.erode(36, relativeTo: .largeTitle).weight(.semibold)
+        static let title = Font.erode(30, relativeTo: .title).weight(.semibold)
+        static let title2 = Font.erode(24, relativeTo: .title2).weight(.semibold)
+        static let title3 = Font.erode(22, relativeTo: .title3).weight(.semibold)
 
-        // Headlines (Erode for emphasis) - Using Erode more
-        static let headline = Font.erode(18).weight(.semibold)
-        static let subheadline = Font.erode(16).weight(.semibold)
+        // Headlines (Erode for emphasis)
+        static let headline = Font.erode(18, relativeTo: .headline).weight(.semibold)
+        static let subheadline = Font.erode(16, relativeTo: .subheadline).weight(.semibold)
 
         // Body (Mix of Erode and Manrope)
-        static let body = Font.manrope(15)
-        static let bodyBold = Font.erode(15).weight(.semibold)
-        static let bodyMedium = Font.erode(15).weight(.semibold)
-        static let callout = Font.manrope(13)
-        static let calloutBold = Font.erode(13).weight(.semibold)
+        static let body = Font.manrope(15, relativeTo: .body)
+        static let bodyBold = Font.erode(15, relativeTo: .body).weight(.semibold)
+        static let bodyMedium = Font.erode(15, relativeTo: .body).weight(.semibold)
+        static let callout = Font.manrope(13, relativeTo: .callout)
+        static let calloutBold = Font.erode(13, relativeTo: .callout).weight(.semibold)
 
         // Captions (Manrope)
-        static let caption = Font.manrope(12)
-        static let caption2 = Font.manrope(11)
-        static let footnote = Font.manrope(13)
+        static let caption = Font.manrope(12, relativeTo: .caption)
+        static let caption2 = Font.manrope(11, relativeTo: .caption2)
+        static let footnote = Font.manrope(13, relativeTo: .footnote)
 
-        // Extra Large (Erode) - Enhanced weights
-        static let hero = Font.erode(120).weight(.bold)
-        static let mega = Font.erode(72).weight(.bold)
-        static let jumbo = Font.erode(60).weight(.semibold)
-        static let giant = Font.erode(56).weight(.semibold)
-        static let huge = Font.erode(48).weight(.semibold)
-        static let xxl = Font.erode(44).weight(.medium)
-        static let xl = Font.erode(40).weight(.medium)
-        static let lg = Font.erode(36).weight(.medium)
-        static let md = Font.erode(32).weight(.medium)
-        static let sm = Font.erode(24).weight(.medium)
+        // Extra Large (Erode)
+        static let hero = Font.erode(120, relativeTo: .largeTitle).weight(.bold)
+        static let mega = Font.erode(72, relativeTo: .largeTitle).weight(.bold)
+        static let jumbo = Font.erode(60, relativeTo: .largeTitle).weight(.semibold)
+        static let giant = Font.erode(56, relativeTo: .largeTitle).weight(.semibold)
+        static let huge = Font.erode(48, relativeTo: .largeTitle).weight(.semibold)
+        static let xxl = Font.erode(44, relativeTo: .largeTitle).weight(.medium)
+        static let xl = Font.erode(40, relativeTo: .largeTitle).weight(.medium)
+        static let lg = Font.erode(36, relativeTo: .title).weight(.medium)
+        static let md = Font.erode(32, relativeTo: .title).weight(.medium)
+        static let sm = Font.erode(24, relativeTo: .title2).weight(.medium)
 
         // Micro (Manrope)
-        static let micro = Font.manrope(10)
-        static let nano = Font.manrope(8)
+        static let micro = Font.manrope(10, relativeTo: .caption2)
+        static let nano = Font.manrope(8, relativeTo: .caption2)
 
         // Special
         static let monospaced = Font.system(.body, design: .monospaced)
@@ -133,15 +135,6 @@ struct DesignSystem {
         static let xxxl: CGFloat = 40
     }
 
-    // MARK: - Layout
-
-    struct Layout {
-        static let projectTabBarHeight: CGFloat = 60
-        static let projectTabBarBottomInset: CGFloat = 2
-        static let projectTabBarGap: CGFloat = 5
-        static let projectTabBarClearance: CGFloat = 0
-    }
-
     // MARK: - Corner Radius
 
     struct CornerRadius {
@@ -153,22 +146,6 @@ struct DesignSystem {
         static let xxl: CGFloat = 24
         static let xxxl: CGFloat = 32
         static let round: CGFloat = 999
-    }
-
-    // MARK: - Shadows
-
-    struct Shadows {
-        static let sm = Shadow(color: .clear, radius: 0, x: 0, y: 0)
-        static let md = Shadow(color: .clear, radius: 0, x: 0, y: 0)
-        static let lg = Shadow(color: .clear, radius: 0, x: 0, y: 0)
-        static let card = Shadow(color: .clear, radius: 0, x: 0, y: 0)
-    }
-
-    struct Shadow {
-        let color: Color
-        let radius: CGFloat
-        let x: CGFloat
-        let y: CGFloat
     }
 
     // MARK: - Animations
@@ -211,11 +188,24 @@ struct DesignSystem {
     }
 }
 
-// MARK: - Color Extension for Hex
+// MARK: - Adaptive Color Support
 
 extension Color {
+    /// Adaptive color that resolves a different hex per interface style.
+    init(light: String, dark: String) {
+        self.init(uiColor: UIColor { trait in
+            UIColor(hexString: trait.userInterfaceStyle == .dark ? dark : light)
+        })
+    }
+
     init(hexNonOptional hex: String) {
-        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        self.init(uiColor: UIColor(hexString: hex))
+    }
+}
+
+extension UIColor {
+    convenience init(hexString: String) {
+        let hex = hexString.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         var int: UInt64 = 0
         Scanner(string: hex).scanHexInt64(&int)
         let a, r, g, b: UInt64
@@ -230,72 +220,15 @@ extension Color {
             (a, r, g, b) = (255, 0, 0, 0)
         }
         self.init(
-            .sRGB,
-            red: Double(r) / 255,
-            green: Double(g) / 255,
-            blue: Double(b) / 255,
-            opacity: Double(a) / 255
+            red: CGFloat(r) / 255,
+            green: CGFloat(g) / 255,
+            blue: CGFloat(b) / 255,
+            alpha: CGFloat(a) / 255
         )
     }
 }
 
-// MARK: - Reusable Components (Light Mode)
-
-struct CardView<Content: View>: View {
-    let content: Content
-    let cornerRadius: CGFloat
-
-    init(cornerRadius: CGFloat = DesignSystem.CornerRadius.xl,
-         @ViewBuilder content: () -> Content) {
-        self.content = content()
-        self.cornerRadius = cornerRadius
-    }
-
-    var body: some View {
-        content
-            .background(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .fill(DesignSystem.Colors.surface)
-                    .shadow(
-                        color: DesignSystem.Shadows.card.color,
-                        radius: DesignSystem.Shadows.card.radius,
-                        x: DesignSystem.Shadows.card.x,
-                        y: DesignSystem.Shadows.card.y
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(DesignSystem.Colors.border, lineWidth: 1)
-            )
-    }
-}
-
-struct GlassCard<Content: View>: View {
-    let content: Content
-    let cornerRadius: CGFloat
-
-    init(cornerRadius: CGFloat = DesignSystem.CornerRadius.xl,
-         @ViewBuilder content: () -> Content) {
-        self.content = content()
-        self.cornerRadius = cornerRadius
-    }
-
-    var body: some View {
-        content
-            .background(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .fill(DesignSystem.Colors.surface)
-                    .shadow(
-                        color: DesignSystem.Shadows.sm.color,
-                        radius: DesignSystem.Shadows.sm.radius
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(DesignSystem.Colors.border, lineWidth: 1)
-            )
-    }
-}
+// MARK: - Reusable Components
 
 struct PrimaryButton: View {
     let title: String
@@ -322,14 +255,11 @@ struct PrimaryButton: View {
                     .font(DesignSystem.Typography.headline)
                     .fontWeight(.semibold)
             }
-            .foregroundStyle(DesignSystem.Colors.textPrimary)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, DesignSystem.Spacing.md)
-            .background(
-                Capsule()
-                    .fill(isDestructive ? DesignSystem.Colors.error : DesignSystem.Colors.primary)
-            )
+            .padding(.vertical, DesignSystem.Spacing.xxs)
         }
+        .buttonStyle(.glassProminent)
+        .tint(isDestructive ? DesignSystem.Colors.error : DesignSystem.Colors.primary)
     }
 }
 
@@ -357,16 +287,10 @@ struct SecondaryButton: View {
                     .font(DesignSystem.Typography.callout)
             }
             .foregroundStyle(DesignSystem.Colors.textPrimary)
-            .padding(.horizontal, DesignSystem.Spacing.md)
-            .padding(.vertical, DesignSystem.Spacing.sm)
-            .background(
-                Capsule()
-                    .fill(DesignSystem.Colors.surface)
-                    .overlay(
-                        Capsule().stroke(DesignSystem.Colors.border, lineWidth: 1)
-                    )
-            )
+            .padding(.horizontal, DesignSystem.Spacing.xxs)
+            .padding(.vertical, DesignSystem.Spacing.xxxs)
         }
+        .buttonStyle(.glass)
     }
 }
 
@@ -443,18 +367,23 @@ struct AppButton: View {
     var kind: AppButtonKind = .primary(DesignSystem.Colors.primary)
     let action: () -> Void
 
-    private var tint: Color {
+    var body: some View {
         switch kind {
         case .primary(let color):
-            return color
+            baseButton
+                .buttonStyle(.glassProminent)
+                .tint(color)
         case .secondary:
-            return DesignSystem.Colors.textPrimary
+            baseButton
+                .buttonStyle(.glass)
         case .destructive:
-            return DesignSystem.Colors.error
+            baseButton
+                .buttonStyle(.glassProminent)
+                .tint(DesignSystem.Colors.error)
         }
     }
 
-    var body: some View {
+    private var baseButton: some View {
         Button(action: action) {
             HStack(spacing: DesignSystem.Spacing.xxs) {
                 if let icon {
@@ -463,48 +392,8 @@ struct AppButton: View {
                 Text(title)
             }
             .font(DesignSystem.Typography.headline)
-            .foregroundStyle(foregroundColor)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, DesignSystem.Spacing.md)
-            .background(
-                Capsule()
-                    .fill(backgroundFill)
-                    .overlay(
-                        Capsule()
-                            .stroke(borderStroke, lineWidth: 1)
-                    )
-            )
-        }
-    }
-
-    private var backgroundFill: Color {
-        switch kind {
-        case .primary(let color):
-            return color.opacity(0.75)
-        case .secondary:
-            return DesignSystem.Colors.surfaceSecondary
-        case .destructive:
-            return DesignSystem.Colors.error.opacity(0.2)
-        }
-    }
-
-    private var foregroundColor: Color {
-        switch kind {
-        case .primary:
-            return DesignSystem.Colors.backgroundSecondary
-        case .secondary, .destructive:
-            return DesignSystem.Colors.textPrimary
-        }
-    }
-
-    private var borderStroke: Color {
-        switch kind {
-        case .primary(let color):
-            return color.opacity(0.6)
-        case .secondary:
-            return DesignSystem.Colors.border
-        case .destructive:
-            return DesignSystem.Colors.error.opacity(0.6)
+            .padding(.vertical, DesignSystem.Spacing.xxs)
         }
     }
 }
@@ -599,6 +488,8 @@ struct SectionColorDot: View {
 // MARK: - View Extensions
 
 extension View {
+    /// Solid content surface. Content stays opaque for legibility;
+    /// Liquid Glass is reserved for floating controls.
     func cardStyle(cornerRadius: CGFloat = DesignSystem.CornerRadius.xl, color: Color? = nil) -> some View {
         self
             .background(
@@ -608,18 +499,6 @@ extension View {
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .stroke(color ?? DesignSystem.Colors.border, lineWidth: 1)
-            )
-    }
-
-    func glassStyle(cornerRadius: CGFloat = DesignSystem.CornerRadius.xl) -> some View {
-        self
-            .background(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .fill(DesignSystem.Colors.surface)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(DesignSystem.Colors.border, lineWidth: 1)
             )
     }
 

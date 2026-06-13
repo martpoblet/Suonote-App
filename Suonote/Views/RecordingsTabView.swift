@@ -187,16 +187,12 @@ struct RecordingsTabView: View {
                         .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
                 .padding(DesignSystem.Spacing.md)
-                .background(
-                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                        .fill(DesignSystem.Colors.surface)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                                .stroke(DesignSystem.Colors.error.opacity(0.3), lineWidth: 1)
-                        )
+                .glassEffect(
+                    .regular.tint(DesignSystem.Colors.error.opacity(0.15)).interactive(),
+                    in: .rect(cornerRadius: DesignSystem.CornerRadius.lg)
                 )
             }
-            .animatedPress()
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, DesignSystem.Spacing.xl)
         .padding(.top, DesignSystem.Spacing.xl)

@@ -1,3 +1,4 @@
+import os
 import AVFoundation
 import Combine
 
@@ -212,7 +213,7 @@ class AudioEffectsProcessor: ObservableObject {
             try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
             try session.setActive(true)
         } catch {
-            print("Failed to configure audio session: \(error)")
+            AppLog.audio.error("Failed to configure audio session: \(String(describing: error))")
         }
     }
 }

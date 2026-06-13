@@ -1,3 +1,4 @@
+import os
 import AVFoundation
 
 /// Shared audio session and engine management (A-04)
@@ -20,7 +21,7 @@ final class AudioSessionManager {
             try session.setActive(true)
             isSessionActive = true
         } catch {
-            print("[AudioSessionManager] Failed to activate session: \(error)")
+            AppLog.audio.error("Failed to activate session: \(String(describing: error))")
         }
     }
     
@@ -31,7 +32,7 @@ final class AudioSessionManager {
             try session.setActive(false, options: .notifyOthersOnDeactivation)
             isSessionActive = false
         } catch {
-            print("[AudioSessionManager] Failed to deactivate session: \(error)")
+            AppLog.audio.error("Failed to deactivate session: \(String(describing: error))")
         }
     }
     
@@ -46,7 +47,7 @@ final class AudioSessionManager {
             try session.setPreferredSampleRate(44100)
             try session.setPreferredIOBufferDuration(0.005)
         } catch {
-            print("[AudioSessionManager] Failed to configure recording: \(error)")
+            AppLog.audio.error("Failed to configure recording: \(String(describing: error))")
         }
     }
     

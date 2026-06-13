@@ -164,14 +164,17 @@ struct ImmersiveLyricsEditor: View {
         VStack(spacing: 0) {
             // Header
             ZStack {
-                // Center: dot + section name
+                // Center: dot + section name in a floating glass capsule
                 HStack(spacing: DesignSystem.Spacing.xs) {
                     SectionColorDot(section.color, size: 10)
                     Text(section.name)
                         .font(DesignSystem.Typography.title3)
                         .foregroundStyle(DesignSystem.Colors.textPrimary)
                 }
-                
+                .padding(.horizontal, DesignSystem.Spacing.md)
+                .padding(.vertical, DesignSystem.Spacing.xxs)
+                .glassEffect(.regular.tint(section.color.opacity(0.2)), in: .capsule)
+
                 // Leading: back chevron
                 HStack {
                     Button {
@@ -184,6 +187,7 @@ struct ImmersiveLyricsEditor: View {
                             .frame(width: 44, height: 44)
                             .contentShape(Rectangle())
                     }
+                    .buttonStyle(.glass)
                     Spacer()
                 }
             }
@@ -227,14 +231,25 @@ struct ImmersiveLyricsEditor: View {
                     } label: {
                         Text("Done")
                             .font(DesignSystem.Typography.bodyBold)
-                            .foregroundStyle(DesignSystem.Colors.primaryDark)
                     }
+                    .buttonStyle(.glassProminent)
+                    .tint(section.color)
                 }
             }
             .padding(.horizontal, DesignSystem.Spacing.xl)
             .padding(.vertical, DesignSystem.Spacing.sm)
         }
-        .background(DesignSystem.Colors.background.ignoresSafeArea())
+        .background(
+            ZStack {
+                DesignSystem.Colors.background
+                LinearGradient(
+                    colors: [section.color.opacity(0.10), .clear],
+                    startPoint: .top,
+                    endPoint: .center
+                )
+            }
+            .ignoresSafeArea()
+        )
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 isTextEditorFocused = true

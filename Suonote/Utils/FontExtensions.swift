@@ -21,20 +21,37 @@ struct AppFonts {
 // MARK: - Font Extension
 extension Font {
 
-    // MARK: - Erode (Primary - Titles & Display)
-
-    static func erode(_ size: CGFloat) -> Font {
-        .custom(AppFonts.erode, size: size)
+    /// Maps a design size to the closest system text style so custom fonts
+    /// scale with Dynamic Type.
+    private static func inferredTextStyle(for size: CGFloat) -> TextStyle {
+        switch size {
+        case ..<11: return .caption2
+        case ..<13: return .caption
+        case ..<14: return .footnote
+        case ..<16: return .body
+        case ..<18: return .callout
+        case ..<20: return .headline
+        case ..<24: return .title3
+        case ..<30: return .title2
+        case ..<36: return .title
+        default: return .largeTitle
+        }
     }
 
-    static func erodeItalic(_ size: CGFloat) -> Font {
-        .custom(AppFonts.erode, size: size).italic()
+    // MARK: - Erode (Primary - Titles & Display)
+
+    static func erode(_ size: CGFloat, relativeTo style: TextStyle? = nil) -> Font {
+        .custom(AppFonts.erode, size: size, relativeTo: style ?? inferredTextStyle(for: size))
+    }
+
+    static func erodeItalic(_ size: CGFloat, relativeTo style: TextStyle? = nil) -> Font {
+        erode(size, relativeTo: style).italic()
     }
 
     // MARK: - Manrope (Secondary - Body & UI)
 
-    static func manrope(_ size: CGFloat) -> Font {
-        .custom(AppFonts.manrope, size: size)
+    static func manrope(_ size: CGFloat, relativeTo style: TextStyle? = nil) -> Font {
+        .custom(AppFonts.manrope, size: size, relativeTo: style ?? inferredTextStyle(for: size))
     }
 
     // MARK: - Display Sizes (Erode)

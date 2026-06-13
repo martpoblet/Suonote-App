@@ -13,7 +13,8 @@ struct ProjectDetailView: View {
     @State private var selectedTab: ProjectTab = .compose
     @State private var showingEditSheet = false
     @State private var showingStatusPicker = false
-    
+    @StateObject private var playback = StudioPlaybackEngine()
+
     fileprivate enum ProjectTab: Int, CaseIterable {
         case compose
         case studio
@@ -50,18 +51,26 @@ struct ProjectDetailView: View {
     
     // MARK: - Body
     var body: some View {
-        ZStack {
-            ProjectBackgroundView()
-            
-            // MARK: Tab Content
-            /// Contenido dinámico según la tab seleccionada
-            ProjectTabContainer {
-                selectedTabContent
+        TabView(selection: $selectedTab) {
+            Tab(ProjectTab.compose.title, systemImage: ProjectTab.compose.icon, value: .compose) {
+                ProjectTabContainer { ComposeTabView(project: project) }
             }
-            .overlay(alignment: .bottom) {
-                ProjectTabBar(selectedTab: $selectedTab)
+            Tab(ProjectTab.studio.title, systemImage: ProjectTab.studio.icon, value: .studio) {
+                ProjectTabContainer { StudioTabView(project: project) }
+            }
+            Tab(ProjectTab.lyrics.title, systemImage: ProjectTab.lyrics.icon, value: .lyrics) {
+                ProjectTabContainer { LyricsTabView(project: project) }
+            }
+            Tab(ProjectTab.record.title, systemImage: ProjectTab.record.icon, value: .record) {
+                ProjectTabContainer { RecordingsTabView(project: project) }
             }
         }
+        .tint(selectedTab.tintColor)
+        .tabBarMinimizeBehavior(.onScrollDown)
+        .tabViewBottomAccessory {
+            MiniTransportView(project: project)
+        }
+        .environmentObject(playback)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             // MARK: Toolbar - Title
@@ -109,10 +118,6 @@ struct ProjectDetailView: View {
             StatusPickerSheet(project: project)
                 .studioModalStyle()
         }
-        .toolbarBackground(Color.clear, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.light, for: .navigationBar)
-        .preferredColorScheme(.light)
         .onAppear {
             updateWidgetData()
         }
@@ -137,72 +142,11 @@ struct ProjectDetailView: View {
         WidgetCenter.shared.reloadAllTimelines()
     }
 
-    @ViewBuilder
-    private var selectedTabContent: some View {
-        switch selectedTab {
-        case .compose:
-            ComposeTabView(project: project)
-        case .studio:
-            StudioTabView(project: project)
-        case .lyrics:
-            LyricsTabView(project: project)
-        case .record:
-            RecordingsTabView(project: project)
-        }
-    }
-
-    // MARK: - Helper Methods
-    
-}
-
-private struct ProjectTabBar: View {
-    @Binding var selectedTab: ProjectDetailView.ProjectTab
-    
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(ProjectDetailView.ProjectTab.allCases, id: \.self) { tab in
-                Button {
-                    withAnimation(DesignSystem.Animations.quickSpring) {
-                        selectedTab = tab
-                    }
-                } label: {
-                    VStack(spacing: 4) {
-                        Image(systemName: tab.icon)
-                            .font(DesignSystem.Typography.bodyMedium)
-                            .foregroundStyle(tab.tintColor)
-                        Text(tab.title)
-                            .font(DesignSystem.Typography.bodyMedium)
-                            .foregroundStyle(DesignSystem.Colors.textSecondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(selectedTab == tab ? tab.tintColor.opacity(0.12) : Color.clear)
-                    )
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 24)
-                .fill(DesignSystem.Colors.backgroundSecondary.opacity(0.95))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 24)
-                .stroke(DesignSystem.Colors.border.opacity(0.7), lineWidth: 1)
-        )
-        .shadow(color: DesignSystem.Colors.textPrimary.opacity(0.08), radius: 16, x: 0, y: 8)
-        .padding(.horizontal, 16)
-        .ignoresSafeArea(.keyboard, edges: .bottom)
-    }
 }
 
 struct ProjectBackgroundView: View {
     static let gradient = DesignSystem.Colors.background
-    
+
     var body: some View {
         Self.gradient
             .ignoresSafeArea()
@@ -211,22 +155,15 @@ struct ProjectBackgroundView: View {
 
 struct ProjectTabContainer<Content: View>: View {
     let content: Content
-    
+
     init(@ViewBuilder content: () -> Content) {
         self.content = content()
     }
-    
+
     var body: some View {
         ZStack {
             ProjectBackgroundView()
             content
-        }
-        .safeAreaInset(edge: .bottom) {
-            Color.clear.frame(
-                height: DesignSystem.Layout.projectTabBarHeight
-                    + DesignSystem.Layout.projectTabBarGap
-                    + DesignSystem.Layout.projectTabBarBottomInset
-            )
         }
     }
 }

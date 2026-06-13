@@ -1,40 +1,57 @@
+import os
 import AVFoundation
 import AudioToolbox
 import Combine
 
-/// Simple chord preview player using MIDI sampler
+/// Simple chord preview player using MIDI sampler.
+/// Engine starts lazily on first preview and pending note-offs are cancelled
+/// when a new chord starts, so rapid previews never leave hanging notes (A-06).
 final class ChordPreviewPlayer: ObservableObject {
     private let audioEngine = AVAudioEngine()
     private let sampler = AVAudioUnitSampler()
     private var isSetup = false
-    
+    private var activeNotes: Set<UInt8> = []
+    private var pendingWorkItems: [DispatchWorkItem] = []
+    private var interruptionObserver: Any?
+
     init() {
-        setupAudio()
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.stopAllNotes()
+        }
     }
-    
-    private func setupAudio() {
-        guard !isSetup else { return }
-        
-        // Attach sampler to engine
+
+    deinit {
+        if let interruptionObserver {
+            NotificationCenter.default.removeObserver(interruptionObserver)
+        }
+    }
+
+    private func setupIfNeeded() {
+        guard !isSetup else {
+            if !audioEngine.isRunning {
+                try? audioEngine.start()
+            }
+            return
+        }
+
         audioEngine.attach(sampler)
-        
-        // Connect to output
         audioEngine.connect(sampler, to: audioEngine.mainMixerNode, format: nil)
-        
-        // Load piano soundfont
         loadPianoSoundFont()
-        
-        // Start engine
+
         do {
             try audioEngine.start()
             isSetup = true
         } catch {
-            print("❌ Failed to start audio engine: \(error)")
+            AppLog.audio.error("Failed to start audio engine: \(String(describing: error))")
         }
     }
-    
+
     private func loadPianoSoundFont() {
-        // Use Electric Piano from Arachno (warm, cleaner preview than acoustic)
+        // Use Electric Piano (warm, cleaner preview than acoustic)
         if let customURL = SoundFontManager.soundFontURL(for: .piano, variant: .electricPiano) {
             attemptLoad(url: customURL, program: 4) // Electric Piano = GM program 4
             return
@@ -45,23 +62,23 @@ final class ChordPreviewPlayer: ObservableObject {
             attemptLoad(url: systemURL, program: 4)
         }
     }
-    
+
     private func systemSoundBankURL() -> URL? {
         let possiblePaths = [
             "/System/Library/Components/CoreAudio.component/Contents/Resources/gs_instruments.dls",
             "/System/Library/Frameworks/AudioToolbox.framework/Versions/A/Resources/gs_instruments.dls"
         ]
-        
+
         for path in possiblePaths {
             let url = URL(fileURLWithPath: path)
             if FileManager.default.fileExists(atPath: url.path) {
                 return url
             }
         }
-        
+
         return nil
     }
-    
+
     private func attemptLoad(url: URL, program: UInt8) {
         do {
             try sampler.loadSoundBankInstrument(
@@ -70,14 +87,34 @@ final class ChordPreviewPlayer: ObservableObject {
                 bankMSB: UInt8(kAUSampler_DefaultMelodicBankMSB),
                 bankLSB: UInt8(kAUSampler_DefaultBankLSB)
             )
-            print("✅ Loaded SoundFont for chord preview")
         } catch {
-            print("❌ Failed to load SoundFont: \(error)")
+            AppLog.audio.error("Failed to load SoundFont: \(String(describing: error))")
         }
     }
-    
+
+    /// Cancels pending note events and silences anything still sounding.
+    func stopAllNotes() {
+        for item in pendingWorkItems {
+            item.cancel()
+        }
+        pendingWorkItems.removeAll()
+        for note in activeNotes {
+            sampler.stopNote(note, onChannel: 0)
+        }
+        activeNotes.removeAll()
+    }
+
+    private func schedule(after delay: TimeInterval, _ block: @escaping () -> Void) {
+        let item = DispatchWorkItem(block: block)
+        pendingWorkItems.append(item)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
+    }
+
     /// Play a chord preview with voice spread, per-voice velocity, and bass octave doubling.
     func playChord(root: String, quality: ChordQuality, duration: TimeInterval = 0.8) {
+        setupIfNeeded()
+        stopAllNotes()
+
         let notes = ChordUtils.getChordNotes(root: root, quality: quality)
         guard !notes.isEmpty else { return }
 
@@ -104,9 +141,9 @@ final class ChordPreviewPlayer: ObservableObject {
 
         // Staggered note-on: 14ms per voice — like a real piano arpeggiation
         for (i, midiNote) in midiNotes.enumerated() {
-            let delay = Double(i) * 0.014
             let vel = velocities[i]
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            schedule(after: Double(i) * 0.014) { [weak self] in
+                self?.activeNotes.insert(midiNote)
                 self?.sampler.startNote(midiNote, withVelocity: vel, onChannel: 0)
             }
         }
@@ -117,14 +154,13 @@ final class ChordPreviewPlayer: ObservableObject {
 
         for (i, midiNote) in midiNotes.enumerated() {
             let releaseTime = i == 0 ? bassRelease : upperRelease
-            DispatchQueue.main.asyncAfter(deadline: .now() + releaseTime) { [weak self] in
+            schedule(after: releaseTime) { [weak self] in
                 self?.sampler.stopNote(midiNote, onChannel: 0)
+                self?.activeNotes.remove(midiNote)
             }
         }
-
-        print("🎹 Playing chord: \(root) \(quality.displayName) — \(midiNotes.count) voices")
     }
-    
+
     /// Convert note name (e.g., "C", "C#", "Db") to MIDI number at the given octave.
     private func noteNameToMIDI(_ noteName: String, octave: Int = 4) -> UInt8? {
         let noteMap: [String: Int] = [

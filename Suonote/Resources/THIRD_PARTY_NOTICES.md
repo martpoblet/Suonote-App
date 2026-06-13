@@ -1,10 +1,31 @@
 # Third-Party Notices
 
-## Arachno SoundFont
+## MS Basic SoundFont (MuseScore General)
 
-This app includes a Lite subset of Arachno SoundFont.
+This app includes `MS_Basic.sf2`, the MS Basic SoundFont from MuseScore
+(formerly distributed as MuseScore_General), based on FluidR3 by Frank Wen
+with extensive additions and curation by S. Christian Collins and the
+MuseScore community.
 
-Arachno SoundFont is created by Maxime Abbey (Arachnosoft) and is used with permission.
+Upstream documentation and license:
+https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/
 
-Official page:
-https://www.arachnosoft.com/main/soundfont.php
+### License (MIT)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
