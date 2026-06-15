@@ -1,0 +1,13 @@
+# Large bundled SoundFont — exceeds GitHub's 100 MB file limit.
+# Keep the file locally (it ships in the app bundle); just don't push it.
+Suonote/SoundFonts/**/*.sf2
+
+# macOS
+.DS_Store
+
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint

@@ -19,6 +19,27 @@ struct SuonoteApp: App {
         let segmentedAppearance = UISegmentedControl.appearance()
         segmentedAppearance.setTitleTextAttributes([.font: UIFont.manrope(11)], for: .normal)
         segmentedAppearance.setTitleTextAttributes([.font: UIFont.manrope(11)], for: .selected)
+
+        // Soften unselected tab items from pure black/white to the app's ink.
+        // Transparent background keeps the system Liquid Glass tab bar intact;
+        // selected items still follow the SwiftUI `.tint`.
+        let unselected = UIColor { trait in
+            trait.userInterfaceStyle == .dark
+                ? UIColor(hexString: "A4A9B6")   // textSecondary (dark)
+                : UIColor(hexString: "6E7480")   // textSecondary (light)
+        }
+        let itemAppearance = UITabBarItemAppearance()
+        for state in [itemAppearance.normal, itemAppearance.disabled] {
+            state.iconColor = unselected
+            state.titleTextAttributes = [.foregroundColor: unselected]
+        }
+        let tabAppearance = UITabBarAppearance()
+        tabAppearance.configureWithTransparentBackground()
+        tabAppearance.stackedLayoutAppearance = itemAppearance
+        tabAppearance.inlineLayoutAppearance = itemAppearance
+        tabAppearance.compactInlineLayoutAppearance = itemAppearance
+        UITabBar.appearance().standardAppearance = tabAppearance
+        UITabBar.appearance().scrollEdgeAppearance = tabAppearance
     }
 
     var sharedModelContainer: ModelContainer = {

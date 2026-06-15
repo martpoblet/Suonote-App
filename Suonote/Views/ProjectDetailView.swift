@@ -68,7 +68,9 @@ struct ProjectDetailView: View {
         .tint(selectedTab.tintColor)
         .tabBarMinimizeBehavior(.onScrollDown)
         .tabViewBottomAccessory {
-            MiniTransportView(project: project)
+            if selectedTab != .studio {
+                MiniTransportView(project: project)
+            }
         }
         .environmentObject(playback)
         .navigationBarTitleDisplayMode(.inline)

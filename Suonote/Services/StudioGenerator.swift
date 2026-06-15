@@ -29,6 +29,29 @@ struct StudioGenerator {
         let duration: Double
     }
 
+    /// Describes the full set of instruments in an arrangement so each
+    /// instrument can place its notes in a coordinated register and thin its
+    /// voicing — instead of every instrument independently piling chords into
+    /// the same mid register (the cause of "no harmony between instruments").
+    struct ArrangementContext {
+        let instruments: Set<StudioInstrument>
+
+        /// No coordination context — the instrument fills its full natural
+        /// role (e.g. a lone piano covers both hands and the low end).
+        static let solo = ArrangementContext(instruments: [])
+
+        var hasBass: Bool { instruments.contains(.bass) }
+
+        /// Chord-playing instruments competing for the harmonic mid register.
+        var harmonicCount: Int {
+            instruments.filter { ![.bass, .drums, .audio].contains($0) }.count
+        }
+
+        /// MIDI floor for non-bass instruments when a dedicated bass is present,
+        /// keeping the low end clear for the bass.
+        var lowEndFloor: Int? { hasBass ? 48 : nil } // C3
+    }
+
     struct SectionDynamic {
         let startBeat: Double
         let endBeat: Double
@@ -122,6 +145,7 @@ struct StudioGenerator {
             beatsPerBar: project.timeTop,
             timeBottom: project.timeBottom
         )
+        let arrangement = ArrangementContext(instruments: Set(instruments))
 
         for (index, instrument) in instruments.enumerated() {
             let track = StudioTrack(
@@ -151,6 +175,7 @@ struct StudioGenerator {
                 variant: track.variant,
                 octaveShift: track.octaveShift,
                 keyRoot: project.keyRoot,
+                keyMode: project.keyMode,
                 diatonicMap: diatonicMap,
                 intensity: track.regenerateIntensity,
                 complexity: track.regenerateComplexity,
@@ -158,7 +183,10 @@ struct StudioGenerator {
                 arpeggioEnabled: track.regenerateArpeggioEnabled,
                 arpeggioRate: track.regenerateArpeggioRate,
                 arpeggioPattern: track.regenerateArpeggioPattern,
-                sectionBoundaryBars: sectionBounds
+                compingPattern: track.compingPattern,
+                bassPattern: track.bassPattern,
+                sectionBoundaryBars: sectionBounds,
+                arrangement: arrangement
             )
             applySectionDynamics(notes, dynamics: dynamics)
             for note in notes {
@@ -188,6 +216,9 @@ struct StudioGenerator {
             for: style,
             beatsPerBar: project.timeTop,
             timeBottom: project.timeBottom
+        )
+        let arrangement = ArrangementContext(
+            instruments: Set(project.studioTracks.filter { !$0.instrument.isAudio }.map(\.instrument))
         )
 
         for track in project.studioTracks where !track.instrument.isAudio {
@@ -219,6 +250,7 @@ struct StudioGenerator {
                 variant: track.variant,
                 octaveShift: track.octaveShift,
                 keyRoot: project.keyRoot,
+                keyMode: project.keyMode,
                 diatonicMap: diatonicMap,
                 intensity: track.regenerateIntensity,
                 complexity: track.regenerateComplexity,
@@ -226,7 +258,10 @@ struct StudioGenerator {
                 arpeggioEnabled: track.regenerateArpeggioEnabled,
                 arpeggioRate: track.regenerateArpeggioRate,
                 arpeggioPattern: track.regenerateArpeggioPattern,
-                sectionBoundaryBars: sectionBounds
+                compingPattern: track.compingPattern,
+                bassPattern: track.bassPattern,
+                sectionBoundaryBars: sectionBounds,
+                arrangement: arrangement
             )
             applySectionDynamics(notes, dynamics: dynamics)
             for note in notes {
@@ -300,13 +335,16 @@ struct StudioGenerator {
                 variant: track.variant,
                 octaveShift: track.octaveShift,
                 keyRoot: project.keyRoot,
+                keyMode: project.keyMode,
                 diatonicMap: diatonicMap,
                 intensity: track.regenerateIntensity,
                 complexity: track.regenerateComplexity,
                 naturalness: track.regenerateNaturalness,
                 arpeggioEnabled: track.regenerateArpeggioEnabled,
                 arpeggioRate: track.regenerateArpeggioRate,
-                arpeggioPattern: track.regenerateArpeggioPattern
+                arpeggioPattern: track.regenerateArpeggioPattern,
+                compingPattern: track.compingPattern,
+                bassPattern: track.bassPattern
             )
             let newNotes = notes.filter { note in
                 let beat = note.startBeat
@@ -368,13 +406,16 @@ struct StudioGenerator {
                 variant: track.variant,
                 octaveShift: track.octaveShift,
                 keyRoot: project.keyRoot,
+                keyMode: project.keyMode,
                 diatonicMap: diatonicMap,
                 intensity: track.regenerateIntensity,
                 complexity: track.regenerateComplexity,
                 naturalness: track.regenerateNaturalness,
                 arpeggioEnabled: track.regenerateArpeggioEnabled,
                 arpeggioRate: track.regenerateArpeggioRate,
-                arpeggioPattern: track.regenerateArpeggioPattern
+                arpeggioPattern: track.regenerateArpeggioPattern,
+                compingPattern: track.compingPattern,
+                bassPattern: track.bassPattern
             )
             didChange = appendNotes(notes, to: track, modelContext: modelContext) || didChange
         }
@@ -398,7 +439,10 @@ struct StudioGenerator {
         naturalness: Double = 0.0,
         arpeggioEnabled: Bool = false,
         arpeggioRate: String = "1/8",
-        arpeggioPattern: String = "up"
+        arpeggioPattern: String = "up",
+        compingPattern: CompingPattern = .auto,
+        bassPattern: BassPattern = .auto,
+        arrangement: ArrangementContext = .solo
     ) -> [StudioNote] {
         let timeline = buildTimeline(for: project)
         let diatonicMap = diatonicQualityMap(forKey: project.keyRoot, mode: project.keyMode)
@@ -423,13 +467,17 @@ struct StudioGenerator {
             variant: variant,
             octaveShift: octaveShift,
             keyRoot: project.keyRoot,
+            keyMode: project.keyMode,
             diatonicMap: diatonicMap,
             intensity: intensity,
             complexity: complexity,
             naturalness: naturalness,
             arpeggioEnabled: arpeggioEnabled,
             arpeggioRate: arpeggioRate,
-            arpeggioPattern: arpeggioPattern
+            arpeggioPattern: arpeggioPattern,
+            compingPattern: compingPattern,
+            bassPattern: bassPattern,
+            arrangement: arrangement
         )
     }
 
@@ -591,6 +639,7 @@ struct StudioGenerator {
         variant: InstrumentVariant?,
         octaveShift: Int,
         keyRoot: String,
+        keyMode: KeyMode = .major,
         diatonicMap: [String: ChordQuality],
         intensity: Double = 0.5,
         complexity: Double = 0.5,
@@ -598,7 +647,10 @@ struct StudioGenerator {
         arpeggioEnabled: Bool = false,
         arpeggioRate: String = "1/8",
         arpeggioPattern: String = "up",
-        sectionBoundaryBars: Set<Int> = []
+        compingPattern: CompingPattern = .auto,
+        bassPattern: BassPattern = .auto,
+        sectionBoundaryBars: Set<Int> = [],
+        arrangement: ArrangementContext = .solo
     ) -> [StudioNote] {
         let generated: [StudioNote]
         switch instrument {
@@ -630,12 +682,14 @@ struct StudioGenerator {
                 octaveShift: octaveShift,
                 keyRoot: keyRoot,
                 intensity: intensity,
-                complexity: complexity
+                complexity: complexity,
+                bassPattern: bassPattern
             )
-        case .guitar, .synth, .piano, .strings, .brass, .woodwinds, .organ, .mallets:
-            generated = chordPadNotes(
+        case .piano:
+            // Piano plays as two hands: a low-register left-hand foundation
+            // plus a mid/upper-register right-hand voicing.
+            generated = pianoNotes(
                 chords: chords,
-                instrument: instrument,
                 totalBars: totalBars,
                 beatsPerBar: beatsPerBar,
                 timeBottom: timeBottom,
@@ -648,8 +702,50 @@ struct StudioGenerator {
                 complexity: complexity,
                 arpeggioEnabled: arpeggioEnabled,
                 arpeggioRate: arpeggioRate,
-                arpeggioPattern: arpeggioPattern
+                arpeggioPattern: arpeggioPattern,
+                compingPattern: compingPattern,
+                arrangement: arrangement
             )
+        case .guitar, .synth, .strings, .brass, .woodwinds, .organ, .mallets:
+            let profile = chordVoicingProfile(for: instrument, variant: variant, style: style)
+            if profile.monophonic {
+                // Lead instruments (woodwinds, synth leads) play a real melodic
+                // line over the changes rather than one held chord tone.
+                generated = melodyNotes(
+                    chords: chords,
+                    instrument: instrument,
+                    variant: variant,
+                    beatsPerBar: beatsPerBar,
+                    timeBottom: timeBottom,
+                    style: style,
+                    octaveShift: octaveShift,
+                    keyRoot: keyRoot,
+                    keyMode: keyMode,
+                    diatonicMap: diatonicMap,
+                    intensity: intensity,
+                    complexity: complexity
+                )
+            } else {
+                generated = chordPadNotes(
+                    chords: chords,
+                    instrument: instrument,
+                    totalBars: totalBars,
+                    beatsPerBar: beatsPerBar,
+                    timeBottom: timeBottom,
+                    style: style,
+                    variant: variant,
+                    octaveShift: octaveShift,
+                    keyRoot: keyRoot,
+                    diatonicMap: diatonicMap,
+                    intensity: intensity,
+                    complexity: complexity,
+                    arpeggioEnabled: arpeggioEnabled,
+                    arpeggioRate: arpeggioRate,
+                    arpeggioPattern: arpeggioPattern,
+                    compingPattern: compingPattern,
+                    arrangement: arrangement
+                )
+            }
         case .audio:
             generated = []
         }
@@ -693,7 +789,11 @@ struct StudioGenerator {
         complexity: Double = 0.5,
         arpeggioEnabled: Bool = false,
         arpeggioRate: String = "1/8",
-        arpeggioPattern: String = "up"
+        arpeggioPattern: String = "up",
+        compingPattern: CompingPattern = .auto,
+        arrangement: ArrangementContext = .solo,
+        rangeOverride: ClosedRange<Int>? = nil,
+        noteCap: Int? = nil
     ) -> [StudioNote] {
         let voicingProfile = chordVoicingProfile(
             for: instrument,
@@ -701,7 +801,34 @@ struct StudioGenerator {
             style: style
         )
         let effectiveComplexity = max(0.0, min(1.0, complexity + voicingProfile.extensionBias))
-        let range = chordRange(for: instrument, variant: variant, style: style, octaveShift: octaveShift)
+
+        // Resolve `.auto` to the instrument's recommended pattern, then derive
+        // the concrete behaviour: a sustained pad, a broken-chord figure, or a
+        // rhythmic block comp.
+        let effectiveComping: CompingPattern = compingPattern == .auto
+            ? recommendedComping(for: instrument, variant: variant, style: style)
+            : compingPattern
+        let isSustained = effectiveComping == .sustained
+        let figure: AccompanimentPattern? = arpeggioEnabled ? nil : accompanimentFigure(for: effectiveComping)
+
+        var range = rangeOverride ?? chordRange(for: instrument, variant: variant, style: style, octaveShift: octaveShift)
+        // Keep the low end clear for a dedicated bass: lift harmonic instruments
+        // out of the bass register so they don't muddy the foundation.
+        if let floor = arrangement.lowEndFloor, instrument != .mallets {
+            let lifted = max(range.lowerBound, floor)
+            if lifted < range.upperBound {
+                range = lifted...range.upperBound
+            }
+        }
+        // Thin voicings when many instruments share the harmony — fewer notes
+        // per instrument keeps the combined texture clear instead of a wash.
+        let densityCap: Int? = {
+            switch arrangement.harmonicCount {
+            case 0...3: return noteCap
+            case 4: return min(noteCap ?? .max, 3)
+            default: return min(noteCap ?? .max, 2)
+            }
+        }()
         let tonicTarget = anchorPitch(for: keyRoot, in: range)
         var lastCenter = tonicTarget
         var lastVoicing: [Int] = []
@@ -715,37 +842,49 @@ struct StudioGenerator {
                 for: span.chord,
                 diatonicMap: diatonicMap
             )
-            var pitches = chordPitches(
-                rootPitch: rootPitch,
-                quality: resolvedQuality,
-                omitThird: voicingProfile.omitThird
-            )
-            let extensions = chordExtensionIntervals(
-                for: resolvedQuality,
-                style: style,
-                instrument: instrument,
-                variant: variant,
-                complexity: effectiveComplexity
-            )
-            for interval in extensions {
-                pitches.append(rootPitch + interval)
+            // Accurate chord tones from the real quality + the event's
+            // extensions — this is what guarantees a m7 sounds like a m7,
+            // a maj7 keeps its natural 7, a sus has no third, etc.
+            let tones = harmonicTones(for: resolvedQuality, extensions: span.chord.extensions)
+            var intervals: [Int]
+            if voicingProfile.omitThird {
+                // Power / fifth voicings — root + fifth only.
+                intervals = [0, tones.fifth]
+            } else {
+                intervals = tones.essential + selectedTensions(
+                    from: tones,
+                    instrument: instrument,
+                    variant: variant,
+                    style: style,
+                    complexity: effectiveComplexity
+                )
             }
-            if intensity > 0.7, instrument != .guitar || voicingProfile.allowOctaveDoubling {
+            var pitches = uniqueSorted(intervals).map { rootPitch + $0 }
+            if intensity > 0.7, voicingProfile.allowOctaveDoubling, instrument != .guitar {
                 pitches.append(rootPitch + 12)
             }
             pitches = uniqueSorted(pitches)
             pitches = fitPitches(pitches, in: range)
-            
-            // Monophonic instruments or variants: pick a single melodic pitch
-            if (instrument == .woodwinds || voicingProfile.monophonic), let pitch = pitches.last {
-                pitches = [pitch]
+
+            // Jazz keyboards comp rootless — the bass / left hand owns the root,
+            // freeing the 3rd, 7th and tensions to define the color.
+            if style == .jazz, instrument == .piano || instrument == .organ, pitches.count >= 3 {
+                pitches = fitPitches(rootlessVoicing(pitches, rootPitch: rootPitch), in: range)
+            }
+
+            // Monophonic instruments: pick the chord tone nearest the previous
+            // note for a smooth melodic line instead of always the top note.
+            if instrument == .woodwinds || voicingProfile.monophonic {
+                if let pitch = pitches.min(by: { abs($0 - lastCenter) < abs($1 - lastCenter) }) {
+                    pitches = [pitch]
+                }
             }
 
             // Simplify guitar voicings - complexity scales note count up to 6
             if instrument == .guitar {
                 let maxNotes = complexity > 0.8 ? 6 : (complexity > 0.6 ? 5 : (complexity > 0.4 ? 4 : (complexity > 0.2 ? 3 : 2)))
                 let cappedNotes = min(maxNotes, voicingProfile.maxNotes ?? maxNotes)
-                pitches = trimVoices(pitches, keep: cappedNotes)
+                pitches = trimVoicesHarmonic(pitches, rootPitch: rootPitch, keep: cappedNotes)
             }
 
             if voicingProfile.preferOpenVoicing {
@@ -762,8 +901,13 @@ struct StudioGenerator {
                 pitches = drop2Voicing(pitches, range: range)
             }
 
-            if let maxNotes = voicingProfile.maxNotes {
-                pitches = trimVoices(pitches, keep: maxNotes)
+            // Octave-displacing voicings can overshoot the range — fold every
+            // voice back in (never drop a chord tone).
+            pitches = foldIntoRange(pitches, range)
+
+            let effectiveMaxNotes = [voicingProfile.maxNotes, densityCap].compactMap { $0 }.min()
+            if let effectiveMaxNotes {
+                pitches = trimVoicesHarmonic(pitches, rootPitch: rootPitch, keep: effectiveMaxNotes)
             }
 
             // Smooth voice leading: pick the inversion closest to the
@@ -779,29 +923,64 @@ struct StudioGenerator {
             let baseVelocity = chordVelocity(for: instrument, style: style)
                 + chordVelocityAdjustment(for: instrument, variant: variant, style: style)
             let velocity = velocityCurve(base: baseVelocity, intensity: intensity, instrument: instrument)
-            
-            let hitOffsets = chordHitOffsets(
-                instrument: instrument,
-                style: style,
-                beatsPerBar: beatsPerBar,
-                timeBottom: timeBottom,
-                chordDuration: baseDuration,
-                intensity: intensity,
-                complexity: effectiveComplexity
-            )
+
+            // Broken-chord patterns (arpeggio / Alberti). The user's explicit
+            // choice wins; `.auto` resolves to the instrument's recommended
+            // figure. The legacy arpeggio toggle routes through its own branch.
+            if pitches.count >= 2, let figure {
+                // Explicit arpeggio/Alberti choices follow the rate control;
+                // the auto default uses a musical per-style grid.
+                let grid = compingPattern == .auto
+                    ? patternGrid(style: style, timeBottom: timeBottom)
+                    : arpeggioRateBeats(arpeggioRate, timeBottom: timeBottom)
+                notes += patternFigure(
+                    pitches: pitches,
+                    startBeat: span.startBeat,
+                    duration: baseDuration,
+                    pattern: figure,
+                    grid: grid,
+                    velocity: velocity
+                )
+                continue
+            }
+
+            // Sustained pads (strings, organ, synth pads, or an explicit
+            // "Sustained" choice) hold one voicing across the whole chord — the
+            // glue under the rhythmic instruments. Everything else comps with
+            // the per-style rhythm.
+            let hitOffsets: [Double]
+            if isSustained {
+                hitOffsets = [0]
+            } else {
+                hitOffsets = chordHitOffsets(
+                    instrument: instrument,
+                    style: style,
+                    beatsPerBar: beatsPerBar,
+                    timeBottom: timeBottom,
+                    chordDuration: baseDuration,
+                    intensity: intensity,
+                    complexity: effectiveComplexity
+                )
+            }
 
             for offset in hitOffsets {
                 guard offset < baseDuration else { continue }
-                let hitDuration = chordHitDuration(
-                    instrument: instrument,
-                    variant: variant,
-                    style: style,
-                    timeBottom: timeBottom,
-                    baseDuration: baseDuration,
-                    offset: offset,
-                    durationScale: voicingProfile.durationScale
-                )
-                let duration = min(hitDuration, max(0.25, baseDuration - offset))
+                let duration: Double
+                if isSustained {
+                    // Ring through the chord and a touch into the next for legato.
+                    duration = max(0.25, baseDuration - offset) + 0.2
+                } else {
+                    let hitDuration = chordHitDuration(
+                        instrument: instrument,
+                        variant: variant,
+                        style: style,
+                        timeBottom: timeBottom,
+                        baseDuration: baseDuration,
+                        offset: offset,
+                        durationScale: voicingProfile.durationScale
+                    )
+                    duration = min(hitDuration, max(0.25, baseDuration - offset))
+                }
                 let startBeat = span.startBeat + offset
                 let positionInBar = (span.startBeat + offset)
                     .truncatingRemainder(dividingBy: Double(beatsPerBar))
@@ -887,6 +1066,454 @@ struct StudioGenerator {
         return dedupeAndClampNotes(notes)
     }
 
+    // MARK: - Piano (two hands)
+
+    /// Generates a pianistic part split into a low-register left-hand
+    /// foundation and a mid/upper-register right-hand voicing. The right hand
+    /// reuses the chord-comping engine; the left hand anchors the harmony
+    /// (and the low end when no dedicated bass is present).
+    private static func pianoNotes(
+        chords: [ChordSpan],
+        totalBars: Int,
+        beatsPerBar: Int,
+        timeBottom: Int,
+        style: StudioStyle,
+        variant: InstrumentVariant?,
+        octaveShift: Int,
+        keyRoot: String,
+        diatonicMap: [String: ChordQuality],
+        intensity: Double,
+        complexity: Double,
+        arpeggioEnabled: Bool,
+        arpeggioRate: String,
+        arpeggioPattern: String,
+        compingPattern: CompingPattern,
+        arrangement: ArrangementContext
+    ) -> [StudioNote] {
+        let fullRange = chordRange(for: .piano, variant: variant, style: style, octaveShift: octaveShift)
+        // Split the keyboard around middle C. The right hand comps above it;
+        // the left hand lives below.
+        let splitPoint = max(fullRange.lowerBound + 7, min(60, fullRange.upperBound - 7))
+        let rightRange = splitPoint...fullRange.upperBound
+        // With a dedicated bass, keep even the left hand above the bass register.
+        let leftLower = max(fullRange.lowerBound, arrangement.lowEndFloor ?? fullRange.lowerBound)
+        let leftRange = min(leftLower, splitPoint - 1)...(splitPoint - 1)
+
+        var notes: [StudioNote] = []
+
+        // Right hand: comp the chord voicing in the upper register, 3 voices.
+        notes += chordPadNotes(
+            chords: chords,
+            instrument: .piano,
+            totalBars: totalBars,
+            beatsPerBar: beatsPerBar,
+            timeBottom: timeBottom,
+            style: style,
+            variant: variant,
+            octaveShift: octaveShift,
+            keyRoot: keyRoot,
+            diatonicMap: diatonicMap,
+            intensity: intensity,
+            complexity: complexity,
+            arpeggioEnabled: arpeggioEnabled,
+            arpeggioRate: arpeggioRate,
+            arpeggioPattern: arpeggioPattern,
+            compingPattern: compingPattern,
+            arrangement: arrangement,
+            rangeOverride: rightRange,
+            noteCap: 3
+        )
+
+        // Left hand foundation (skipped while the right hand spans the whole
+        // register via an arpeggio / broken pattern).
+        let effectiveComping = compingPattern == .auto
+            ? recommendedComping(for: .piano, variant: variant, style: style)
+            : compingPattern
+        let rightHandSpansRegister = arpeggioEnabled
+            || accompanimentFigure(for: effectiveComping) != nil
+        if !rightHandSpansRegister {
+            notes += pianoLeftHand(
+                chords: chords,
+                range: leftRange,
+                style: style,
+                keyRoot: keyRoot,
+                intensity: intensity,
+                beatsPerBar: beatsPerBar,
+                hasBass: arrangement.hasBass
+            )
+        }
+
+        return dedupeAndClampNotes(notes)
+    }
+
+    /// Left-hand foundation. With a dedicated bass present it plays a soft
+    /// sustained root+fifth shell up near the hand split (staying out of the
+    /// bass's way); otherwise it anchors the low end like a real left hand —
+    /// root on the downbeat, fifth mid-bar, sustained.
+    private static func pianoLeftHand(
+        chords: [ChordSpan],
+        range: ClosedRange<Int>,
+        style: StudioStyle,
+        keyRoot: String,
+        intensity: Double,
+        beatsPerBar: Int,
+        hasBass: Bool
+    ) -> [StudioNote] {
+        guard range.lowerBound < range.upperBound else { return [] }
+
+        // Sit the shell in the upper third of the LH range when a bass owns the
+        // low end, otherwise anchor near the bottom.
+        let anchorTarget = hasBass
+            ? range.lowerBound + (range.upperBound - range.lowerBound) * 2 / 3
+            : range.lowerBound + 4
+        var lastRoot = nearestPitch(for: noteSemitone(for: keyRoot), in: range, near: anchorTarget)
+        var notes: [StudioNote] = []
+
+        let baseVelocity = max(40, bassVelocity(for: style) - (hasBass ? 22 : 10))
+        let midBeat = Double(max(1, beatsPerBar / 2))
+        let staccato = !hasBass && (style == .funk || style == .edm)
+
+        for span in chords {
+            let rootClass = noteSemitone(for: span.chord.slashRoot ?? span.chord.root)
+            let rootPitch = nearestPitch(for: rootClass, in: range, near: lastRoot)
+            lastRoot = rootPitch
+            let baseDuration = max(0.25, span.duration)
+            let fifth = fitPitch(rootPitch + 7, in: range)
+            let velocity = clampVelocity(velocityCurve(base: baseVelocity, intensity: intensity, instrument: .bass))
+
+            // Note-on offsets and which pitch sounds.
+            var hits: [(offset: Double, pitch: Int)] = [(0, rootPitch)]
+            if !staccato, baseDuration >= midBeat + 0.25 {
+                // Add the fifth (or a higher root) mid-bar to keep the hand moving.
+                hits.append((midBeat, hasBass ? fitPitch(rootPitch + 12, in: range) : fifth))
+            }
+
+            for hit in hits {
+                guard hit.offset < baseDuration else { continue }
+                let ring = staccato ? min(0.4, baseDuration - hit.offset)
+                                    : (baseDuration - hit.offset) + 0.15  // legato
+                notes.append(
+                    StudioNote(
+                        startBeat: span.startBeat + hit.offset,
+                        duration: max(0.2, ring),
+                        pitch: hit.pitch,
+                        velocity: velocity
+                    )
+                )
+            }
+        }
+
+        return dedupeAndClampNotes(notes)
+    }
+
+    // MARK: - Melodic line (lead instruments)
+
+    private struct MelodyCell {
+        let offset: Double
+        let duration: Double
+        let isRest: Bool
+        let strong: Bool
+    }
+
+    /// Builds a real melodic line over the changes for monophonic lead
+    /// instruments: stepwise scale motion that lands on chord tones on strong
+    /// beats, with rests for phrasing and a register that arcs rather than
+    /// holding a single note per chord.
+    private static func melodyNotes(
+        chords: [ChordSpan],
+        instrument: StudioInstrument,
+        variant: InstrumentVariant?,
+        beatsPerBar: Int,
+        timeBottom: Int,
+        style: StudioStyle,
+        octaveShift: Int,
+        keyRoot: String,
+        keyMode: KeyMode,
+        diatonicMap: [String: ChordQuality],
+        intensity: Double,
+        complexity: Double
+    ) -> [StudioNote] {
+        let range = chordRange(for: instrument, variant: variant, style: style, octaveShift: octaveShift)
+        guard range.upperBound > range.lowerBound else { return [] }
+        let keyPC = noteSemitone(for: keyRoot)
+        let scalePCs = Set(keyMode.intervals.map { (keyPC + $0) % 12 })
+
+        // Leads sing in the upper-middle of their range; keep the line within
+        // roughly an octave of that center so it stays singable.
+        let center = range.lowerBound + (range.upperBound - range.lowerBound) * 6 / 10
+        let windowRadius = 10
+        var lastPitch = nearest(in: pitches(in: range, pcs: scalePCs), to: center) ?? center
+        var direction = 1
+        let baseVelocity = chordVelocity(for: instrument, style: style)
+        var notes: [StudioNote] = []
+
+        for (index, span) in chords.enumerated() {
+            let quality = resolveQuality(for: span.chord, diatonicMap: diatonicMap)
+            let tones = harmonicTones(for: quality)
+            let chordRootPC = noteSemitone(for: span.chord.root)
+            let chordTonePCs = Set(tones.essential.map { (chordRootPC + $0) % 12 })
+            // Diatonic steps plus the chord's own tones (covers chromatic chords).
+            let stepPCs = scalePCs.union(chordTonePCs)
+            let stepPitches = pitches(in: range, pcs: stepPCs)
+            let chordTonePitches = pitches(in: range, pcs: chordTonePCs)
+            guard !stepPitches.isEmpty, !chordTonePitches.isEmpty else { continue }
+
+            let isLast = index == chords.count - 1
+            let cells = melodicRhythm(
+                style: style,
+                chordDuration: max(0.25, span.duration),
+                beatsPerBar: beatsPerBar,
+                timeBottom: timeBottom,
+                complexity: complexity,
+                intensity: intensity,
+                isLastChord: isLast
+            )
+
+            for cell in cells where !cell.isRest {
+                // Reflect direction at the edges of the melodic window.
+                if lastPitch > center + windowRadius { direction = -1 }
+                else if lastPitch < center - windowRadius { direction = 1 }
+                else if Int.random(in: 0..<5) == 0 { direction = -direction }
+
+                let target: Int
+                if cell.strong {
+                    // Land on a chord tone, biased a small step in the current
+                    // direction so the line keeps moving.
+                    let aim = lastPitch + direction * 2
+                    target = nearest(in: chordTonePitches, to: aim) ?? lastPitch
+                } else {
+                    // Passing / neighbor tone: nearest scale step in direction.
+                    target = nearestStep(from: lastPitch, in: stepPitches, direction: direction)
+                }
+
+                let velocity = clampVelocity(
+                    velocityCurve(base: baseVelocity, intensity: intensity, instrument: instrument)
+                        + (cell.strong ? 6 : -3)
+                        + Int.random(in: -3...3)
+                )
+                notes.append(
+                    StudioNote(
+                        startBeat: span.startBeat + cell.offset,
+                        duration: cell.duration,
+                        pitch: target,
+                        velocity: velocity
+                    )
+                )
+                lastPitch = target
+            }
+        }
+        return dedupeAndClampNotes(notes)
+    }
+
+    /// All pitches in `range` whose pitch class is in `pcs`, ascending.
+    private static func pitches(in range: ClosedRange<Int>, pcs: Set<Int>) -> [Int] {
+        range.filter { pcs.contains((($0 % 12) + 12) % 12) }
+    }
+
+    private static func nearest(in pitches: [Int], to target: Int) -> Int? {
+        pitches.min(by: { abs($0 - target) < abs($1 - target) })
+    }
+
+    /// The next scale pitch one step from `from` in `direction`; reflects at
+    /// the ends so the line never runs off the instrument range.
+    private static func nearestStep(from pitch: Int, in scalePitches: [Int], direction: Int) -> Int {
+        let sorted = scalePitches
+        guard !sorted.isEmpty else { return pitch }
+        let idx = sorted.indices.min(by: { abs(sorted[$0] - pitch) < abs(sorted[$1] - pitch) }) ?? 0
+        let nextIdx = idx + direction
+        if nextIdx < 0 { return sorted[min(1, sorted.count - 1)] }
+        if nextIdx >= sorted.count { return sorted[max(0, sorted.count - 2)] }
+        return sorted[nextIdx]
+    }
+
+    /// A per-style rhythmic grid of melodic cells (notes and rests) covering
+    /// one chord, with chord-tone "strong" landings on the main beats.
+    private static func melodicRhythm(
+        style: StudioStyle,
+        chordDuration: Double,
+        beatsPerBar: Int,
+        timeBottom: Int,
+        complexity: Double,
+        intensity: Double,
+        isLastChord: Bool
+    ) -> [MelodyCell] {
+        let grid: Double
+        switch style {
+        case .lofi, .ambient:   grid = 1.0
+        default:                grid = 0.5
+        }
+        let density = max(0.0, min(1.0, 0.35 + complexity * 0.4 + intensity * 0.15))
+
+        var cells: [MelodyCell] = []
+        var offset = 0.0
+        var first = true
+        while offset < chordDuration - 0.001 {
+            let onBeat = abs(offset.rounded() - offset) < 0.001
+            let beatIndex = Int(offset.rounded())
+            let strong = onBeat && (beatIndex % 2 == 0)
+
+            let restChance: Double = first ? 0.0 : (strong ? 0.12 : (1.0 - density))
+            let isRest = !first && Double.random(in: 0...1) < restChance
+
+            var duration = grid
+            if !isRest, Double.random(in: 0...1) < 0.3, offset + grid * 2 <= chordDuration {
+                duration = grid * 2
+            }
+            duration = min(duration, chordDuration - offset)
+
+            cells.append(MelodyCell(offset: offset, duration: max(0.1, duration), isRest: isRest, strong: strong))
+            offset += duration
+            first = false
+        }
+
+        if isLastChord, let last = cells.last, last.isRest, cells.count > 1 {
+            cells.removeLast()
+        }
+        return cells
+    }
+
+    // MARK: - Idiomatic accompaniment patterns
+
+    private enum AccompanimentPattern {
+        case arpeggioUp
+        case arpeggioDown
+        case arpeggioUpDown
+        case alberti       // low–high–mid–high (broken-chord keyboard figure)
+    }
+
+    /// Resolves an explicit chord pattern to its broken-chord figure (nil means
+    /// block or sustained — handled outside the pattern path). `.auto` is
+    /// resolved to the per-instrument recommendation before this is called.
+    private static func accompanimentFigure(for comping: CompingPattern) -> AccompanimentPattern? {
+        switch comping {
+        case .arpeggioUp:     return .arpeggioUp
+        case .arpeggioDown:   return .arpeggioDown
+        case .arpeggioUpDown: return .arpeggioUpDown
+        case .alberti:        return .alberti
+        case .auto, .block, .sustained: return nil
+        }
+    }
+
+    private static func guitarIsAcoustic(_ variant: InstrumentVariant?) -> Bool {
+        guard let variant else { return true }
+        return [.acousticNylonGuitar, .acousticSteelGuitar, .cleanGuitar, .jazzGuitar].contains(variant)
+    }
+
+    /// The idiomatic default articulation for a chord instrument in a given
+    /// style — what "Auto" resolves to, and what the add-instrument flow
+    /// pre-selects. This is the heart of "a specific pattern per instrument".
+    static func recommendedComping(
+        for instrument: StudioInstrument,
+        variant: InstrumentVariant?,
+        style: StudioStyle
+    ) -> CompingPattern {
+        switch instrument {
+        // Sustained beds.
+        case .strings, .organ, .synth:
+            return .sustained
+
+        case .piano:
+            switch style {
+            case .lofi, .ambient, .pop, .hiphop: return .alberti   // broken comp
+            case .jazz, .rock, .edm, .funk:      return .block      // rootless / stabs
+            }
+
+        case .guitar:
+            let acoustic = guitarIsAcoustic(variant)
+            switch style {
+            case .lofi, .ambient:        return .arpeggioUp                 // fingerpick
+            case .pop:                   return acoustic ? .arpeggioUp : .block
+            case .jazz:                  return acoustic ? .arpeggioUp : .block
+            case .rock, .edm, .funk, .hiphop: return .block                 // strum / stabs / power
+            }
+
+        case .mallets:
+            switch style {
+            case .rock, .edm:                  return .block
+            case .lofi, .ambient, .jazz, .hiphop: return .arpeggioUpDown
+            case .pop, .funk:                  return .arpeggioUp
+            }
+
+        case .brass:
+            return .block   // section stabs
+
+        // Woodwinds play melodic lines, bass/drums have their own engines.
+        case .woodwinds, .bass, .drums, .audio:
+            return .auto
+        }
+    }
+
+    /// The idiomatic default bass feel for a style (pre-selected in the
+    /// add-instrument flow).
+    static func recommendedBass(for style: StudioStyle) -> BassPattern {
+        switch style {
+        case .pop:     return .rootFifth
+        case .rock:    return .octaves
+        case .jazz:    return .walking
+        case .funk:    return .syncopated
+        case .edm:     return .octaves
+        case .hiphop:  return .roots
+        case .lofi:    return .roots
+        case .ambient: return .roots
+        }
+    }
+
+    private static func patternGrid(style: StudioStyle, timeBottom: Int) -> Double {
+        let beat = timeBottom == 8 ? 1.0 : 0.5   // an eighth note in UI beats
+        return style == .ambient ? beat * 2 : beat
+    }
+
+    /// Emits a repeating broken-chord figure across the chord's duration.
+    private static func patternFigure(
+        pitches: [Int],
+        startBeat: Double,
+        duration: Double,
+        pattern: AccompanimentPattern,
+        grid: Double,
+        velocity: Int
+    ) -> [StudioNote] {
+        let sorted = uniqueSorted(pitches)
+        guard sorted.count >= 2, grid > 0 else {
+            return sorted.map { StudioNote(startBeat: startBeat, duration: duration, pitch: $0, velocity: clampVelocity(velocity)) }
+        }
+
+        let top = sorted.count - 1
+        let sequence: [Int]
+        switch pattern {
+        case .arpeggioUp:
+            sequence = Array(0..<sorted.count)
+        case .arpeggioDown:
+            sequence = Array((0..<sorted.count).reversed())
+        case .arpeggioUpDown:
+            sequence = sorted.count <= 2
+                ? Array(0..<sorted.count)
+                : Array(0..<sorted.count) + Array((1..<top).reversed())
+        case .alberti:
+            sequence = sorted.count >= 3 ? [0, top, 1, top] : [0, 1]
+        }
+
+        var result: [StudioNote] = []
+        var step = 0
+        var offset = 0.0
+        while offset < duration - 0.001 {
+            let pitch = sorted[sequence[step % sequence.count]]
+            let isCycleStart = step % sequence.count == 0
+            let dur = min(grid * 0.95, duration - offset)
+            result.append(
+                StudioNote(
+                    startBeat: startBeat + offset,
+                    duration: max(0.1, dur),
+                    pitch: pitch,
+                    // Emphasise the bass note that begins each cycle.
+                    velocity: clampVelocity(velocity + (isCycleStart ? 4 : -5) + Int.random(in: -2...2))
+                )
+            )
+            offset += grid
+            step += 1
+        }
+        return result
+    }
+
     private static func bassNotes(
         chords: [ChordSpan],
         instrument: StudioInstrument,
@@ -898,23 +1525,80 @@ struct StudioGenerator {
         octaveShift: Int,
         keyRoot: String,
         intensity: Double = 0.5,
-        complexity: Double = 0.5
+        complexity: Double = 0.5,
+        bassPattern: BassPattern = .auto
     ) -> [StudioNote] {
         let range = bassRange(variant: variant, style: style, octaveShift: octaveShift)
         let bassProfile = bassVoicingProfile(variant: variant, style: style)
         var lastPitch = anchorPitch(for: keyRoot, in: range)
         var notes: [StudioNote] = []
 
-        for span in chords {
+        for (index, span) in chords.enumerated() {
             let rootName = span.chord.slashRoot ?? span.chord.root
             let rootClass = noteSemitone(for: rootName)
             let rootPitch = nearestPitch(for: rootClass, in: range, near: lastPitch)
             lastPitch = rootPitch
             let baseDuration = max(0.25, span.duration)
-            let fifth = fitPitch(rootPitch + 7, in: range)
+            let tones = harmonicTones(for: span.chord.quality)
+            let fifth = fitPitch(rootPitch + tones.fifth, in: range)
+            let third = fitPitch(rootPitch + (tones.third ?? tones.suspension ?? 7), in: range)
             let octave = fitPitch(rootPitch + 12, in: range)
             let midBeat = Double(max(1, beatsPerBar / 2))
+
+            // Where the NEXT chord's root lands, for leading-tone / approach notes.
+            let nextRootClass: Int? = index + 1 < chords.count
+                ? noteSemitone(for: chords[index + 1].chord.slashRoot ?? chords[index + 1].chord.root)
+                : nil
+            // A half-step (or whole-step) approach note just below/above the
+            // next root — the hallmark of a walking / connected bass line.
+            func approachToNext() -> Int {
+                guard let nextRootClass else { return fifth }
+                let target = nearestPitch(for: nextRootClass, in: range, near: rootPitch)
+                let fromBelow = fitPitch(target - 1, in: range)
+                let fromAbove = fitPitch(target + 1, in: range)
+                // Prefer the chromatic approach that's closest to where we are.
+                return abs(fromBelow - rootPitch) <= abs(fromAbove - rootPitch) ? fromBelow : fromAbove
+            }
+
             var hits: [(offset: Double, pitch: Int)] = [(0, rootPitch)]
+
+            // Explicit user-chosen bass feel overrides the per-style default.
+            if bassPattern != .auto {
+                switch bassPattern {
+                case .roots:
+                    hits = [(0, rootPitch)]
+                case .rootFifth:
+                    hits = [(0, rootPitch)]
+                    if baseDuration >= midBeat + 0.25 { hits.append((midBeat, fifth)) }
+                case .octaves:
+                    hits = stride(from: 0.0, to: baseDuration, by: 1.0).enumerated()
+                        .map { i, off in (off, i % 2 == 0 ? rootPitch : octave) }
+                case .walking:
+                    let line = [rootPitch, third, fifth, approachToNext()]
+                    hits = stride(from: 0.0, to: baseDuration, by: 1.0).enumerated()
+                        .map { i, off in (off, line[i % line.count]) }
+                case .syncopated:
+                    hits = stride(from: 0.0, to: baseDuration, by: 0.5).enumerated()
+                        .map { i, off in (off, i % 2 == 0 ? rootPitch : (i % 4 == 1 ? octave : fifth)) }
+                case .auto:
+                    break
+                }
+                // Skip the per-style switch and density auto-edits below.
+                let velocity = scaledVelocity(
+                    base: bassVelocity(for: style) + bassProfile.velocityOffset,
+                    intensity: intensity,
+                    range: 36
+                )
+                let durationHint = bassHitDuration(style: style) * bassProfile.durationScale
+                let adjustedDuration = max(0.25, durationHint * (1.1 - 0.4 * intensity))
+                var seen = Set<Double>()
+                for hit in hits.filter({ seen.insert($0.offset).inserted }).sorted(by: { $0.offset < $1.offset }) {
+                    guard hit.offset < baseDuration else { continue }
+                    let duration = min(adjustedDuration, max(0.25, baseDuration - hit.offset))
+                    notes.append(StudioNote(startBeat: span.startBeat + hit.offset, duration: duration, pitch: hit.pitch, velocity: velocity))
+                }
+                continue
+            }
 
             switch style {
             case .pop:
@@ -940,18 +1624,15 @@ struct StudioGenerator {
                 let offsets = stride(from: 0.0, to: baseDuration, by: strideBeat).map { $0 }
                 hits = offsets.map { ($0, rootPitch) }
             case .jazz:
-                // Walking bass: root → 3rd → 5th → chromatic approach to next root
+                // Walking bass: root → 3rd → 5th → chromatic approach to the
+                // real next root (1-3-5-approach over four beats).
                 if baseDuration >= 2.0 {
-                    let third = fitPitch(rootPitch + (span.chord.quality.isMinor ? 3 : 4), in: range)
                     hits = [(0, rootPitch), (1.0, third)]
                     if baseDuration >= 3.0 {
                         hits.append((2.0, fifth))
                     }
-                    // Chromatic approach to next chord root
                     if baseDuration >= 4.0 {
-                        let nextRootClass = rootClass  // Will be overridden by approach
-                        let approach = fitPitch(rootPitch + (nextRootClass % 2 == 0 ? 11 : 1), in: range)
-                        hits.append((3.0, approach))
+                        hits.append((3.0, approachToNext()))
                     }
                 } else if baseDuration >= 1.0 {
                     hits.append((0.75, fifth))
@@ -993,10 +1674,11 @@ struct StudioGenerator {
                         hits.append((extraOffset, extraPitch))
                     }
                 }
-                if density > 0.85, baseDuration >= 1.5 {
+                if density > 0.85, baseDuration >= 1.5, nextRootClass != nil {
+                    // Lead into the next chord with a real approach note.
                     let approachOffset = max(0.5, baseDuration - 0.5)
                     if approachOffset < baseDuration {
-                        hits.append((approachOffset, fitPitch(rootPitch + 2, in: range)))
+                        hits.append((approachOffset, approachToNext()))
                     }
                 }
             }
@@ -1795,6 +2477,127 @@ struct StudioGenerator {
         return intervals.map { rootPitch + $0 }
     }
 
+    // MARK: - Accurate harmonic core
+
+    /// The chord tones derived from the *actual* chord quality (so a m7 always
+    /// carries its ♭7, a maj7 its natural 7, a sus has no third, etc.), split
+    /// into essential tones (must sound for the chord to be correct) and
+    /// optional upper tensions (9/11/13 colors).
+    struct HarmonicTones {
+        var third: Int?       // 3 (minor) or 4 (major); nil for power/sus
+        var suspension: Int?  // 2 or 5 (sus chords)
+        var fifth: Int        // 6 (dim), 7 (perfect), 8 (aug)
+        var sixth: Int?       // 9 (6 / m6 chords)
+        var seventh: Int?     // 9 (dim7 bb7), 10 (♭7), 11 (maj7)
+        var tensions: [Int]   // 13(♭9) 14(9) 15(♯9) 17(11) 18(♯11) 20(♭13) 21(13)
+
+        /// Notes that must be present for the quality to be heard.
+        var essential: [Int] {
+            var result = [0]
+            if let suspension { result.append(suspension) }
+            if let third { result.append(third) }
+            result.append(fifth)
+            if let sixth { result.append(sixth) }
+            if let seventh { result.append(seventh) }
+            return result.sorted()
+        }
+    }
+
+    static func harmonicTones(for quality: ChordQuality, extensions: [String] = []) -> HarmonicTones {
+        let intervals = Set(quality.intervals)
+        var tones = HarmonicTones(third: nil, suspension: nil, fifth: 7, sixth: nil, seventh: nil, tensions: [])
+
+        // Fifth: diminished / augmented / perfect.
+        if intervals.contains(6) { tones.fifth = 6 }
+        else if intervals.contains(8) { tones.fifth = 8 }
+        else { tones.fifth = 7 }
+
+        // Third or (for sus/power) the replacing tone.
+        if intervals.contains(4) { tones.third = 4 }
+        else if intervals.contains(3) { tones.third = 3 }
+        else if intervals.contains(2) { tones.suspension = 2 }
+        else if intervals.contains(5) { tones.suspension = 5 }
+
+        // Seventh / sixth. A 9-semitone interval is the ♭♭7 in dim7 but the
+        // 6th in 6/m6 chords.
+        if quality == .diminished7 {
+            tones.seventh = 9
+        } else if intervals.contains(11) {
+            tones.seventh = 11
+        } else if intervals.contains(10) {
+            tones.seventh = 10
+        } else if intervals.contains(9), quality.category == .sixth {
+            tones.sixth = 9
+        }
+
+        // Upper tensions baked into the quality.
+        var tensions = Set(quality.intervals.filter { $0 >= 13 })
+
+        // Explicit extensions chosen on the event.
+        for ext in extensions {
+            guard let iv = extensionInterval(for: ext) else { continue }
+            switch iv {
+            case 2, 5:
+                if tones.third == nil { tones.suspension = iv }
+            case 10:
+                if tones.seventh == nil { tones.seventh = 10 }
+            default:
+                if iv >= 13 { tensions.insert(iv) }
+            }
+        }
+        tones.tensions = tensions.sorted()
+        return tones
+    }
+
+    /// Chooses which upper tensions to actually voice, given the instrument,
+    /// style and complexity. Essential tones are always kept by the caller;
+    /// this only adds color.
+    private static func selectedTensions(
+        from tones: HarmonicTones,
+        instrument: StudioInstrument,
+        variant: InstrumentVariant?,
+        style: StudioStyle,
+        complexity: Double
+    ) -> [Int] {
+        guard !tones.tensions.isEmpty else { return [] }
+
+        // How freely this context adds extensions (0 = none, 1 = all available).
+        var openness: Double
+        switch style {
+        case .jazz:   openness = 0.85
+        case .lofi:   openness = 0.65
+        case .ambient: openness = 0.6
+        case .hiphop: openness = 0.5
+        case .funk:   openness = 0.5
+        case .pop:    openness = 0.3
+        case .edm:    openness = 0.3
+        case .rock:   openness = 0.15
+        }
+        switch instrument {
+        case .guitar, .mallets: openness -= 0.2   // fewer stacked tensions
+        case .strings, .synth, .organ: openness += 0.1
+        case .brass, .woodwinds: openness -= 0.1
+        default: break
+        }
+        openness += (complexity - 0.5) * 0.6
+        openness = max(0, min(1, openness))
+
+        // Keep tensions in priority order: 9th, 13th, then 11th/altered last.
+        let priority: [Int] = [14, 21, 13, 15, 18, 17, 20]
+        let available = priority.filter { tones.tensions.contains($0) }
+        // Avoid the natural 11 (17) clashing with a major 3rd unless the chord
+        // is explicitly an 11 chord (which the model already encodes).
+        let maxCount = Int((openness * 3).rounded())   // 0...3 tensions
+        return Array(available.prefix(max(0, maxCount)))
+    }
+
+    /// Rootless jazz keyboard voicing — drops the root (bass/left hand covers
+    /// it) so the 3rd and 7th define the chord. The signature jazz-comp sound.
+    private static func rootlessVoicing(_ pitches: [Int], rootPitch: Int) -> [Int] {
+        let withoutRoot = pitches.filter { ($0 - rootPitch) % 12 != 0 }
+        return withoutRoot.count >= 2 ? withoutRoot : pitches
+    }
+
     private static func chordExtensionIntervals(
         for quality: ChordQuality,
         style: StudioStyle,
@@ -1965,6 +2768,19 @@ struct StudioGenerator {
         let styleShift = styleRegisterShift(for: instrument, style: style)
         let semitoneShift = styleShift + ((octaveShift - 2) * 12)
         return shiftRange(base, by: semitoneShift)
+    }
+
+    /// The complete playable range for manual editing — the instrument's
+    /// natural range extended an octave each way, clamped to a musical span
+    /// (C1–C7) so every available octave is editable.
+    static func fullInstrumentRange(
+        for instrument: StudioInstrument,
+        variant: InstrumentVariant? = nil
+    ) -> ClosedRange<Int> {
+        let base = baseInstrumentRange(for: instrument, variant: variant)
+        let lower = max(24, base.lowerBound - 12)   // C1 floor
+        let upper = min(96, base.upperBound + 12)   // C7 ceiling
+        return lower...max(lower + 12, upper)
     }
 
     /// Returns the default internal `octaveShift` for a new track.
@@ -2369,6 +3185,9 @@ struct StudioGenerator {
         var durationScale: Double
         var monophonic: Bool
         var allowOctaveDoubling: Bool
+        /// Holds a single voicing across the whole chord (legato pad) instead
+        /// of re-articulating with the rhythm.
+        var sustains: Bool = false
     }
 
     private struct BassVoicingProfile {
@@ -2405,6 +3224,7 @@ struct StudioGenerator {
         case .strings:
             profile.maxNotes = 4
             profile.preferOpenVoicing = true
+            profile.sustains = true
         case .brass:
             profile.maxNotes = 3
         case .woodwinds:
@@ -2412,11 +3232,17 @@ struct StudioGenerator {
         case .organ:
             profile.maxNotes = 4
             profile.preferOpenVoicing = true
+            profile.sustains = true
         case .mallets:
             profile.maxNotes = 2
             profile.durationScale = 0.7
         case .bass, .drums, .audio:
             break
+        }
+
+        // Ambient is a wash: everything sustains.
+        if style == .ambient, instrument != .mallets {
+            profile.sustains = true
         }
 
         if let variant {
@@ -2452,6 +3278,7 @@ struct StudioGenerator {
                 profile.preferOpenVoicing = true
                 profile.extensionBias = 0.2
                 profile.durationScale = 1.1
+                profile.sustains = true
             case .acousticNylonGuitar, .acousticSteelGuitar:
                 profile.maxNotes = 3
                 profile.preferOpenVoicing = true
@@ -2471,14 +3298,17 @@ struct StudioGenerator {
             case .pizzicatoStrings:
                 profile.durationScale = 0.4
                 profile.maxNotes = 2
+                profile.sustains = false   // plucked, re-articulates
             case .stringEnsemble, .slowStrings, .synthStrings1, .synthStrings2:
                 profile.maxNotes = 4
                 profile.preferOpenVoicing = true
                 profile.extensionBias = 0.1
+                profile.sustains = true
             case .choirAahs, .voiceOohs:
                 profile.maxNotes = 3
                 profile.preferOpenVoicing = true
                 profile.extensionBias = 0.15
+                profile.sustains = true
             case .trumpet, .trombone, .tuba, .mutedTrumpet, .frenchHorn:
                 profile.maxNotes = 2
                 profile.extensionBias = -0.1
@@ -2492,6 +3322,7 @@ struct StudioGenerator {
             case .percussiveOrgan:
                 profile.maxNotes = 3
                 profile.durationScale = 0.7
+                profile.sustains = false   // staccato organ, re-articulates
             case .accordion, .harmonica, .tangoAccordion:
                 profile.maxNotes = 2
                 profile.durationScale = 0.8
@@ -2625,11 +3456,47 @@ struct StudioGenerator {
         return [sorted[0]] + Array(sorted.suffix(keep - 1))
     }
 
+    /// Harmonic importance of a voice for trimming decisions — the 3rd and 7th
+    /// (guide tones) define the chord quality and must outrank the easily
+    /// dropped perfect 5th.
+    private static func voiceImportance(_ pitch: Int, rootPitch: Int) -> Int {
+        let iv = ((pitch - rootPitch) % 12 + 12) % 12
+        switch iv {
+        case 3, 4:        return 6   // third
+        case 10, 11:      return 6   // seventh
+        case 6, 8:        return 5   // altered 5th — defines dim/aug
+        case 9:           return 4   // 6th / dim7 / 13th color
+        case 2, 5:        return 3   // sus / 9 / 11 color
+        case 0:           return 3   // root
+        case 7:           return 1   // perfect 5th — first to go
+        default:          return 2
+        }
+    }
+
+    /// Trims to `keep` voices while preserving the guide tones: always keeps the
+    /// bass and the top, then fills the middle by harmonic importance (so the
+    /// 3rd/7th survive and the 5th is dropped first).
+    private static func trimVoicesHarmonic(_ pitches: [Int], rootPitch: Int, keep: Int) -> [Int] {
+        let sorted = uniqueSorted(pitches)
+        guard sorted.count > keep, keep >= 1 else { return sorted }
+        guard keep > 1 else { return [sorted[0]] }
+
+        var kept: Set<Int> = [sorted.first!, sorted.last!]
+        let middle = sorted.dropFirst().dropLast()
+            .sorted { voiceImportance($0, rootPitch: rootPitch) > voiceImportance($1, rootPitch: rootPitch) }
+        for pitch in middle where kept.count < keep {
+            kept.insert(pitch)
+        }
+        return kept.sorted()
+    }
+
     /// Picks the chord inversion that moves least from the previous voicing,
     /// weighting top-voice continuity — smooth comping instead of parallel
     /// root-position jumps.
     private static func voiceLead(_ pitches: [Int], previous: [Int], range: ClosedRange<Int>) -> [Int] {
         guard !previous.isEmpty, pitches.count > 1 else { return uniqueSorted(pitches) }
+
+        let voiceCount = uniqueSorted(pitches).count
 
         func cost(_ candidate: [Int]) -> Int {
             var total = 0
@@ -2650,6 +3517,9 @@ struct StudioGenerator {
             guard let lowest = rising.min() else { break }
             rising = uniqueSorted(rising.filter { $0 != lowest } + [lowest + 12])
             guard rising.allSatisfy({ range.contains($0) }) else { break }
+            // Never accept an inversion that lost a voice to an octave collision —
+            // that would silently drop a chord tone.
+            guard rising.count == voiceCount else { continue }
             let candidateCost = cost(rising)
             if candidateCost < bestCost {
                 best = rising
@@ -2662,6 +3532,7 @@ struct StudioGenerator {
             guard let highest = falling.max() else { break }
             falling = uniqueSorted(falling.filter { $0 != highest } + [highest - 12])
             guard falling.allSatisfy({ range.contains($0) }) else { break }
+            guard falling.count == voiceCount else { continue }
             let candidateCost = cost(falling)
             if candidateCost < bestCost {
                 best = falling
@@ -2672,12 +3543,17 @@ struct StudioGenerator {
         return best
     }
 
-    /// Raises (or drops) voices packed tighter than a fourth below G3 —
-    /// close low intervals turn to mud with realistic samples.
+    /// Opens up voices packed tighter than a fourth below G3 — close low
+    /// intervals turn to mud with realistic samples. It only ever moves a voice
+    /// up by an octave (preserving the chord tone); if it can't, it leaves the
+    /// voice in place rather than dropping a chord tone.
     private static func avoidLowIntervalMud(_ pitches: [Int], range: ClosedRange<Int>) -> [Int] {
         var sorted = uniqueSorted(pitches)
+        guard sorted.count > 2 else { return sorted }   // keep small voicings intact
         var index = 1
-        while index < sorted.count {
+        var safety = 0
+        while index < sorted.count, safety < 64 {
+            safety += 1
             let lower = sorted[index - 1]
             let upper = sorted[index]
             if lower < 55, upper - lower < 5 {
@@ -2687,10 +3563,8 @@ struct StudioGenerator {
                     sorted = uniqueSorted(sorted)
                     index = 1
                     continue
-                } else {
-                    sorted.remove(at: index)
-                    continue
                 }
+                // Can't cleanly raise — leave it rather than drop a chord tone.
             }
             index += 1
         }
@@ -2708,23 +3582,35 @@ struct StudioGenerator {
         return voicing.sorted()
     }
 
-    /// Divisi spacing for strings: cello (36-60), viola (55-72), violin (60-84)
-    /// Ensures minimum P5 (7 semitones) spacing below C4 (60).
-    private static func divisiSpacing(_ pitches: [Int], range: ClosedRange<Int>) -> [Int] {
-        var sorted = pitches.sorted()
-        // Place lowest note in cello register
-        if sorted[0] > 55 { sorted[0] = sorted[0] - 12 }
-        // Ensure at least P5 spacing between lower voices
-        for i in 1..<sorted.count {
-            if sorted[i] < 60, sorted[i] - sorted[i-1] < 7 {
-                sorted[i] = sorted[i-1] + 7
-            }
+    /// Octave-folds any out-of-range voices back inside the instrument range,
+    /// preserving their pitch class. Voicing transforms (open / drop-2 / divisi)
+    /// displace notes by octaves and can overshoot the range — folding keeps
+    /// every chord tone instead of dropping it.
+    private static func foldIntoRange(_ pitches: [Int], _ range: ClosedRange<Int>) -> [Int] {
+        let folded = pitches.map { pitch -> Int in
+            var value = pitch
+            while value > range.upperBound { value -= 12 }
+            while value < range.lowerBound { value += 12 }
+            return max(range.lowerBound, min(range.upperBound, value))
         }
-        // Keep highest voice in violin register
-        if let last = sorted.last, last < 60, sorted.count >= 3 {
+        return uniqueSorted(folded)
+    }
+
+    /// Divisi spacing for strings — opens the chord across the cello/viola/
+    /// violin registers. Critically it only moves voices by **octaves**, so the
+    /// chord tones (and thus the quality) are preserved; it never rewrites a
+    /// 3rd into a 5th.
+    private static func divisiSpacing(_ pitches: [Int], range: ClosedRange<Int>) -> [Int] {
+        var sorted = uniqueSorted(pitches)
+        // Drop the lowest voice an octave for a cello-like foundation.
+        if let first = sorted.first, first > 55, range.contains(first - 12) {
+            sorted[0] = first - 12
+        }
+        // Lift the top voice an octave for violin sheen when the chord is cramped.
+        if sorted.count >= 3, let last = sorted.last, last < 67, range.contains(last + 12) {
             sorted[sorted.count - 1] = last + 12
         }
-        return sorted.filter { range.contains($0) }
+        return foldIntoRange(sorted, range)
     }
 
     /// Drop-2 voicing for brass: move the 2nd-highest note down an octave.

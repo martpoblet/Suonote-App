@@ -188,8 +188,11 @@ struct StudioTabView: View {
             StudioInstrumentPickerView(
                 availableInstruments: availableInstruments,
                 existingInstruments: existingInstrumentSet,
-                onPick: { instrument in
-                    addInstrumentTrack(instrument)
+                style: project.studioStyle,
+                beatsPerBar: project.timeTop,
+                timeBottom: project.timeBottom,
+                onPick: { instrument, choice in
+                    addInstrumentTrack(instrument, choice: choice)
                 }
             )
         }
@@ -379,7 +382,7 @@ struct StudioTabView: View {
         showingInstrumentPicker = true
     }
 
-    private func addInstrumentTrack(_ instrument: StudioInstrument) {
+    private func addInstrumentTrack(_ instrument: StudioInstrument, choice: TrackStyleChoice = TrackStyleChoice()) {
         guard hasSections else { return }
         guard let style = project.studioStyle else { return }
         guard !existingInstrumentSet.contains(instrument) else { return }
@@ -394,6 +397,13 @@ struct StudioTabView: View {
         project.studioTracks.append(track)
         modelContext.insert(track)
 
+        // Apply the playing style chosen when adding the instrument.
+        track.compingPattern = choice.comping
+        track.bassPattern = choice.bass
+        if let density = choice.leadComplexity {
+            track.regenerateComplexity = density
+        }
+
         // Set the musically correct default octave for this instrument before generating.
         track.octaveShift = StudioGenerator.defaultOctaveShift(for: instrument, variant: track.variant)
         // Tracks added individually should get the same default humanization
@@ -401,7 +411,7 @@ struct StudioTabView: View {
         track.regenerateNaturalness = StudioGenerator.defaultNaturalness(for: instrument)
 
         let drumPreset = instrument == .drums
-            ? DrumPreset.defaultPreset(for: style, beatsPerBar: project.timeTop, timeBottom: project.timeBottom)
+            ? (choice.drumPreset ?? DrumPreset.defaultPreset(for: style, beatsPerBar: project.timeTop, timeBottom: project.timeBottom))
             : nil
         track.drumPreset = drumPreset
         let notes = StudioGenerator.generateNotes(
@@ -416,7 +426,12 @@ struct StudioTabView: View {
             naturalness: track.regenerateNaturalness,
             arpeggioEnabled: track.regenerateArpeggioEnabled,
             arpeggioRate: track.regenerateArpeggioRate,
-            arpeggioPattern: track.regenerateArpeggioPattern
+            arpeggioPattern: track.regenerateArpeggioPattern,
+            compingPattern: track.compingPattern,
+            bassPattern: track.bassPattern,
+            arrangement: StudioGenerator.ArrangementContext(
+                instruments: Set(project.studioTracks.filter { !$0.instrument.isAudio }.map(\.instrument))
+            )
         )
         for note in notes {
             note.track = track
@@ -1169,13 +1184,15 @@ struct StudioTrackEditorView: View {
     let onPause: () -> Void
     let onStop: () -> Void
     @State private var showingRegenerateOptions = false
+    @State private var showingCustomizeNotes = false
     @State private var regenerateIntensity: Double = 0.5
     @State private var regenerateComplexity: Double = 0.5
     @State private var regenerateNaturalness: Double = 0.0
-    @State private var regenerateArpeggioEnabled = false
-    @State private var regenerateArpeggioRate = "1/8"
-    @State private var regenerateArpeggioPattern = "Up"
     @State private var effectsDebounceTask: Task<Void, Never>?
+
+    private var supportsNoteEditing: Bool {
+        track.instrument != .drums && track.instrument != .audio
+    }
 
     private var accentColor: Color {
         track.instrument.color
@@ -1186,6 +1203,19 @@ struct StudioTrackEditorView: View {
             return "\(track.instrument.title) - \(variant)"
         }
         return track.instrument.title
+    }
+
+    private var noteCountLabel: String {
+        let count = track.notes.count
+        return count == 1 ? "1 note" : "\(count) notes"
+    }
+
+    private var noteRangeLabel: String {
+        let pitches = track.notes.map(\.pitch)
+        guard let low = pitches.min(), let high = pitches.max() else {
+            return "No notes yet"
+        }
+        return "\(midiNoteName(for: low))-\(midiNoteName(for: high))"
     }
 
     private var keyLabel: String {
@@ -1307,6 +1337,9 @@ struct StudioTrackEditorView: View {
                 VStack(spacing: DesignSystem.Spacing.lg) {
                     trackControls
                     editorContent
+                    if supportsNoteEditing {
+                        customizeNotesButton
+                    }
                 }
                 .padding(DesignSystem.Spacing.lg)
                 .padding(.bottom, 80)
@@ -1320,21 +1353,76 @@ struct StudioTrackEditorView: View {
         .sheet(isPresented: $showingRegenerateOptions) {
             RegenerateOptionsView(
                 trackName: track.name,
-                instrument: track.instrument,
-                variant: track.variant,
-                style: style,
                 intensity: $regenerateIntensity,
                 complexity: $regenerateComplexity,
                 naturalness: $regenerateNaturalness,
-                arpeggioEnabled: $regenerateArpeggioEnabled,
-                arpeggioRate: $regenerateArpeggioRate,
-                arpeggioPattern: $regenerateArpeggioPattern,
                 onRegenerate: executeRegenerate,
                 onCancel: {
                     showingRegenerateOptions = false
                 }
             )
         }
+        .fullScreenCover(isPresented: $showingCustomizeNotes) {
+            CustomizeNotesView(
+                project: project,
+                track: track,
+                totalBars: totalBars,
+                beatsPerBar: beatsPerBar,
+                barSectionInfos: barSectionInfos,
+                style: style,
+                playback: playback,
+                onNotesChanged: onNotesChanged
+            )
+        }
+    }
+
+    private var customizeNotesButton: some View {
+        Button {
+            showingCustomizeNotes = true
+        } label: {
+            HStack(spacing: DesignSystem.Spacing.sm) {
+                Image(systemName: "pianokeys")
+                    .font(DesignSystem.Typography.title3)
+                    .foregroundStyle(accentColor)
+                    .frame(width: 38, height: 38)
+                    .background(
+                        Circle()
+                            .fill(accentColor.opacity(0.18))
+                    )
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Customize Notes")
+                        .font(DesignSystem.Typography.subheadline.weight(.semibold))
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
+                    Text("Open the full-range note editor")
+                        .font(DesignSystem.Typography.caption2)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+
+                Spacer()
+
+                HStack(spacing: 4) {
+                    Text("All octaves")
+                        .font(DesignSystem.Typography.caption2)
+                    Image(systemName: "chevron.right")
+                        .font(DesignSystem.Typography.caption2.weight(.semibold))
+                }
+                .foregroundStyle(accentColor)
+            }
+            .padding(DesignSystem.Spacing.md)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(accentColor.opacity(0.12))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(accentColor.opacity(0.45), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private var header: some View {
@@ -1547,21 +1635,75 @@ struct StudioTrackEditorView: View {
         } else if track.instrument == .audio {
             StudioAudioTrackView(track: track, project: project)
         } else {
-            StudioNoteEditor(
-                track: track,
-                beatsPerBar: beatsPerBar,
-                totalBars: totalBars,
-                barSectionInfos: barSectionInfos,
-                currentBeat: playback.currentBeat,
-                isPlaying: playback.isPlaying,
-                liveBeat: { playback.livePositionBeats() },
-                onSeek: { beat in
-                    playback.seek(to: beat)
-                },
-                style: style,
-                onNotesChanged: onNotesChanged
-            )
+            noteOverviewCard
         }
+    }
+
+    private var noteOverviewCard: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+            HStack(alignment: .center, spacing: DesignSystem.Spacing.sm) {
+                Image(systemName: "music.note.list")
+                    .font(DesignSystem.Typography.title3)
+                    .foregroundStyle(accentColor)
+                    .frame(width: 42, height: 42)
+                    .background(
+                        Circle()
+                            .fill(accentColor.opacity(0.16))
+                    )
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Notes")
+                        .font(DesignSystem.Typography.headline)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
+                    Text("Open Customize Notes to edit the piano roll.")
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                }
+
+                Spacer()
+            }
+
+            HStack(spacing: 10) {
+                noteMetric(icon: "number", title: "Count", value: noteCountLabel)
+                noteMetric(icon: "pianokeys", title: "Range", value: noteRangeLabel)
+                noteMetric(icon: "timeline.selection", title: "Length", value: "\(totalBars) bars")
+            }
+        }
+        .padding(DesignSystem.Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(DesignSystem.Colors.surfaceSecondary)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(accentColor.opacity(0.35), lineWidth: 1)
+                )
+        )
+    }
+
+    private func noteMetric(icon: String, title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(DesignSystem.Typography.nano)
+                Text(title)
+                    .font(DesignSystem.Typography.nano)
+            }
+            .foregroundStyle(DesignSystem.Colors.textSecondary)
+
+            Text(value)
+                .font(DesignSystem.Typography.caption2.weight(.semibold))
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(accentColor.opacity(0.08))
+        )
     }
 
     private func trackSliderCompact(
@@ -1762,6 +1904,13 @@ struct StudioTrackEditorView: View {
         .animation(.none, value: isEnabled.wrappedValue)
     }
 
+    private func midiNoteName(for midi: Int) -> String {
+        let names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+        let name = names[(midi % 12 + 12) % 12]
+        let octave = (midi / 12) - 1
+        return "\(name)\(octave)"
+    }
+
     private func fxSlider(label: String, value: Binding<Float>, range: ClosedRange<Float>, display: String) -> some View {
         HStack(spacing: 6) {
             Text(label)
@@ -1783,9 +1932,6 @@ struct StudioTrackEditorView: View {
         regenerateIntensity = track.regenerateIntensity
         regenerateComplexity = track.regenerateComplexity
         regenerateNaturalness = track.regenerateNaturalness
-        regenerateArpeggioEnabled = track.regenerateArpeggioEnabled
-        regenerateArpeggioRate = track.regenerateArpeggioRate
-        regenerateArpeggioPattern = normalizedArpeggioPattern(track.regenerateArpeggioPattern)
         showingRegenerateOptions = true
     }
 
@@ -1807,9 +1953,13 @@ struct StudioTrackEditorView: View {
             intensity: regenerateIntensity,
             complexity: regenerateComplexity,
             naturalness: regenerateNaturalness,
-            arpeggioEnabled: regenerateArpeggioEnabled,
-            arpeggioRate: regenerateArpeggioRate,
-            arpeggioPattern: regenerateArpeggioPattern
+            arpeggioEnabled: false,
+            arpeggioRate: track.regenerateArpeggioRate,
+            compingPattern: track.compingPattern,
+            bassPattern: track.bassPattern,
+            arrangement: StudioGenerator.ArrangementContext(
+                instruments: Set(project.studioTracks.filter { !$0.instrument.isAudio }.map(\.instrument))
+            )
         )
 
         for note in newNotes {
@@ -1821,25 +1971,11 @@ struct StudioTrackEditorView: View {
         track.regenerateIntensity = regenerateIntensity
         track.regenerateComplexity = regenerateComplexity
         track.regenerateNaturalness = regenerateNaturalness
-        track.regenerateArpeggioEnabled = regenerateArpeggioEnabled
-        track.regenerateArpeggioRate = regenerateArpeggioRate
-        track.regenerateArpeggioPattern = normalizedArpeggioPattern(regenerateArpeggioPattern)
         project.updatedAt = Date()
         try? modelContext.save()
         onNotesChanged()
         onStop()
         showingRegenerateOptions = false
-    }
-
-    private func normalizedArpeggioPattern(_ raw: String) -> String {
-        switch raw.lowercased() {
-        case "down":
-            return "Down"
-        case "updown":
-            return "UpDown"
-        default:
-            return "Up"
-        }
     }
 
     private var playbackHud: some View {
@@ -1857,6 +1993,151 @@ struct StudioTrackEditorView: View {
             .padding(.horizontal, DesignSystem.Spacing.md)
             .padding(.vertical, DesignSystem.Spacing.sm)
         }
+    }
+}
+
+/// Full-range manual note editor presented as a dedicated screen — shows every
+/// available octave so the user can place notes anywhere on the instrument.
+struct CustomizeNotesView: View {
+    @Bindable var project: Project
+    @Bindable var track: StudioTrack
+    let totalBars: Int
+    let beatsPerBar: Int
+    let barSectionInfos: [StudioBarSectionInfo]
+    let style: StudioStyle?
+    @ObservedObject var playback: StudioPlaybackEngine
+    let onNotesChanged: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    private var accentColor: Color { track.instrument.color }
+
+    private var noteCountLabel: String {
+        let count = track.notes.count
+        return count == 1 ? "1 note" : "\(count) notes"
+    }
+
+    private var rangeLabel: String {
+        let pitches = track.notes.map(\.pitch)
+        guard let low = pitches.min(), let high = pitches.max() else { return "Empty" }
+        return "\(midiNoteName(for: low))-\(midiNoteName(for: high))"
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+                    customizeNotesHeader
+
+                    StudioNoteEditor(
+                        track: track,
+                        beatsPerBar: beatsPerBar,
+                        totalBars: totalBars,
+                        barSectionInfos: barSectionInfos,
+                        currentBeat: playback.currentBeat,
+                        isPlaying: playback.isPlaying,
+                        liveBeat: { playback.livePositionBeats() },
+                        onSeek: { beat in playback.seek(to: beat) },
+                        style: style,
+                        onNotesChanged: onNotesChanged,
+                        fullRange: true
+                    )
+                }
+                .padding(DesignSystem.Spacing.lg)
+            }
+            .background(DesignSystem.Colors.background.ignoresSafeArea())
+            .navigationTitle("Customize Notes")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 1) {
+                        Text("Customize Notes")
+                            .font(DesignSystem.Typography.subheadline)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
+                        Text("\(track.name) · all octaves")
+                            .font(DesignSystem.Typography.caption2)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                        .foregroundStyle(accentColor)
+                }
+            }
+        }
+    }
+
+    private var customizeNotesHeader: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+            HStack(spacing: DesignSystem.Spacing.sm) {
+                Image(systemName: "pianokeys")
+                    .font(DesignSystem.Typography.title2)
+                    .foregroundStyle(accentColor)
+                    .frame(width: 48, height: 48)
+                    .background(
+                        Circle()
+                            .fill(accentColor.opacity(0.16))
+                    )
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(track.name)
+                        .font(DesignSystem.Typography.title3)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
+                    Text("Tap the grid to add notes, drag blocks to reshape the phrase.")
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        .lineLimit(2)
+                }
+
+                Spacer()
+            }
+
+            HStack(spacing: 10) {
+                headerMetric(icon: "number", title: "Notes", value: noteCountLabel)
+                headerMetric(icon: "arrow.up.and.down.text.horizontal", title: "Range", value: rangeLabel)
+                headerMetric(icon: "metronome", title: "Grid", value: "1/16")
+            }
+        }
+        .padding(DesignSystem.Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(DesignSystem.Colors.surfaceSecondary)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(accentColor.opacity(0.35), lineWidth: 1)
+                )
+        )
+    }
+
+    private func headerMetric(icon: String, title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                Text(title)
+            }
+            .font(DesignSystem.Typography.nano)
+            .foregroundStyle(DesignSystem.Colors.textSecondary)
+
+            Text(value)
+                .font(DesignSystem.Typography.caption2.weight(.semibold))
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(accentColor.opacity(0.08))
+        )
+    }
+
+    private func midiNoteName(for midi: Int) -> String {
+        let names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+        let name = names[(midi % 12 + 12) % 12]
+        let octave = (midi / 12) - 1
+        return "\(name)\(octave)"
     }
 }
 
@@ -2431,6 +2712,9 @@ struct StudioNoteEditor: View {
     let onSeek: (Double) -> Void
     let style: StudioStyle?
     let onNotesChanged: () -> Void
+    /// When true, shows the instrument's complete range (all octaves) for
+    /// detailed manual editing.
+    var fullRange: Bool = false
 
     @Environment(\.modelContext) private var modelContext
     @State private var selectedNoteId: UUID?
@@ -2470,7 +2754,8 @@ struct StudioNoteEditor: View {
             for: track.instrument,
             variant: track.variant,
             style: style,
-            octaveShift: track.octaveShift
+            octaveShift: track.octaveShift,
+            fullRange: fullRange
         )
     }
 
@@ -2978,7 +3263,8 @@ struct PitchRow: Identifiable {
         for instrument: StudioInstrument,
         variant: InstrumentVariant? = nil,
         style: StudioStyle?,
-        octaveShift: Int
+        octaveShift: Int,
+        fullRange: Bool = false
     ) -> [PitchRow] {
         switch instrument {
         case .drums:
@@ -2989,12 +3275,14 @@ struct PitchRow: Identifiable {
                 PitchRow(pitch: 39, label: "Clap")
             ]
         case .bass, .guitar, .synth, .piano, .strings, .brass, .woodwinds, .organ, .mallets:
-            let range = StudioGenerator.instrumentRange(
-                for: instrument,
-                variant: variant,
-                style: style,
-                octaveShift: octaveShift
-            )
+            let range = fullRange
+                ? StudioGenerator.fullInstrumentRange(for: instrument, variant: variant)
+                : StudioGenerator.instrumentRange(
+                    for: instrument,
+                    variant: variant,
+                    style: style,
+                    octaveShift: octaveShift
+                )
             return noteRows(range: range)
         case .audio:
             return []
@@ -3467,76 +3755,54 @@ struct StudioStylePickerView: View {
     }
 }
 
+/// The playing style chosen for a freshly added instrument.
+struct TrackStyleChoice {
+    var comping: CompingPattern = .auto
+    var bass: BassPattern = .auto
+    var drumPreset: DrumPreset? = nil
+    var leadComplexity: Double? = nil
+}
+
 struct StudioInstrumentPickerView: View {
     let availableInstruments: [StudioInstrument]
     let existingInstruments: Set<StudioInstrument>
-    let onPick: (StudioInstrument) -> Void
+    let style: StudioStyle?
+    let beatsPerBar: Int
+    let timeBottom: Int
+    let onPick: (StudioInstrument, TrackStyleChoice) -> Void
     @Environment(\.dismiss) private var dismiss
 
     private let columns = [GridItem(.flexible()), GridItem(.flexible())]
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 20) {
-                Text("Add Track")
-                    .font(DesignSystem.Typography.title2)
-                    .fontWeight(.bold)
-                    .foregroundStyle(DesignSystem.Colors.textPrimary)
-
-                if availableInstruments.isEmpty {
-                    Text("No instruments available.")
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                } else {
-                    LazyVGrid(columns: columns, spacing: 12) {
-                        ForEach(availableInstruments) { instrument in
-                            let isAdded = existingInstruments.contains(instrument)
-                            Button {
-                                guard !isAdded else { return }
-                                onPick(instrument)
-                                dismiss()
-                            } label: {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    HStack {
-                                        Image(systemName: instrument.icon)
-                                            .font(DesignSystem.Typography.title3)
-                                            .foregroundStyle(instrument.color)
-                                        Spacer()
-                                        if isAdded {
-                                            Image(systemName: "checkmark.circle.fill")
-                                                .font(DesignSystem.Typography.title3)
-                                        }
-                                    }
-
-                                    Text(instrument.title)
-                                        .font(DesignSystem.Typography.headline)
-
-                                    Text(isAdded ? "Already added" : "Tap to add")
-                                        .font(DesignSystem.Typography.caption)
-                                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 12) {
+                    ForEach(availableInstruments) { instrument in
+                        let isAdded = existingInstruments.contains(instrument)
+                        NavigationLink {
+                            TrackStyleStepView(
+                                instrument: instrument,
+                                style: style,
+                                beatsPerBar: beatsPerBar,
+                                timeBottom: timeBottom,
+                                onConfirm: { choice in
+                                    onPick(instrument, choice)
+                                    dismiss()
                                 }
-                                .foregroundStyle(DesignSystem.Colors.textPrimary)
-                                .padding(14)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .fill(instrument.color.opacity(0.1))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 16)
-                                                .stroke(instrument.color.opacity(isAdded ? 0.5 : 0.8), lineWidth: 1)
-                                        )
-                                )
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(isAdded)
-                            .opacity(isAdded ? 0.6 : 1.0)
+                            )
+                        } label: {
+                            instrumentCard(instrument, isAdded: isAdded)
                         }
+                        .buttonStyle(.plain)
+                        .disabled(isAdded)
+                        .opacity(isAdded ? 0.6 : 1.0)
                     }
                 }
-
-                Spacer()
+                .padding(24)
             }
-            .padding(24)
-            .navigationTitle("Instruments")
+            .background(DesignSystem.Colors.background.ignoresSafeArea())
+            .navigationTitle("Add Instrument")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -3545,7 +3811,220 @@ struct StudioInstrumentPickerView: View {
                 }
             }
         }
+    }
+
+    private func instrumentCard(_ instrument: StudioInstrument, isAdded: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: instrument.icon)
+                    .font(DesignSystem.Typography.title3)
+                    .foregroundStyle(instrument.color)
+                Spacer()
+                Image(systemName: isAdded ? "checkmark.circle.fill" : "chevron.right")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
             }
+            Text(instrument.title)
+                .font(DesignSystem.Typography.headline)
+            Text(isAdded ? "Already added" : "Choose a style")
+                .font(DesignSystem.Typography.caption)
+                .foregroundStyle(DesignSystem.Colors.textSecondary)
+        }
+        .foregroundStyle(DesignSystem.Colors.textPrimary)
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(instrument.color.opacity(0.1))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(instrument.color.opacity(isAdded ? 0.5 : 0.8), lineWidth: 1)
+                )
+        )
+    }
+}
+
+/// Second step of "add instrument": pick how it should play. The options shown
+/// depend on the instrument family (comping for chords, line for bass, groove
+/// for drums, phrasing for leads).
+struct TrackStyleStepView: View {
+    let instrument: StudioInstrument
+    let style: StudioStyle?
+    let beatsPerBar: Int
+    let timeBottom: Int
+    let onConfirm: (TrackStyleChoice) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var comping: CompingPattern = .auto
+    @State private var bass: BassPattern = .auto
+    @State private var drumPreset: DrumPreset = .basic
+    @State private var leadFeel: LeadFeel = .auto
+
+    private enum LeadFeel: String, CaseIterable, Identifiable {
+        case auto, sparse, flowing, busy
+        var id: String { rawValue }
+        var displayName: String {
+            switch self {
+            case .auto: return "Auto"
+            case .sparse: return "Sparse"
+            case .flowing: return "Flowing"
+            case .busy: return "Busy"
+            }
+        }
+        var icon: String {
+            switch self {
+            case .auto: return "wand.and.stars"
+            case .sparse: return "moon.stars"
+            case .flowing: return "wind"
+            case .busy: return "hare.fill"
+            }
+        }
+        var complexity: Double? {
+            switch self {
+            case .auto: return nil
+            case .sparse: return 0.3
+            case .flowing: return 0.6
+            case .busy: return 0.85
+            }
+        }
+    }
+
+    private var isBass: Bool { instrument == .bass }
+    private var isDrums: Bool { instrument == .drums }
+    private var isLead: Bool {
+        !isBass && !isDrums
+            && !StudioGenerator.supportsArpeggio(instrument: instrument, variant: nil, style: style)
+    }
+    private var drumPresets: [DrumPreset] {
+        DrumPreset.presets(for: style ?? .pop, beatsPerBar: beatsPerBar, timeBottom: timeBottom)
+    }
+    private var recommendedComping: CompingPattern {
+        StudioGenerator.recommendedComping(for: instrument, variant: nil, style: style ?? .pop)
+    }
+    private var recommendedBass: BassPattern {
+        StudioGenerator.recommendedBass(for: style ?? .pop)
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                HStack(spacing: 12) {
+                    Image(systemName: instrument.icon)
+                        .font(DesignSystem.Typography.title2)
+                        .foregroundStyle(instrument.color)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(instrument.title)
+                            .font(DesignSystem.Typography.title3)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
+                        Text("How should it play?")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    }
+                }
+
+                if isBass {
+                    optionGrid(BassPattern.allCases, selected: bass, recommended: recommendedBass, label: \.displayName, icon: \.icon) { bass = $0 }
+                } else if isDrums {
+                    optionGrid(drumPresets, selected: drumPreset, recommended: drumPresets.first, label: \.title, icon: { _ in "metronome" }) { drumPreset = $0 }
+                } else if isLead {
+                    optionGrid(LeadFeel.allCases, selected: leadFeel, recommended: .flowing, label: \.displayName, icon: \.icon) { leadFeel = $0 }
+                } else {
+                    optionGrid(CompingPattern.allCases, selected: comping, recommended: recommendedComping, label: \.displayName, icon: \.icon) { comping = $0 }
+                }
+            }
+            .padding(24)
+        }
+        .background(DesignSystem.Colors.background.ignoresSafeArea())
+        .navigationTitle("Playing Style")
+        .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .bottom) {
+            Button {
+                onConfirm(buildChoice())
+            } label: {
+                Text("Add to Studio")
+                    .font(DesignSystem.Typography.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DesignSystem.Spacing.xxs)
+            }
+            .buttonStyle(.glassProminent)
+            .tint(instrument.color)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 12)
+            .background(.bar)
+        }
+        .onAppear {
+            // Pre-select the instrument's recommended playing style.
+            comping = recommendedComping
+            bass = recommendedBass
+            leadFeel = .flowing
+            if isDrums { drumPreset = drumPresets.first ?? .basic }
+        }
+    }
+
+    private func buildChoice() -> TrackStyleChoice {
+        var choice = TrackStyleChoice()
+        if isBass { choice.bass = bass }
+        else if isDrums { choice.drumPreset = drumPreset }
+        else if isLead { choice.leadComplexity = leadFeel.complexity }
+        else { choice.comping = comping }
+        return choice
+    }
+
+    private func optionGrid<Option: Identifiable & Equatable>(
+        _ options: [Option],
+        selected: Option,
+        recommended: Option?,
+        label: KeyPath<Option, String>,
+        icon: @escaping (Option) -> String,
+        onSelect: @escaping (Option) -> Void
+    ) -> some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            ForEach(options) { option in
+                let isSelected = option == selected
+                let isRecommended = option == recommended
+                Button {
+                    onSelect(option)
+                    haptic(.selection)
+                } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            Image(systemName: icon(option))
+                                .font(DesignSystem.Typography.subheadline)
+                                .foregroundStyle(isSelected ? instrument.color : DesignSystem.Colors.textSecondary)
+                            Text(option[keyPath: label])
+                                .font(DesignSystem.Typography.callout)
+                                .foregroundStyle(DesignSystem.Colors.textPrimary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                            Spacer(minLength: 0)
+                            if isSelected {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(DesignSystem.Typography.caption)
+                                    .foregroundStyle(instrument.color)
+                            }
+                        }
+                        if isRecommended {
+                            Text("Recommended")
+                                .font(DesignSystem.Typography.nano)
+                                .foregroundStyle(instrument.color)
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(isSelected ? instrument.color.opacity(0.15) : DesignSystem.Colors.surfaceSecondary)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(isSelected ? instrument.color : DesignSystem.Colors.border, lineWidth: isSelected ? 2 : 1)
+                            )
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
 }
 
 struct StudioRecordingPicker: View {
@@ -3599,20 +4078,11 @@ struct StudioRecordingPicker: View {
 
 struct RegenerateOptionsView: View {
     let trackName: String
-    let instrument: StudioInstrument
-    let variant: InstrumentVariant?
-    let style: StudioStyle?
     @Binding var intensity: Double
     @Binding var complexity: Double
     @Binding var naturalness: Double
-    @Binding var arpeggioEnabled: Bool
-    @Binding var arpeggioRate: String
-    @Binding var arpeggioPattern: String
     let onRegenerate: () -> Void
     let onCancel: () -> Void
-    
-    private let arpeggioRates = ["1/4", "1/8", "1/16"]
-    private let arpeggioPatterns = ["Up", "Down", "UpDown"]
     
     var body: some View {
         NavigationView {
@@ -3720,81 +4190,9 @@ struct RegenerateOptionsView: View {
                             .foregroundStyle(DesignSystem.Colors.textTertiary)
                     }
 
-                    // Arpeggio Options
-                    if supportsArpeggio {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Toggle(isOn: $arpeggioEnabled) {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "arrow.up.right.and.arrow.down.left")
-                                        .foregroundStyle(DesignSystem.Colors.info)
-                                    Text("Arpeggiate")
-                                        .font(DesignSystem.Typography.subheadline)
-                                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                                }
-                            }
-                            .tint(DesignSystem.Colors.info)
-                            
-                            if arpeggioEnabled {
-                                HStack(spacing: 12) {
-                                    Menu {
-                                        ForEach(arpeggioRates, id: \.self) { rate in
-                                            Button(rate) {
-                                                arpeggioRate = rate
-                                            }
-                                        }
-                                    } label: {
-                                        HStack(spacing: 6) {
-                                            Text("Rate \(arpeggioRate)")
-                                                .font(DesignSystem.Typography.caption)
-                                            Image(systemName: "chevron.down")
-                                                .font(DesignSystem.Typography.caption2)
-                                        }
-                                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 6)
-                                        .background(
-                                            Capsule()
-                                                .fill(DesignSystem.Colors.surfaceSecondary)
-                                                .overlay(
-                                                    Capsule()
-                                                        .stroke(DesignSystem.Colors.border, lineWidth: 1)
-                                                )
-                                        )
-                                    }
-                                    
-                                    Menu {
-                                        ForEach(arpeggioPatterns, id: \.self) { pattern in
-                                            Button(pattern) {
-                                                arpeggioPattern = pattern
-                                            }
-                                        }
-                                    } label: {
-                                        HStack(spacing: 6) {
-                                            Text(arpeggioPattern)
-                                                .font(DesignSystem.Typography.caption)
-                                            Image(systemName: "chevron.down")
-                                                .font(DesignSystem.Typography.caption2)
-                                        }
-                                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 6)
-                                        .background(
-                                            Capsule()
-                                                .fill(DesignSystem.Colors.surfaceSecondary)
-                                                .overlay(
-                                                    Capsule()
-                                                        .stroke(DesignSystem.Colors.border, lineWidth: 1)
-                                                )
-                                        )
-                                    }
-                                }
-                                
-                                Text("Spreads chord notes in time")
-                                    .font(DesignSystem.Typography.caption2)
-                                    .foregroundStyle(DesignSystem.Colors.textTertiary)
-                            }
-                        }
-                    }
+                    Text("Tip: the playing style (arpeggio, walking bass, groove…) is chosen when you add the instrument.")
+                        .font(DesignSystem.Typography.caption2)
+                        .foregroundStyle(DesignSystem.Colors.textTertiary)
                 }
                 .padding(20)
                 .background(
@@ -3825,11 +4223,4 @@ struct RegenerateOptionsView: View {
         .presentationDetents([.height(680)])
     }
 
-    private var supportsArpeggio: Bool {
-        StudioGenerator.supportsArpeggio(
-            instrument: instrument,
-            variant: variant,
-            style: style
-        )
-    }
 }

@@ -495,6 +495,10 @@ final class StudioTrack {
     var regenerateArpeggioEnabled: Bool = false
     private var _regenerateArpeggioRate: String = "1/8"
     private var _regenerateArpeggioPattern: String = "Up"
+    /// User-selected accompaniment pattern for chord instruments.
+    private var _compingPattern: String = "auto"
+    /// User-selected bass line style.
+    private var _bassPattern: String = "auto"
     var createdAt: Date = Date()
     var audioRecordingId: UUID? = nil
     var audioStartBeat: Double = 0
@@ -579,6 +583,8 @@ final class StudioTrack {
         self.regenerateArpeggioEnabled = false
         self._regenerateArpeggioRate = "1/8"
         self._regenerateArpeggioPattern = "Up"
+        self._compingPattern = "auto"
+        self._bassPattern = "auto"
         self.createdAt = Date()
         self.audioRecordingId = audioRecordingId
         self.audioStartBeat = audioStartBeat
@@ -603,6 +609,97 @@ final class StudioTrack {
     var regenerateArpeggioPattern: String {
         get { _regenerateArpeggioPattern }
         set { _regenerateArpeggioPattern = newValue }
+    }
+
+    var compingPattern: CompingPattern {
+        get { CompingPattern(rawValue: _compingPattern) ?? .auto }
+        set { _compingPattern = newValue.rawValue }
+    }
+
+    var bassPattern: BassPattern {
+        get { BassPattern(rawValue: _bassPattern) ?? .auto }
+        set { _bassPattern = newValue.rawValue }
+    }
+}
+
+/// How a bass line is built. `auto` keeps the smart per-style line; the rest
+/// let the user pick a feel explicitly.
+enum BassPattern: String, CaseIterable, Identifiable {
+    case auto
+    case roots          // one root per chord
+    case rootFifth      // root + fifth
+    case octaves        // root/octave bounce
+    case walking        // 4-to-the-bar walking line
+    case syncopated     // funky offbeats
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .auto: return "Auto"
+        case .roots: return "Roots"
+        case .rootFifth: return "Root + Fifth"
+        case .octaves: return "Octaves"
+        case .walking: return "Walking"
+        case .syncopated: return "Syncopated"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .auto: return "wand.and.stars"
+        case .roots: return "circle.fill"
+        case .rootFifth: return "circle.grid.2x1.fill"
+        case .octaves: return "arrow.up.arrow.down"
+        case .walking: return "figure.walk"
+        case .syncopated: return "bolt.fill"
+        }
+    }
+}
+
+/// How a chord instrument articulates its harmony. `auto` keeps the smart
+/// per-style behavior; the rest let the user pick explicitly.
+enum CompingPattern: String, CaseIterable, Identifiable {
+    case auto
+    case block
+    case sustained
+    case arpeggioUp
+    case arpeggioDown
+    case arpeggioUpDown
+    case alberti
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .auto: return "Auto"
+        case .block: return "Block / Comp"
+        case .sustained: return "Sustained Pad"
+        case .arpeggioUp: return "Arpeggio ↑"
+        case .arpeggioDown: return "Arpeggio ↓"
+        case .arpeggioUpDown: return "Arpeggio ↑↓"
+        case .alberti: return "Alberti / Broken"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .auto: return "wand.and.stars"
+        case .block: return "rectangle.grid.1x2"
+        case .sustained: return "rectangle.fill"
+        case .arpeggioUp: return "arrow.up.right"
+        case .arpeggioDown: return "arrow.down.right"
+        case .arpeggioUpDown: return "arrow.up.arrow.down"
+        case .alberti: return "water.waves"
+        }
+    }
+
+    /// Whether choosing this pattern exposes the arpeggio rate control.
+    var usesRate: Bool {
+        switch self {
+        case .arpeggioUp, .arpeggioDown, .arpeggioUpDown, .alberti: return true
+        case .auto, .block, .sustained: return false
+        }
     }
 }
 

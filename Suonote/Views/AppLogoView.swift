@@ -2,9 +2,10 @@ import SwiftUI
 
 struct AppLogoView: View {
     var height: CGFloat = 24
-    @State private var cachedImage: Image?
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var cachedUIImage: UIImage?
 
-    private func loadLogo() -> Image? {
+    private func loadLogo() -> UIImage? {
         let candidates: [URL?] = [
             Bundle.main.url(forResource: "Logo", withExtension: "png", subdirectory: "Logo"),
             Bundle.main.url(forResource: "Logo", withExtension: "png", subdirectory: "Resources/Logo"),
@@ -13,7 +14,7 @@ struct AppLogoView: View {
 
         for url in candidates.compactMap({ $0 }) {
             if let image = UIImage(contentsOfFile: url.path) {
-                return Image(uiImage: image).renderingMode(.original)
+                return image
             }
         }
         return nil
@@ -21,28 +22,49 @@ struct AppLogoView: View {
 
     var body: some View {
         Group {
-            if let cachedImage {
-                cachedImage
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
+            if let cachedUIImage {
+                logoImage(cachedUIImage)
             } else {
                 Text("Suonote")
                     .font(DesignSystem.Typography.title3)
-                    .foregroundStyle(DesignSystem.Colors.primaryDark)
+                    .foregroundStyle(colorScheme == .dark ? .white : DesignSystem.Colors.primaryDark)
             }
         }
         .frame(height: height)
         .fixedSize(horizontal: true, vertical: false)
         .onAppear {
-            if cachedImage == nil {
-                cachedImage = loadLogo()
+            if cachedUIImage == nil {
+                cachedUIImage = loadLogo()
             }
+        }
+    }
+
+    @ViewBuilder
+    private func logoImage(_ image: UIImage) -> some View {
+        if colorScheme == .dark {
+            // Flatten the multi-color logo to a single white silhouette in dark mode.
+            Image(uiImage: image)
+                .renderingMode(.template)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .foregroundStyle(.white)
+        } else {
+            Image(uiImage: image)
+                .renderingMode(.original)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
         }
     }
 }
 
 #Preview {
-    AppLogoView(height: 34)
-        .padding()
-        .background(DesignSystem.Colors.background)
+    VStack(spacing: 24) {
+        AppLogoView(height: 34)
+            .padding()
+            .background(DesignSystem.Colors.background)
+        AppLogoView(height: 34)
+            .padding()
+            .background(Color.black)
+            .environment(\.colorScheme, .dark)
+    }
 }

@@ -2177,12 +2177,13 @@ struct SectionCreatorView: View {
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
+            ScrollView {
+                VStack(spacing: 24) {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Quick Templates")
                         .font(DesignSystem.Typography.headline)
                         .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    
+
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                         ForEach(SectionPreset.allCases) { preset in
                             PresetCard(
@@ -2267,17 +2268,11 @@ struct SectionCreatorView: View {
                         }
                     }
                 }
-                
-                Spacer()
-                
-                AppButton(title: "Create Section", kind: .primary(DesignSystem.Colors.primary)) {
-                    createSection()
                 }
-                .disabled(sectionName.isEmpty)
+                .padding(.horizontal, 24)
+                .padding(.top, 12)
+                .padding(.bottom, 24)
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 40)
-            .padding(.bottom, 24)
             .background(DesignSystem.Colors.background)
             .navigationTitle("New Section")
             .navigationBarTitleDisplayMode(.inline)
@@ -2286,6 +2281,16 @@ struct SectionCreatorView: View {
                     Button("Cancel") { dismiss() }
                         .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
+            }
+            .safeAreaInset(edge: .bottom) {
+                AppButton(title: "Create Section", kind: .primary(DesignSystem.Colors.primary)) {
+                    createSection()
+                }
+                .disabled(sectionName.isEmpty)
+                .padding(.horizontal, 24)
+                .padding(.top, 12)
+                .padding(.bottom, 16)
+                .background(.bar)
             }
         }
         .onAppear {

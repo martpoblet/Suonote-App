@@ -578,11 +578,15 @@ struct FloatingActionButton: View {
         Button(action: action) {
             Image(systemName: "plus")
                 .font(.system(size: 24, weight: .bold))
-                .foregroundStyle(DesignSystem.Colors.textWhite)
                 .frame(width: 60, height: 60)
+                .contentShape(.circle)
         }
-        .buttonStyle(.plain)
-        .glassEffect(.regular.tint(DesignSystem.Colors.primary.opacity(0.85)).interactive(), in: .circle)
+        // Native glass button styles handle the tap + press animation together;
+        // applying `.glassEffect(...interactive())` on a plain Button swallowed
+        // the first tap.
+        .buttonStyle(.glassProminent)
+        .buttonBorderShape(.circle)
+        .tint(DesignSystem.Colors.primary)
     }
 }
 
