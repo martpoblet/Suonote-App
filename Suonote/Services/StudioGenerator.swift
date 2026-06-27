@@ -158,7 +158,7 @@ struct StudioGenerator {
             if instrument == .drums {
                 track.drumPreset = defaultDrumPreset
             }
-            track.octaveShift = defaultOctaveShift(for: instrument, variant: track.variant)
+            track.octaveShift = initialOctaveShift(for: instrument, variant: track.variant)
             // Set per-instrument humanization defaults so freshly generated tracks
             // feel played rather than quantized. The applyNaturalness pass already
             // knows to apply less timing jitter to drums than melodic instruments.
@@ -2837,6 +2837,21 @@ struct StudioGenerator {
         }
     }
 
+    /// Octave shift assigned to a freshly added/generated track. The base
+    /// registers tend to load high, so new tracks start below their neutral
+    /// reference, clamped to the instrument's allowed range (drums/audio stay
+    /// fixed). Piano starts one octave below neutral: low enough to avoid the
+    /// bright register, but not so low that soundfont samples feel unstable.
+    static func initialOctaveShift(
+        for instrument: StudioInstrument,
+        variant: InstrumentVariant? = nil
+    ) -> Int {
+        let neutral = defaultOctaveShift(for: instrument, variant: variant)
+        let allowed = allowedOctaveShiftRange(for: instrument, variant: variant)
+        let defaultDrop = instrument == .piano ? 1 : 2
+        return min(allowed.upperBound, max(allowed.lowerBound, neutral - defaultDrop))
+    }
+
     /// Returns the allowed range of `octaveShift` values for a given instrument/variant.
     /// Display octave = octaveShift − defaultOctaveShift(for:variant:)
     /// Internal formula: semitoneShift = (octaveShift − 2) × 12
@@ -3019,16 +3034,17 @@ struct StudioGenerator {
         case .rock:
             return 0
         case .lofi:
-            // Only push piano/synth lower; strings at -12 drops below cello (C1 = MIDI 24)
-            if instrument == .piano || instrument == .synth {
+            // Only push synth lower; piano already starts in a lower default register.
+            // Strings at -12 drops below cello (C1 = MIDI 24).
+            if instrument == .synth {
                 return -12
             }
             return 0
         case .edm:
             return instrument == .synth ? 12 : 0
         case .jazz:
-            // Only piano shifts up; brass +12 pushes trumpet to Bb6+ (above physical limit)
-            return instrument == .piano ? 12 : 0
+            // Brass +12 pushes trumpet to Bb6+ (above physical limit)
+            return 0
         case .hiphop:
             // Bass is already at E1 (MIDI 28); -12 drops to E0 (MIDI 16), out of soundfont range
             return instrument == .synth ? -12 : 0
@@ -3039,7 +3055,7 @@ struct StudioGenerator {
             if instrument == .synth || instrument == .strings || instrument == .organ {
                 return 12
             }
-            return instrument == .piano ? 12 : 0
+            return 0
         }
     }
 

@@ -10,6 +10,12 @@ final class StudioPlaybackEngine: ObservableObject {
     @Published private(set) var isPlaying = false
     @Published private(set) var currentBeat: Double = 0
     @Published private(set) var totalBeats: Double = 0
+
+    /// Set when the project's musical content changes so the MIDI sequence is
+    /// stale. Lets transports defer the (expensive) rebuild until the user
+    /// actually presses play, while sharing that state across views (the
+    /// Studio tab and the bottom-accessory transport).
+    @Published var needsSequenceRebuild: Bool = true
     
     // Loop/Cycle playback (P-06)
     @Published var isLooping: Bool = false
@@ -74,6 +80,10 @@ final class StudioPlaybackEngine: ObservableObject {
         case available(URL)
         case unavailable
     }
+
+    nonisolated private static let audioSessionQueue = DispatchQueue(
+        label: "com.suonote.studioPlayback.audioSession"
+    )
 
     private var sessionObservers: [Any] = []
     private var wasPlayingBeforeInterruption = false
@@ -151,7 +161,7 @@ final class StudioPlaybackEngine: ObservableObject {
 
     private func observeAudioSessionNotifications() {
         let center = NotificationCenter.default
-        sessionObservers.append(center.addObserver(
+        let interruptionObserver = center.addObserver(
             forName: AVAudioSession.interruptionNotification,
             object: nil,
             queue: .main
@@ -162,8 +172,10 @@ final class StudioPlaybackEngine: ObservableObject {
             Task { @MainActor [weak self] in
                 self?.handleInterruption(typeValue: typeValue, optionsValue: optionsValue)
             }
-        })
-        sessionObservers.append(center.addObserver(
+        }
+        sessionObservers.append(interruptionObserver)
+
+        let routeChangeObserver = center.addObserver(
             forName: AVAudioSession.routeChangeNotification,
             object: nil,
             queue: .main
@@ -172,7 +184,8 @@ final class StudioPlaybackEngine: ObservableObject {
             Task { @MainActor [weak self] in
                 self?.handleRouteChange(reasonValue: reasonValue)
             }
-        })
+        }
+        sessionObservers.append(routeChangeObserver)
     }
 
     private func handleInterruption(typeValue: UInt?, optionsValue: UInt?) {
@@ -401,6 +414,19 @@ final class StudioPlaybackEngine: ObservableObject {
         isCountingIn = false
     }
 
+    /// Rebuild the sequence first if it's marked stale, then start playback.
+    /// Centralizes the deferred-rebuild logic so any transport (Studio tab or
+    /// bottom accessory) can start playback correctly.
+    func playRebuildingIfNeeded(project: Project) {
+        if needsSequenceRebuild {
+            rebuildSequence(project: project)
+            needsSequenceRebuild = false
+        } else {
+            updateProject(project)
+        }
+        play()
+    }
+
     func pause() {
         stop(resetPosition: false)
     }
@@ -509,12 +535,14 @@ final class StudioPlaybackEngine: ObservableObject {
     }
 
     private func configureAudioSession() {
-        let session = AVAudioSession.sharedInstance()
-        do {
-            try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
-            try session.setActive(true)
-        } catch {
-            AppLog.audio.error("Failed to configure audio session: \(String(describing: error))")
+        Self.audioSessionQueue.sync {
+            let session = AVAudioSession.sharedInstance()
+            do {
+                try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+                try session.setActive(true)
+            } catch {
+                AppLog.audio.error("Failed to configure audio session: \(String(describing: error))")
+            }
         }
     }
 

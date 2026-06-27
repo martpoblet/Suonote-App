@@ -14,7 +14,6 @@ struct StudioTabView: View {
     @State private var pendingAddTrackAfterStyle = false
     @State private var selectedTrackId: UUID?
     @State private var editingTrack: StudioTrack?
-    @State private var needsRebuild = true
     @State private var lastProjectSignature = ""
     @State private var lastChordIds: Set<UUID> = []
     @State private var lastTotalBars = 0
@@ -38,6 +37,14 @@ struct StudioTabView: View {
         Set(project.studioTracks.filter { !$0.instrument.isAudio }.map(\.instrument))
     }
 
+    /// How many generated tracks exist per instrument, used to gate adding more
+    /// (most instruments allow one; piano allows up to three).
+    private var instrumentCounts: [StudioInstrument: Int] {
+        project.studioTracks
+            .filter { !$0.instrument.isAudio }
+            .reduce(into: [:]) { counts, track in counts[track.instrument, default: 0] += 1 }
+    }
+
     private var existingRecordingIds: Set<UUID> {
         Set(project.studioTracks.compactMap { $0.audioRecordingId })
     }
@@ -59,40 +66,6 @@ struct StudioTabView: View {
             .compactMap { $0.sectionTemplate?.bars }
             .reduce(0, +)
         return max(1, bars)
-    }
-
-    private var timelineSegments: [StudioTimelineSegment] {
-        let orderedItems = project.arrangementItems.sorted { $0.orderIndex < $1.orderIndex }
-        var segments: [StudioTimelineSegment] = []
-        var startBar = 0
-
-        for item in orderedItems {
-            guard let section = item.sectionTemplate else { continue }
-            let bars = max(1, section.bars)
-            let label = item.labelOverride?.isEmpty == false ? item.labelOverride! : section.name
-            segments.append(
-                StudioTimelineSegment(
-                    label: label,
-                    color: section.color,
-                    startBar: startBar,
-                    bars: bars
-                )
-            )
-            startBar += bars
-        }
-
-        if segments.isEmpty {
-            segments.append(
-                StudioTimelineSegment(
-                    label: "Song",
-                    color: SectionColor.purple.color,
-                    startBar: 0,
-                    bars: totalBars
-                )
-            )
-        }
-
-        return segments
     }
 
     var body: some View {
@@ -121,6 +94,7 @@ struct StudioTabView: View {
             if selectedTrackId == nil {
                 selectedTrackId = sortedTracks.first?.id
             }
+            normalizeLegacyPianoOctavesIfNeeded()
             playback.prepare(project: project)
             playback.updateProject(project)
             // Restart playhead timer if still playing (e.g. returning from another tab)
@@ -151,7 +125,7 @@ struct StudioTabView: View {
             }
         }
         .onChange(of: playback.isMetronomeEnabled) { _, _ in
-            needsRebuild = true
+            playback.needsSequenceRebuild = true
         }
         .sheet(isPresented: $showingStylePicker) {
             StudioStylePickerView(
@@ -168,7 +142,7 @@ struct StudioTabView: View {
                             resetDrumPreset: true
                         )
                         updateStudioSyncState(signature: projectStudioSignature, timeline: StudioGenerator.timeline(for: project))
-                        needsRebuild = true
+                        playback.needsSequenceRebuild = true
                         try? modelContext.save()
                     } else {
                         try? modelContext.save()
@@ -187,7 +161,7 @@ struct StudioTabView: View {
         .sheet(isPresented: $showingInstrumentPicker) {
             StudioInstrumentPickerView(
                 availableInstruments: availableInstruments,
-                existingInstruments: existingInstrumentSet,
+                instrumentCounts: instrumentCounts,
                 style: project.studioStyle,
                 beatsPerBar: project.timeTop,
                 timeBottom: project.timeBottom,
@@ -220,7 +194,7 @@ struct StudioTabView: View {
                 timeBottom: project.timeBottom,
                 style: project.studioStyle,
                 playback: playback,
-                onNotesChanged: { needsRebuild = true },
+                onNotesChanged: { playback.needsSequenceRebuild = true },
                 onPlay: handlePlay,
                 onPause: playback.pause,
                 onStop: handleStop
@@ -252,7 +226,7 @@ struct StudioTabView: View {
                     tracks: sortedTracks,
                     style: project.studioStyle,
                     selectedTrackId: $selectedTrackId,
-                    onTrackStructureChange: { needsRebuild = true },
+                    onTrackStructureChange: { playback.needsSequenceRebuild = true },
                     onMixChange: applyMixState,
                     onEffectsChange: applyEffects,
                     onDelete: deleteTrack,
@@ -275,29 +249,8 @@ struct StudioTabView: View {
                 .padding(.trailing, DesignSystem.Spacing.lg)
                 .padding(.bottom, DesignSystem.Spacing.sm)
         }
-
-        if hasSections {
-            // Fixed timeline at bottom
-            StudioTimelineView(
-                segments: timelineSegments,
-                beatsPerBar: project.timeTop,
-                totalBars: totalBars,
-                currentBeat: playback.currentBeat,
-                isPlaying: playback.isPlaying,
-                accentColor: project.studioStyle?.accentColor ?? SectionColor.purple.color,
-                isMetronomeEnabled: $playback.isMetronomeEnabled,
-                isLooping: $playback.isLooping,
-                liveBeat: { playback.livePositionBeats() },
-                onPlay: handlePlay,
-                onPause: playback.pause,
-                onStop: handleStop,
-                onSeek: { beat in
-                    playback.seek(to: beat)
-                }
-            )
-            .padding(.horizontal, DesignSystem.Spacing.md)
-            .padding(.vertical, DesignSystem.Spacing.sm)
-        }
+        // The transport now lives only in the shared bottom-accessory mini player
+        // (see MiniTransportView / ProjectDetailView), shown on every tab.
     }
 
     private var addTrackFAB: some View {
@@ -365,7 +318,7 @@ struct StudioTabView: View {
         updateStudioSyncState(signature: projectStudioSignature, timeline: StudioGenerator.timeline(for: project))
         project.updatedAt = Date()
         try? modelContext.save()
-        needsRebuild = true
+        playback.needsSequenceRebuild = true
         playback.stop(resetPosition: true)
     }
 
@@ -385,11 +338,15 @@ struct StudioTabView: View {
     private func addInstrumentTrack(_ instrument: StudioInstrument, choice: TrackStyleChoice = TrackStyleChoice()) {
         guard hasSections else { return }
         guard let style = project.studioStyle else { return }
-        guard !existingInstrumentSet.contains(instrument) else { return }
+        let existingCount = instrumentCounts[instrument, default: 0]
+        guard existingCount < instrument.maxStudioTracks else { return }
 
         let orderIndex = (project.studioTracks.map(\.orderIndex).max() ?? -1) + 1
+        // When more than one of an instrument is allowed (e.g. piano), number the
+        // extra tracks so they're distinguishable in the list.
+        let trackName = existingCount == 0 ? instrument.title : "\(instrument.title) \(existingCount + 1)"
         let track = StudioTrack(
-            name: instrument.title,
+            name: trackName,
             instrument: instrument,
             orderIndex: orderIndex
         )
@@ -405,7 +362,8 @@ struct StudioTabView: View {
         }
 
         // Set the musically correct default octave for this instrument before generating.
-        track.octaveShift = StudioGenerator.defaultOctaveShift(for: instrument, variant: track.variant)
+        // The generator owns per-instrument defaults so playing-style regeneration stays aligned.
+        track.octaveShift = StudioGenerator.initialOctaveShift(for: instrument, variant: track.variant)
         // Tracks added individually should get the same default humanization
         // as style-generated ones (otherwise they play perfectly quantized).
         track.regenerateNaturalness = StudioGenerator.defaultNaturalness(for: instrument)
@@ -443,7 +401,7 @@ struct StudioTabView: View {
         updateStudioSyncState(signature: projectStudioSignature, timeline: StudioGenerator.timeline(for: project))
         project.updatedAt = Date()
         try? modelContext.save()
-        needsRebuild = true
+        playback.needsSequenceRebuild = true
     }
 
     private func deleteTrack(_ track: StudioTrack) {
@@ -468,7 +426,7 @@ struct StudioTabView: View {
         }
         project.updatedAt = Date()
         try? modelContext.save()
-        needsRebuild = true
+        playback.needsSequenceRebuild = true
     }
 
     private func reorderTracks(_ source: IndexSet, _ destination: Int) {
@@ -479,7 +437,7 @@ struct StudioTabView: View {
         }
         project.updatedAt = Date()
         try? modelContext.save()
-        needsRebuild = true
+        playback.needsSequenceRebuild = true
     }
 
     private func addAudioTrack(from recording: Recording) {
@@ -497,7 +455,7 @@ struct StudioTabView: View {
         selectedTrackId = track.id
         project.updatedAt = Date()
         try? modelContext.save()
-        needsRebuild = true
+        playback.needsSequenceRebuild = true
     }
 
     private func handlePlay() {
@@ -505,13 +463,7 @@ struct StudioTabView: View {
             showingNoSectionsAlert = true
             return
         }
-        if needsRebuild {
-            playback.rebuildSequence(project: project)
-            needsRebuild = false
-        } else {
-            playback.updateProject(project)
-        }
-        playback.play()
+        playback.playRebuildingIfNeeded(project: project)
     }
 
     private func handleStop() {
@@ -527,7 +479,7 @@ struct StudioTabView: View {
         if playback.isPlaying {
             playback.stop(resetPosition: false)
         }
-        needsRebuild = true
+        playback.needsSequenceRebuild = true
         playback.prepare(project: project)
         playback.updateProject(project)
     }
@@ -631,7 +583,29 @@ struct StudioTabView: View {
 
         updateStudioSyncState(signature: signature, timeline: timeline)
         try? modelContext.save()
-        needsRebuild = true
+        playback.needsSequenceRebuild = true
+    }
+
+    private func normalizeLegacyPianoOctavesIfNeeded() {
+        guard let style = project.studioStyle else { return }
+
+        let pianoTracks = project.studioTracks.filter {
+            $0.instrument == .piano && $0.octaveShift < 0
+        }
+        guard !pianoTracks.isEmpty else { return }
+
+        for track in pianoTracks {
+            track.octaveShift = StudioGenerator.initialOctaveShift(for: .piano, variant: track.variant)
+        }
+
+        StudioGenerator.regenerateNotes(
+            for: project,
+            style: style,
+            modelContext: modelContext
+        )
+        project.updatedAt = Date()
+        try? modelContext.save()
+        playback.needsSequenceRebuild = true
     }
 
     private func updateStudioSyncState(signature: String, timeline: (chords: [StudioGenerator.ChordSpan], totalBars: Int)) {
@@ -799,22 +773,6 @@ struct StudioEmptyState: View {
     }
 }
 
-struct StudioTimelineSegment: Identifiable {
-    let id: String
-    let label: String
-    let color: Color
-    let startBar: Int
-    let bars: Int
-    
-    init(label: String, color: Color, startBar: Int, bars: Int) {
-        self.id = "\(startBar)_\(bars)_\(label)"
-        self.label = label
-        self.color = color
-        self.startBar = startBar
-        self.bars = bars
-    }
-}
-
 struct StudioBarSectionInfo: Identifiable {
     let barIndex: Int
     let sectionLabel: String
@@ -822,191 +780,6 @@ struct StudioBarSectionInfo: Identifiable {
     let chordLabel: String?
 
     var id: Int { barIndex }
-}
-
-struct StudioTimelineView: View {
-    let segments: [StudioTimelineSegment]
-    let beatsPerBar: Int
-    let totalBars: Int
-    let currentBeat: Double
-    let isPlaying: Bool
-    let accentColor: Color
-    @Binding var isMetronomeEnabled: Bool
-    var isLooping: Binding<Bool>? = nil
-    var liveBeat: (() -> Double)? = nil
-    let onPlay: () -> Void
-    let onPause: () -> Void
-    let onStop: () -> Void
-    let onSeek: (Double) -> Void
-    @State private var isScrubbing = false
-    @State private var scrubBeat: Double = 0
-
-    private var maxBeats: Double {
-        Double(max(1, totalBars * beatsPerBar))
-    }
-
-    private var displayedBeat: Double {
-        isScrubbing ? scrubBeat : currentBeat
-    }
-
-    private var currentBarIndex: Int {
-        Int(displayedBeat / Double(beatsPerBar))
-    }
-
-    private var currentSection: StudioTimelineSegment? {
-        segments.last { segment in
-            let endBar = segment.startBar + segment.bars
-            return currentBarIndex >= segment.startBar && currentBarIndex < endBar
-        }
-    }
-
-    private var timeLabel: String {
-        let bar = max(1, currentBarIndex + 1)
-        let beat = max(1, Int(displayedBeat.truncatingRemainder(dividingBy: Double(beatsPerBar))) + 1)
-        return "Bar \(bar) · Beat \(beat)"
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(currentSection?.label ?? "Timeline")
-                        .font(DesignSystem.Typography.title3)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    Text(timeLabel.uppercased())
-                        .font(DesignSystem.Typography.nano)
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                        .tracking(0.6)
-                }
-
-                Spacer()
-
-                HStack(spacing: 8) {
-                    TransportCircleButton(
-                        icon: "metronome.fill",
-                        isActive: isMetronomeEnabled,
-                        accentColor: accentColor
-                    ) {
-                        isMetronomeEnabled.toggle()
-                        haptic(.selection)
-                    }
-
-                    if let isLooping {
-                        TransportCircleButton(
-                            icon: "repeat",
-                            isActive: isLooping.wrappedValue,
-                            accentColor: accentColor
-                        ) {
-                            isLooping.wrappedValue.toggle()
-                            haptic(.selection)
-                        }
-                    }
-
-                    TransportCircleButton(
-                        icon: "stop.fill",
-                        isActive: false,
-                        accentColor: accentColor,
-                        action: onStop
-                    )
-
-                    Button {
-                        isPlaying ? onPause() : onPlay()
-                        haptic(.light)
-                    } label: {
-                        Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                            .font(DesignSystem.Typography.title3)
-                            .foregroundStyle(DesignSystem.Colors.textWhite)
-                            .contentTransition(.symbolEffect(.replace))
-                            .frame(width: 40, height: 40)
-                            .background(
-                                Circle()
-                                    .fill(accentColor)
-                            )
-                            .shadow(color: accentColor.opacity(0.25), radius: 8, x: 0, y: 4)
-                    }
-                }
-            }
-
-            TimelineView(.animation(minimumInterval: nil, paused: !isPlaying || isScrubbing)) { _ in
-                progressBar
-            }
-            .frame(height: 20)
-        }
-        .padding(14)
-        .glassEffect(.regular, in: .rect(cornerRadius: DesignSystem.CornerRadius.xxl))
-    }
-
-    /// Beat used to render the progress bar; reads the live sequencer
-    /// position at frame rate while playing.
-    private var renderedBeat: Double {
-        if isScrubbing { return scrubBeat }
-        if isPlaying, let liveBeat { return liveBeat() }
-        return currentBeat
-    }
-
-    private var progressBar: some View {
-        GeometryReader { geo in
-            let barWidth = geo.size.width / CGFloat(max(1, totalBars))
-            let progressX = CGFloat(renderedBeat / Double(beatsPerBar)) * barWidth
-
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(DesignSystem.Colors.backgroundTertiary.opacity(0.6))
-                    .frame(height: 18)
-                    .overlay(
-                        Capsule()
-                            .stroke(DesignSystem.Colors.borderSubtle, lineWidth: 1)
-                    )
-
-                ForEach(segments) { segment in
-                    let width = CGFloat(segment.bars) * barWidth
-                    let x = CGFloat(segment.startBar) * barWidth
-                    Capsule()
-                        .fill(segment.color.opacity(0.25))
-                        .frame(width: width, height: 18)
-                        .overlay(
-                            Capsule()
-                                .stroke(segment.color.opacity(0.5), lineWidth: 1)
-                        )
-                        .offset(x: x)
-                }
-
-                Capsule()
-                    .fill(accentColor)
-                    .frame(width: max(2, progressX), height: 18)
-
-                ZStack {
-                    Circle()
-                        .fill(DesignSystem.Colors.backgroundSecondary)
-                        .frame(width: 18, height: 18)
-                        .shadow(color: accentColor.opacity(0.25), radius: 4, x: 0, y: 2)
-                    Circle()
-                        .stroke(accentColor, lineWidth: 2)
-                        .frame(width: 18, height: 18)
-                    Circle()
-                        .fill(accentColor)
-                        .frame(width: 4, height: 4)
-                }
-                .offset(x: max(0, min(progressX - 9, geo.size.width - 18)))
-            }
-            .contentShape(Rectangle().inset(by: -12))
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        let clampedX = max(0, min(value.location.x, geo.size.width))
-                        let beat = Double(clampedX / barWidth) * Double(beatsPerBar)
-                        scrubBeat = min(beat, maxBeats)
-                        isScrubbing = true
-                    }
-                    .onEnded { _ in
-                        if isScrubbing {
-                            onSeek(scrubBeat)
-                        }
-                        isScrubbing = false
-                    }
-            )
-        }
-    }
 }
 
 /// Tiny live RMS meter shown next to the track name during playback.
@@ -1183,11 +956,8 @@ struct StudioTrackEditorView: View {
     let onPlay: () -> Void
     let onPause: () -> Void
     let onStop: () -> Void
-    @State private var showingRegenerateOptions = false
+    @State private var showingPlayingStyle = false
     @State private var showingCustomizeNotes = false
-    @State private var regenerateIntensity: Double = 0.5
-    @State private var regenerateComplexity: Double = 0.5
-    @State private var regenerateNaturalness: Double = 0.0
     @State private var effectsDebounceTask: Task<Void, Never>?
 
     private var supportsNoteEditing: Bool {
@@ -1350,17 +1120,27 @@ struct StudioTrackEditorView: View {
             }
         }
         .background(DesignSystem.Colors.background.ignoresSafeArea())
-        .sheet(isPresented: $showingRegenerateOptions) {
-            RegenerateOptionsView(
-                trackName: track.name,
-                intensity: $regenerateIntensity,
-                complexity: $regenerateComplexity,
-                naturalness: $regenerateNaturalness,
-                onRegenerate: executeRegenerate,
-                onCancel: {
-                    showingRegenerateOptions = false
+        .sheet(isPresented: $showingPlayingStyle) {
+            NavigationStack {
+                TrackStyleStepView(
+                    instrument: track.instrument,
+                    style: style,
+                    beatsPerBar: beatsPerBar,
+                    timeBottom: timeBottom,
+                    initialChoice: currentStyleChoice,
+                    confirmTitle: "Update Style",
+                    onConfirm: { choice in
+                        applyPlayingStyle(choice)
+                        showingPlayingStyle = false
+                    }
+                )
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { showingPlayingStyle = false }
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    }
                 }
-            )
+            }
         }
         .fullScreenCover(isPresented: $showingCustomizeNotes) {
             CustomizeNotesView(
@@ -1501,12 +1281,13 @@ struct StudioTrackEditorView: View {
 
                 if !track.instrument.isAudio {
                     Button {
-                        openRegenerateOptions()
+                        guard canRegenerate else { return }
+                        showingPlayingStyle = true
                     } label: {
                         HStack(spacing: 6) {
-                            Image(systemName: "sparkles")
+                            Image(systemName: "slider.horizontal.3")
                                 .font(DesignSystem.Typography.caption)
-                            Text("Regenerate")
+                            Text("Change Playing Style")
                                 .font(DesignSystem.Typography.caption)
                         }
                         .foregroundStyle(DesignSystem.Colors.textPrimary)
@@ -1927,16 +1708,35 @@ struct StudioTrackEditorView: View {
         }
     }
 
-    private func openRegenerateOptions() {
-        guard canRegenerate else { return }
-        regenerateIntensity = track.regenerateIntensity
-        regenerateComplexity = track.regenerateComplexity
-        regenerateNaturalness = track.regenerateNaturalness
-        showingRegenerateOptions = true
+    /// The track's current playing style, used to pre-select the editor's
+    /// "Change Playing Style" sheet.
+    private var currentStyleChoice: TrackStyleChoice {
+        TrackStyleChoice(
+            comping: track.compingPattern,
+            bass: track.bassPattern,
+            drumPreset: track.drumPreset,
+            leadComplexity: track.regenerateComplexity
+        )
     }
 
-    private func executeRegenerate() {
+    /// Applies a new playing style to the track and regenerates its notes,
+    /// keeping the track's existing intensity/naturalness feel. Mirrors the
+    /// add-instrument flow so adding and editing share one code path.
+    private func applyPlayingStyle(_ choice: TrackStyleChoice) {
         guard let style else { return }
+
+        // Persist the chosen playing style on the track.
+        track.compingPattern = choice.comping
+        track.bassPattern = choice.bass
+        if let density = choice.leadComplexity {
+            track.regenerateComplexity = density
+        }
+        if track.instrument == .drums, let preset = choice.drumPreset {
+            track.drumPreset = preset
+        }
+        if track.instrument == .piano, track.octaveShift < 0 {
+            track.octaveShift = StudioGenerator.initialOctaveShift(for: .piano, variant: track.variant)
+        }
 
         for note in track.notes {
             modelContext.delete(note)
@@ -1950,11 +1750,12 @@ struct StudioTrackEditorView: View {
             drumPreset: track.drumPreset,
             variant: track.variant,
             octaveShift: track.octaveShift,
-            intensity: regenerateIntensity,
-            complexity: regenerateComplexity,
-            naturalness: regenerateNaturalness,
-            arpeggioEnabled: false,
+            intensity: track.regenerateIntensity,
+            complexity: track.regenerateComplexity,
+            naturalness: track.regenerateNaturalness,
+            arpeggioEnabled: track.regenerateArpeggioEnabled,
             arpeggioRate: track.regenerateArpeggioRate,
+            arpeggioPattern: track.regenerateArpeggioPattern,
             compingPattern: track.compingPattern,
             bassPattern: track.bassPattern,
             arrangement: StudioGenerator.ArrangementContext(
@@ -1968,14 +1769,10 @@ struct StudioTrackEditorView: View {
             modelContext.insert(note)
         }
 
-        track.regenerateIntensity = regenerateIntensity
-        track.regenerateComplexity = regenerateComplexity
-        track.regenerateNaturalness = regenerateNaturalness
         project.updatedAt = Date()
         try? modelContext.save()
         onNotesChanged()
         onStop()
-        showingRegenerateOptions = false
     }
 
     private var playbackHud: some View {
@@ -3765,7 +3562,7 @@ struct TrackStyleChoice {
 
 struct StudioInstrumentPickerView: View {
     let availableInstruments: [StudioInstrument]
-    let existingInstruments: Set<StudioInstrument>
+    let instrumentCounts: [StudioInstrument: Int]
     let style: StudioStyle?
     let beatsPerBar: Int
     let timeBottom: Int
@@ -3779,7 +3576,8 @@ struct StudioInstrumentPickerView: View {
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(availableInstruments) { instrument in
-                        let isAdded = existingInstruments.contains(instrument)
+                        let count = instrumentCounts[instrument, default: 0]
+                        let isAdded = count >= instrument.maxStudioTracks
                         NavigationLink {
                             TrackStyleStepView(
                                 instrument: instrument,
@@ -3792,7 +3590,7 @@ struct StudioInstrumentPickerView: View {
                                 }
                             )
                         } label: {
-                            instrumentCard(instrument, isAdded: isAdded)
+                            instrumentCard(instrument, count: count, isAdded: isAdded)
                         }
                         .buttonStyle(.plain)
                         .disabled(isAdded)
@@ -3813,8 +3611,17 @@ struct StudioInstrumentPickerView: View {
         }
     }
 
-    private func instrumentCard(_ instrument: StudioInstrument, isAdded: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+    private func instrumentCard(_ instrument: StudioInstrument, count: Int, isAdded: Bool) -> some View {
+        let allowsMultiple = instrument.maxStudioTracks > 1
+        let subtitle: String
+        if isAdded {
+            subtitle = allowsMultiple ? "Max \(instrument.maxStudioTracks) added" : "Already added"
+        } else if allowsMultiple {
+            subtitle = count > 0 ? "Added \(count)/\(instrument.maxStudioTracks) · add more" : "Up to \(instrument.maxStudioTracks)"
+        } else {
+            subtitle = "Choose a style"
+        }
+        return VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: instrument.icon)
                     .font(DesignSystem.Typography.title3)
@@ -3826,7 +3633,7 @@ struct StudioInstrumentPickerView: View {
             }
             Text(instrument.title)
                 .font(DesignSystem.Typography.headline)
-            Text(isAdded ? "Already added" : "Choose a style")
+            Text(subtitle)
                 .font(DesignSystem.Typography.caption)
                 .foregroundStyle(DesignSystem.Colors.textSecondary)
         }
@@ -3852,6 +3659,10 @@ struct TrackStyleStepView: View {
     let style: StudioStyle?
     let beatsPerBar: Int
     let timeBottom: Int
+    /// Pre-selected style when editing an existing track; nil pre-selects the
+    /// recommended style (used when adding a new instrument).
+    var initialChoice: TrackStyleChoice? = nil
+    var confirmTitle: String = "Add to Studio"
     let onConfirm: (TrackStyleChoice) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -3886,6 +3697,16 @@ struct TrackStyleStepView: View {
             case .flowing: return 0.6
             case .busy: return 0.85
             }
+        }
+
+        /// Maps a stored complexity value back to the closest named feel so the
+        /// editor can pre-select the track's current style.
+        init(closestTo complexity: Double?) {
+            guard let complexity else { self = .flowing; return }
+            let options: [LeadFeel] = [.sparse, .flowing, .busy]
+            self = options.min(by: {
+                abs(($0.complexity ?? 0) - complexity) < abs(($1.complexity ?? 0) - complexity)
+            }) ?? .flowing
         }
     }
 
@@ -3941,7 +3762,7 @@ struct TrackStyleStepView: View {
             Button {
                 onConfirm(buildChoice())
             } label: {
-                Text("Add to Studio")
+                Text(confirmTitle)
                     .font(DesignSystem.Typography.headline)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, DesignSystem.Spacing.xxs)
@@ -3953,11 +3774,23 @@ struct TrackStyleStepView: View {
             .background(.bar)
         }
         .onAppear {
-            // Pre-select the instrument's recommended playing style.
-            comping = recommendedComping
-            bass = recommendedBass
-            leadFeel = .flowing
-            if isDrums { drumPreset = drumPresets.first ?? .basic }
+            if let initialChoice {
+                // Editing: pre-select the track's current playing style.
+                comping = initialChoice.comping
+                bass = initialChoice.bass
+                if let preset = initialChoice.drumPreset {
+                    drumPreset = preset
+                } else if isDrums {
+                    drumPreset = drumPresets.first ?? .basic
+                }
+                leadFeel = LeadFeel(closestTo: initialChoice.leadComplexity)
+            } else {
+                // Adding: pre-select the instrument's recommended playing style.
+                comping = recommendedComping
+                bass = recommendedBass
+                leadFeel = .flowing
+                if isDrums { drumPreset = drumPresets.first ?? .basic }
+            }
         }
     }
 
@@ -4074,153 +3907,4 @@ struct StudioRecordingPicker: View {
             }
         }
             }
-}
-
-struct RegenerateOptionsView: View {
-    let trackName: String
-    @Binding var intensity: Double
-    @Binding var complexity: Double
-    @Binding var naturalness: Double
-    let onRegenerate: () -> Void
-    let onCancel: () -> Void
-    
-    var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(spacing: 24) {
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Regenerating: \(trackName)")
-                            .font(DesignSystem.Typography.headline)
-                            .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    }
-                    
-                    // Intensity Slider
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Image(systemName: "waveform")
-                                .foregroundStyle(DesignSystem.Colors.primary)
-                            Text("Intensity")
-                                .font(DesignSystem.Typography.subheadline)
-                                .foregroundStyle(DesignSystem.Colors.textPrimary)
-                            Spacer()
-                            Text("\(Int(intensity * 100))%")
-                                .font(DesignSystem.Typography.caption.monospacedDigit())
-                                .foregroundStyle(DesignSystem.Colors.textSecondary)
-                        }
-                        
-                        Slider(value: $intensity, in: 0...1)
-                            .tint(DesignSystem.Colors.primary)
-                        
-                        HStack {
-                            Text("Minimal")
-                                .font(DesignSystem.Typography.caption2)
-                                .foregroundStyle(DesignSystem.Colors.textSecondary)
-                            Spacer()
-                            Text("Maximum")
-                                .font(DesignSystem.Typography.caption2)
-                                .foregroundStyle(DesignSystem.Colors.textSecondary)
-                        }
-                        
-                        Text("Controls hit frequency and velocity")
-                            .font(DesignSystem.Typography.caption2)
-                            .foregroundStyle(DesignSystem.Colors.textTertiary)
-                    }
-                    
-                    // Complexity Slider
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Image(systemName: "music.note.list")
-                                .foregroundStyle(DesignSystem.Colors.info)
-                            Text("Complexity")
-                                .font(DesignSystem.Typography.subheadline)
-                                .foregroundStyle(DesignSystem.Colors.textPrimary)
-                            Spacer()
-                            Text("\(Int(complexity * 100))%")
-                                .font(DesignSystem.Typography.caption.monospacedDigit())
-                                .foregroundStyle(DesignSystem.Colors.textSecondary)
-                        }
-                        
-                        Slider(value: $complexity, in: 0...1)
-                            .tint(DesignSystem.Colors.accent)
-                        
-                        HStack {
-                            Text("Simple")
-                                .font(DesignSystem.Typography.caption2)
-                                .foregroundStyle(DesignSystem.Colors.textSecondary)
-                            Spacer()
-                            Text("Complex")
-                                .font(DesignSystem.Typography.caption2)
-                                .foregroundStyle(DesignSystem.Colors.textSecondary)
-                        }
-                        
-                        Text("Controls note variations and rhythmic patterns")
-                            .font(DesignSystem.Typography.caption2)
-                            .foregroundStyle(DesignSystem.Colors.textTertiary)
-                    }
-
-                    // Naturalness Slider
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Image(systemName: "tuningfork")
-                                .foregroundStyle(DesignSystem.Colors.warning)
-                            Text("Naturalness")
-                                .font(DesignSystem.Typography.subheadline)
-                                .foregroundStyle(DesignSystem.Colors.textPrimary)
-                            Spacer()
-                            Text("\(Int(naturalness * 100))%")
-                                .font(DesignSystem.Typography.caption.monospacedDigit())
-                                .foregroundStyle(DesignSystem.Colors.textSecondary)
-                        }
-                        
-                        Slider(value: $naturalness, in: 0...1)
-                            .tint(DesignSystem.Colors.warning)
-                        
-                        HStack {
-                            Text("Tight")
-                                .font(DesignSystem.Typography.caption2)
-                                .foregroundStyle(DesignSystem.Colors.textSecondary)
-                            Spacer()
-                            Text("Loose")
-                                .font(DesignSystem.Typography.caption2)
-                                .foregroundStyle(DesignSystem.Colors.textSecondary)
-                        }
-                        
-                        Text("Adds subtle timing and velocity variation")
-                            .font(DesignSystem.Typography.caption2)
-                            .foregroundStyle(DesignSystem.Colors.textTertiary)
-                    }
-
-                    Text("Tip: the playing style (arpeggio, walking bass, groove…) is chosen when you add the instrument.")
-                        .font(DesignSystem.Typography.caption2)
-                        .foregroundStyle(DesignSystem.Colors.textTertiary)
-                }
-                .padding(20)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(DesignSystem.Colors.surfaceSecondary)
-                )
-                
-                Spacer(minLength: 12)
-                
-                // Buttons
-                HStack(spacing: 12) {
-                    AppButton(title: "Cancel", kind: .secondary) {
-                        onCancel()
-                    }
-                    
-                    AppButton(title: "Regenerate", icon: "sparkles", kind: .primary(DesignSystem.Colors.primary)) {
-                        onRegenerate()
-                    }
-                }
-            }
-            .padding(24)
-            .background(
-                DesignSystem.Colors.background
-            )
-            .navigationTitle("Regenerate Options")
-            .navigationBarTitleDisplayMode(.inline)
-        }
-        .presentationDetents([.height(680)])
-    }
-
 }

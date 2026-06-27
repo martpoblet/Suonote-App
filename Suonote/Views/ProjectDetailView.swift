@@ -51,28 +51,14 @@ struct ProjectDetailView: View {
     
     // MARK: - Body
     var body: some View {
-        TabView(selection: $selectedTab) {
-            Tab(ProjectTab.compose.title, systemImage: ProjectTab.compose.icon, value: .compose) {
-                ProjectTabContainer { ComposeTabView(project: project) }
-            }
-            Tab(ProjectTab.studio.title, systemImage: ProjectTab.studio.icon, value: .studio) {
-                ProjectTabContainer { StudioTabView(project: project) }
-            }
-            Tab(ProjectTab.lyrics.title, systemImage: ProjectTab.lyrics.icon, value: .lyrics) {
-                ProjectTabContainer { LyricsTabView(project: project) }
-            }
-            Tab(ProjectTab.record.title, systemImage: ProjectTab.record.icon, value: .record) {
-                ProjectTabContainer { RecordingsTabView(project: project) }
-            }
-        }
-        .tint(selectedTab.tintColor)
-        .tabBarMinimizeBehavior(.onScrollDown)
-        .tabViewBottomAccessory {
-            if selectedTab != .studio {
+        projectTabView
+            // Single transport for the whole project: the Studio-styled mini
+            // player shows on every tab (always-applied accessory means the
+            // TabView is never rebuilt → no stutter when switching tabs).
+            .tabViewBottomAccessory {
                 MiniTransportView(project: project)
             }
-        }
-        .environmentObject(playback)
+            .environmentObject(playback)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             // MARK: Toolbar - Title
@@ -126,7 +112,26 @@ struct ProjectDetailView: View {
         .onChange(of: project.updatedAt) { _, _ in
             updateWidgetData()
         }
-        
+
+    }
+
+    private var projectTabView: some View {
+        TabView(selection: $selectedTab) {
+            Tab(ProjectTab.compose.title, systemImage: ProjectTab.compose.icon, value: .compose) {
+                ProjectTabContainer { ComposeTabView(project: project) }
+            }
+            Tab(ProjectTab.studio.title, systemImage: ProjectTab.studio.icon, value: .studio) {
+                ProjectTabContainer { StudioTabView(project: project) }
+            }
+            Tab(ProjectTab.lyrics.title, systemImage: ProjectTab.lyrics.icon, value: .lyrics) {
+                ProjectTabContainer { LyricsTabView(project: project) }
+            }
+            Tab(ProjectTab.record.title, systemImage: ProjectTab.record.icon, value: .record) {
+                ProjectTabContainer { RecordingsTabView(project: project) }
+            }
+        }
+        .tint(selectedTab.tintColor)
+        .tabBarMinimizeBehavior(.onScrollDown)
     }
 
     // MARK: - Helper Methods

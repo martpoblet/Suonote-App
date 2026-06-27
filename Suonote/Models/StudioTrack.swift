@@ -200,7 +200,16 @@ enum StudioInstrument: String, Codable, CaseIterable, Identifiable {
     var isAudio: Bool {
         self == .audio
     }
-    
+
+    /// How many generated tracks of this instrument a project may contain.
+    /// Most instruments are unique; piano can be layered up to three times.
+    var maxStudioTracks: Int {
+        switch self {
+        case .piano: return 3
+        default: return 1
+        }
+    }
+
     var variants: [InstrumentVariant] {
         SoundFontManager.supportedVariants(for: self)
     }

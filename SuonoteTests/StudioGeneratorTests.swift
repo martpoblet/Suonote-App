@@ -70,6 +70,22 @@ final class StudioGeneratorTests: XCTestCase {
         }
     }
 
+    func testPianoInitialOctaveShiftStartsInLowRegisterAcrossStyles() {
+        let initialShift = StudioGenerator.initialOctaveShift(for: .piano, variant: .acousticPiano)
+        XCTAssertEqual(initialShift, 1)
+
+        for style in StudioStyle.allCases {
+            let range = StudioGenerator.instrumentRange(
+                for: .piano,
+                variant: .acousticPiano,
+                style: style,
+                octaveShift: initialShift
+            )
+            XCTAssertGreaterThanOrEqual(range.lowerBound, 24, "\(style.rawValue) should avoid unstable low piano samples")
+            XCTAssertLessThanOrEqual(range.upperBound, 72, "\(style.rawValue) should keep new piano tracks out of the bright register")
+        }
+    }
+
     // MARK: - Generation from a project
 
     @MainActor
