@@ -74,3 +74,13 @@ RMS (400 ms windows), targeting -20 dBFS. Re-measure whenever the bank changes; 
   - **Register.** Roots stay in A1–A2. The fifth or octave flips below when the root already sits high. Slash chords use the chord's own fifth (A over D/F#, not C#).
 - **`SuonoteBassAmpUnit`** is an in-process AUv3 effect on sampled electric basses (`StudioSoundCatalog.bassAmpDrive`). It adds a parallel path: high-pass at 220 Hz, asymmetric tanh, then two-pole low-pass at 2.8 kHz. That adds ≈ +2.5–3 dB of 600 Hz–3 kHz harmonics, so the bass is heard on phone speakers, and the low end stays clean. It also runs in the sound previewer, where non-bass variants get drive 0, so auditions match the mix.
 - Arranger: light sections keep the bass pick-up in their last bar. Notes humanized a hair before a section boundary now count as part of the section they belong to, both for arranging and for section dynamics.
+
+## v4 — a drummer, not a drum machine
+- **Hi-hats have a hand shape.** Loud on the beat, medium on the "and", soft on the "e" and "a", with a little variation. They used to have two levels.
+- **Ghost notes are musical.** One or two per bar lead into the backbeat and move around bar to bar. Rock plays one every other bar; funk keeps the full sixteenth chatter.
+- **Open hats bark at phrase ends.** Rock opens the "and" of 4 every other bar. Pop and rock choruses open the "and" of 4; funk and EDM open both "and"s.
+- **A fill vocabulary.** The arranger owns every section transition, replacing the groove generator's fixed tom run.
+  - Big fills: 8th→16th snare build, snare roll into toms, tom run.
+  - Phrase and pickup fills: snare 16ths, "ta . ta-ka", snare into toms, quick tom run.
+  - Fills are picked by position so the song doesn't repeat one figure.
+- **Choruses push.** Pop, rock and funk choruses add a kick on the "and" of 2, except on phrase-end bars, and the composed bass follows it.

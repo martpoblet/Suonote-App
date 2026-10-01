@@ -259,8 +259,8 @@ struct ComposeTabView: View {
     private func quickStart() {
         haptic(.success)
         editor.perform(String(localized: "Quick start")) {
-            ComposeChordOps.createSection(in: project, name: "Verse 1", bars: 8, colorHex: SectionPreset.verse.colorHex)
-            ComposeChordOps.createSection(in: project, name: "Chorus", bars: 8, colorHex: SectionPreset.chorus.colorHex)
+            ComposeChordOps.createSection(in: project, name: String(localized: "Verse 1", comment: "Song section name"), bars: 8, colorHex: SectionPreset.verse.colorHex)
+            ComposeChordOps.createSection(in: project, name: String(localized: "Chorus", comment: "Song section name"), bars: 8, colorHex: SectionPreset.chorus.colorHex)
         }
     }
 

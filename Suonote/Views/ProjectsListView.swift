@@ -117,11 +117,20 @@ struct ProjectsListView: View {
             Text("Its sections, lyrics and Studio parts will be removed. This can't be undone.")
         }
         .onOpenURL { url in
+            // suonote://project/<id>[/compose|studio|lyrics|record] (widget links)
+            let parts = url.pathComponents.dropFirst()
             guard url.scheme == "suonote", url.host == "project",
-                  let idString = url.pathComponents.dropFirst().first,
+                  let idString = parts.first,
                   let projectId = UUID(uuidString: idString),
                   let project = allProjects.first(where: { $0.id == projectId }) else { return }
-            pushedRoute = LibraryRoute(project: project)
+            let tab: ProjectDetailTab
+            switch parts.dropFirst().first {
+            case "studio": tab = .studio
+            case "lyrics": tab = .lyrics
+            case "record": tab = .record
+            default: tab = .compose
+            }
+            pushedRoute = LibraryRoute(project: project, tab: tab)
         }
     }
 

@@ -115,7 +115,7 @@ extension SectionTemplate {
         let result = (0..<barCount).map { bar -> String in
             let symbols = (grouped[bar] ?? [])
                 .sorted { $0.beatOffset < $1.beatOffset }
-                .map { $0.display.isEmpty ? $0.root : $0.display }
+                .map { $0.display.isEmpty ? $0.root : $0.localizedDisplay }
             return symbols.isEmpty ? "–" : symbols.joined(separator: " ")
         }
         return result

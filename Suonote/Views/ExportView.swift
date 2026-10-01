@@ -620,7 +620,7 @@ class TextExporter {
                     
                     if !barChords.isEmpty {
                         text += "  " + String(localized: "Bar \(bar + 1):") + " "
-                        text += barChords.map { $0.display }.joined(separator: " - ")
+                        text += barChords.map { $0.localizedDisplay }.joined(separator: " - ")
                         text += "\n"
                     }
                 }
@@ -694,7 +694,7 @@ class TextExporter {
                     
                     if !barChords.isEmpty {
                         text += "  " + String(localized: "Bar \(bar + 1):") + " "
-                        text += barChords.map { String(localized: "\($0.display) (beat \($0.beatOffset + 1), \($0.duration)b)") }
+                        text += barChords.map { String(localized: "\($0.localizedDisplay) (beat \($0.beatOffset + 1), \($0.duration)b)") }
                             .joined(separator: ", ")
                         text += "\n"
                     }

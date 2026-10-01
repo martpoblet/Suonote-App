@@ -1,248 +1,352 @@
 import WidgetKit
 import SwiftUI
 
-// MARK: - App Colors (mirrored from DesignSystem for widget target)
-
-private enum WidgetColors {
-    static let teal = Color(red: 0/255, green: 204/255, blue: 190/255)       // #00CCBE
-    static let tealDark = Color(red: 0/255, green: 175/255, blue: 163/255)   // #00AFA3
-    static let tealLight = Color(red: 143/255, green: 233/255, blue: 227/255) // #8FE9E3
-    static let peach = Color(red: 227/255, green: 168/255, blue: 148/255)    // #E3A894
-    static let charcoal = Color(red: 47/255, green: 46/255, blue: 53/255)    // #2F2E35
-    static let gray = Color(red: 110/255, green: 116/255, blue: 128/255)     // #6E7480
-    static let surface = Color(red: 246/255, green: 247/255, blue: 251/255)  // #F6F7FB
-    static let background = Color(red: 251/255, green: 250/255, blue: 253/255) // #FBFAFD
-    static let border = Color(red: 227/255, green: 230/255, blue: 240/255)   // #E3E6F0
-}
-
-// MARK: - Suonote Logo
-
-private struct SuonoteLogoView: View {
-    let height: CGFloat
-
-    var body: some View {
-        Image("WidgetLogo")
-            .resizable()
-            .scaledToFit()
-            .frame(height: height)
-    }
-}
-
-// MARK: - Relative Time Formatter (minutes minimum)
-
-private func relativeTimeString(from date: Date) -> String {
-    let seconds = Int(Date.now.timeIntervalSince(date))
-    let minutes = seconds / 60
-    let hours = minutes / 60
-    let days = hours / 24
-
-    if days > 0 {
-        return days == 1 ? "1 day ago" : "\(days) days ago"
-    } else if hours > 0 {
-        return hours == 1 ? "1 hr ago" : "\(hours) hrs ago"
-    } else if minutes > 0 {
-        return minutes == 1 ? "1 min ago" : "\(minutes) min ago"
-    } else {
-        return "Just now"
-    }
-}
-
-// MARK: - Timeline Entry
+// MARK: - Timeline
 
 struct SuonoteEntry: TimelineEntry {
     let date: Date
-    let projectId: String?
-    let projectName: String
-    let keyRoot: String
-    let keyMode: String
-    let bpm: Int
-    let sectionCount: Int
-    let lastEdited: Date
-
-    var deepLinkURL: URL? {
-        guard let projectId else { return nil }
-        return URL(string: "suonote://project/\(projectId)")
-    }
+    /// nil before the first song has been opened.
+    let song: WidgetSong?
 }
-
-// MARK: - Provider
 
 struct SuonoteProvider: TimelineProvider {
 
     func placeholder(in context: Context) -> SuonoteEntry {
-        SuonoteEntry(
-            date: .now,
-            projectId: nil,
-            projectName: "My Song",
-            keyRoot: "C",
-            keyMode: "Major",
-            bpm: 120,
-            sectionCount: 4,
-            lastEdited: .now
-        )
+        SuonoteEntry(date: .now, song: .sample)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (SuonoteEntry) -> Void) {
-        completion(placeholder(in: context))
+        completion(SuonoteEntry(date: .now, song: context.isPreview ? .sample : (WidgetSong.load() ?? .sample)))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<SuonoteEntry>) -> Void) {
-        let entry = loadLatestProject() ?? placeholder(in: context)
-        // Refresh every 15 minutes so relative time stays accurate
-        let timeline = Timeline(entries: [entry], policy: .after(.now.addingTimeInterval(60 * 15)))
-        completion(timeline)
-    }
-
-    private func loadLatestProject() -> SuonoteEntry? {
-        guard let defaults = UserDefaults(suiteName: "group.MartinCode.Suonote.shared"),
-              let name = defaults.string(forKey: "widget_projectName") else {
-            return nil
-        }
-        return SuonoteEntry(
-            date: .now,
-            projectId: defaults.string(forKey: "widget_projectId"),
-            projectName: name,
-            keyRoot: defaults.string(forKey: "widget_keyRoot") ?? "C",
-            keyMode: defaults.string(forKey: "widget_keyMode") ?? "Major",
-            bpm: defaults.integer(forKey: "widget_bpm"),
-            sectionCount: defaults.integer(forKey: "widget_sectionCount"),
-            lastEdited: defaults.object(forKey: "widget_lastEdited") as? Date ?? .now
-        )
+        // The app reloads the widget whenever the song changes; refresh now
+        // and then so "Edited … ago" stays honest.
+        let entry = SuonoteEntry(date: .now, song: WidgetSong.load())
+        completion(Timeline(entries: [entry], policy: .after(.now.addingTimeInterval(30 * 60))))
     }
 }
 
-// MARK: - Widget Views
+// MARK: - Views
 
 struct SuonoteWidgetEntryView: View {
-    var entry: SuonoteEntry
-    @Environment(\.widgetFamily) var family
+    let entry: SuonoteEntry
+    @Environment(\.widgetFamily) private var family
 
     var body: some View {
         Group {
-            switch family {
-            case .systemSmall:
-                smallView
-            case .systemMedium:
-                mediumView
-            default:
-                smallView
+            if let song = entry.song {
+                switch family {
+                case .systemMedium: MediumSongView(song: song, now: entry.date)
+                case .accessoryRectangular: LockScreenSongView(song: song, now: entry.date)
+                default: SmallSongView(song: song)
+                }
+            } else {
+                EmptySongView(isMedium: family == .systemMedium, isAccessory: family == .accessoryRectangular)
             }
         }
-        .widgetURL(entry.deepLinkURL)
-    }
-
-    // MARK: - Small Widget
-
-    private var smallView: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            SuonoteLogoView(height: 14)
-
-            Spacer()
-
-            Text(entry.projectName)
-                .font(.system(size: 16, weight: .bold, design: .rounded))
-                .foregroundStyle(WidgetColors.charcoal)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Spacer().frame(height: 8)
-
-            HStack(spacing: 6) {
-                chipView(icon: "key.fill", text: entry.keyRoot)
-                chipView(icon: "metronome", text: "\(entry.bpm)")
-            }
-        }
-        .padding(14)
         .containerBackground(for: .widget) {
-            WidgetColors.background
-        }
-    }
-
-    // MARK: - Medium Widget
-
-    private var mediumView: some View {
-        HStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 0) {
-                SuonoteLogoView(height: 16)
-
-                Spacer()
-
-                Text(entry.projectName)
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                    .foregroundStyle(WidgetColors.charcoal)
-                    .lineLimit(2)
-
-                Spacer().frame(height: 4)
-
-                Text(relativeTimeString(from: entry.lastEdited))
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .foregroundStyle(WidgetColors.gray)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            VStack(spacing: 8) {
-                statRow(icon: "key.fill", label: "Key", value: "\(entry.keyRoot) \(entry.keyMode)")
-                statRow(icon: "metronome", label: "Tempo", value: "\(entry.bpm) BPM")
-                statRow(icon: "list.bullet", label: "Sections", value: "\(entry.sectionCount)")
-            }
-            .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(WidgetColors.surface)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(WidgetColors.border, lineWidth: 1)
-                    )
-            )
-            .frame(width: 140)
-        }
-        .padding(14)
-        .containerBackground(for: .widget) {
-            WidgetColors.background
-        }
-    }
-
-    // MARK: - Reusable Components
-
-    private func chipView(icon: String, text: String) -> some View {
-        HStack(spacing: 3) {
-            Image(systemName: icon)
-                .font(.system(size: 8, weight: .semibold))
-            Text(text)
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
-        }
-        .foregroundStyle(WidgetColors.tealDark)
-        .padding(.horizontal, 7)
-        .padding(.vertical, 4)
-        .background(
-            Capsule()
-                .fill(WidgetColors.tealLight.opacity(0.35))
-        )
-    }
-
-    private func statRow(icon: String, label: String, value: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(WidgetColors.teal)
-                .frame(width: 14)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(label)
-                    .font(.system(size: 8, weight: .medium, design: .rounded))
-                    .foregroundStyle(WidgetColors.gray)
-                Text(value)
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundStyle(WidgetColors.charcoal)
-                    .lineLimit(1)
-            }
-
-            Spacer()
+            if family == .accessoryRectangular { Color.clear } else { WidgetInk.paper }
         }
     }
 }
 
-// MARK: - Widget Configuration
+/// Eyebrow row: the logo waves + "CONTINUE".
+private struct ContinueEyebrow: View {
+    var body: some View {
+        HStack(spacing: 5) {
+            WidgetWavesMark(height: 8, color: WidgetInk.teal)
+                .widgetAccentable()
+            Text("Continue")
+                .widgetEyebrow(WidgetInk.teal)
+        }
+    }
+}
+
+/// Colored dot + status name, like the app's status label.
+private struct StatusLabel: View {
+    let song: WidgetSong
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(WidgetInk.status(song.status))
+                .frame(width: 5, height: 5)
+            Text(song.statusName)
+                .font(WidgetType.manrope(10, "Medium"))
+                .foregroundStyle(WidgetInk.inkSecondary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 2.5)
+        .background(Capsule().fill(WidgetInk.surface))
+    }
+}
+
+/// The song's shape: one capsule per section, sized by bars.
+private struct ArrangementRibbon: View {
+    let sections: [WidgetSong.Section]
+    var height: CGFloat = 4
+
+    var body: some View {
+        GeometryReader { proxy in
+            let total = CGFloat(max(1, sections.reduce(0) { $0 + $1.bars }))
+            let gap: CGFloat = sections.count > 1 ? 1.5 : 0
+            let usable = max(0, proxy.size.width - gap * CGFloat(max(0, sections.count - 1)))
+            if sections.isEmpty {
+                Capsule()
+                    .stroke(WidgetInk.rule, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+            } else {
+                HStack(spacing: gap) {
+                    ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
+                        Capsule()
+                            .fill(WidgetInk.section(section.colorHex))
+                            .frame(width: max(2, usable * CGFloat(section.bars) / total))
+                    }
+                }
+            }
+        }
+        .frame(height: height)
+        .accessibilityHidden(true)
+    }
+}
+
+// MARK: Small
+
+private struct SmallSongView: View {
+    let song: WidgetSong
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ContinueEyebrow()
+            Spacer(minLength: 6)
+            Text(song.title)
+                .font(WidgetType.erode(21, "Semibold", relativeTo: .title3))
+                .foregroundStyle(WidgetInk.ink)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+                .widgetAccentable()
+            StatusLabel(song: song)
+                .padding(.top, 5)
+            Spacer(minLength: 8)
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                fact(song.keyShort)
+                dot
+                fact("\(song.bpm)")
+                Text(" BPM")
+                    .font(WidgetType.manrope(9, "SemiBold"))
+                    .foregroundStyle(WidgetInk.inkTertiary)
+                dot
+                fact(song.meter)
+            }
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            ArrangementRibbon(sections: song.sections, height: 4)
+                .padding(.top, 7)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .widgetURL(song.link())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(song.title), \(song.statusName), \(WidgetSong.modeName(song.keyMode)) \(song.keyRoot), \(song.bpm) BPM")
+    }
+
+    private func fact(_ text: String) -> some View {
+        Text(text)
+            .font(WidgetType.erode(15, "Medium", relativeTo: .subheadline))
+            .foregroundStyle(WidgetInk.ink)
+            .monospacedDigit()
+    }
+
+    private var dot: some View {
+        Text("  ·  ")
+            .font(WidgetType.manrope(10, "Bold"))
+            .foregroundStyle(WidgetInk.inkTertiary)
+    }
+}
+
+// MARK: Medium
+
+private struct MediumSongView: View {
+    let song: WidgetSong
+    let now: Date
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                ContinueEyebrow()
+                Spacer(minLength: 8)
+                Text(song.edited(relativeTo: now))
+                    .font(WidgetType.manrope(9.5, "Medium"))
+                    .foregroundStyle(WidgetInk.inkTertiary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 6)
+
+            HStack(alignment: .top, spacing: 14) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(song.title)
+                        .font(WidgetType.erode(23, "Semibold", relativeTo: .title2))
+                        .foregroundStyle(WidgetInk.ink)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
+                        .widgetAccentable()
+                    StatusLabel(song: song)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                VStack(spacing: 0) {
+                    factRow(String(localized: "Key"), song.keyShort)
+                    rule
+                    factRow(String(localized: "Tempo"), "\(song.bpm)")
+                    rule
+                    factRow(String(localized: "Meter"), song.meter)
+                }
+                .frame(width: 100)
+            }
+
+            Spacer(minLength: 8)
+
+            ArrangementRibbon(sections: song.sections, height: 5)
+
+            Spacer(minLength: 8)
+
+            HStack(spacing: 6) {
+                if let url = song.link() {
+                    Link(destination: url) {
+                        actionPill(String(localized: "Open"), icon: "arrow.right", style: .ink)
+                    }
+                }
+                Spacer(minLength: 0)
+                if let url = song.link("studio") {
+                    Link(destination: url) {
+                        actionPill(String(localized: "Studio"), icon: "square.grid.2x2", style: .outline)
+                    }
+                }
+                if let url = song.link("record") {
+                    Link(destination: url) {
+                        actionPill(String(localized: "Record"), icon: "mic.fill", style: .record)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    }
+
+    private func factRow(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(label)
+                .widgetEyebrow()
+            Spacer(minLength: 4)
+            Text(value)
+                .font(WidgetType.erode(16, "Medium", relativeTo: .subheadline))
+                .foregroundStyle(WidgetInk.ink)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(height: 19)
+    }
+
+    private var rule: some View {
+        Rectangle()
+            .fill(WidgetInk.rule)
+            .frame(height: 1)
+            .padding(.vertical, 2)
+    }
+
+    private enum PillStyle { case ink, outline, record }
+
+    private func actionPill(_ title: String, icon: String, style: PillStyle) -> some View {
+        HStack(spacing: 4) {
+            if style == .ink {
+                Text(title)
+                Image(systemName: icon).font(.system(size: 8, weight: .bold))
+            } else {
+                Image(systemName: icon).font(.system(size: 9, weight: .semibold))
+                Text(title)
+            }
+        }
+        .font(WidgetType.manrope(11, "SemiBold"))
+        .lineLimit(1)
+        .foregroundStyle(style == .ink ? WidgetInk.paper : (style == .record ? WidgetInk.record : WidgetInk.ink))
+        .padding(.horizontal, 10)
+        .frame(height: 24)
+        .background {
+            if style == .ink {
+                Capsule().fill(WidgetInk.ink)
+            } else {
+                Capsule().stroke(style == .record ? WidgetInk.record.opacity(0.45) : WidgetInk.rule, lineWidth: 1)
+            }
+        }
+    }
+}
+
+// MARK: Lock screen
+
+private struct LockScreenSongView: View {
+    let song: WidgetSong
+    let now: Date
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            HStack(spacing: 4) {
+                WidgetWavesMark(height: 7, color: .primary)
+                    .widgetAccentable()
+                Text(song.title)
+                    .font(WidgetType.erode(15, "Semibold", relativeTo: .headline))
+                    .lineLimit(1)
+            }
+            Text("\(song.keyShort) · \(song.bpm) BPM · \(song.meter)")
+                .font(WidgetType.manrope(12, "SemiBold"))
+                .lineLimit(1)
+            Text(song.edited(relativeTo: now))
+                .font(WidgetType.manrope(11, "Medium"))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .widgetURL(song.link())
+    }
+}
+
+// MARK: Empty
+
+private struct EmptySongView: View {
+    let isMedium: Bool
+    let isAccessory: Bool
+
+    var body: some View {
+        if isAccessory {
+            HStack(spacing: 6) {
+                WidgetWavesMark(height: 9, color: .primary).widgetAccentable()
+                Text("Start a song")
+                    .font(WidgetType.erode(15, "Semibold", relativeTo: .headline))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .widgetURL(URL(string: "suonote://"))
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                WidgetWavesMark(height: isMedium ? 16 : 14, color: WidgetInk.brand)
+                    .widgetAccentable()
+                Spacer(minLength: 8)
+                Text("Your next song starts here.")
+                    .font(WidgetType.erode(isMedium ? 22 : 19, "Semibold", relativeTo: .title3))
+                    .foregroundStyle(WidgetInk.ink)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.8)
+                Spacer(minLength: 6)
+                Text("Open Suonote")
+                    .font(WidgetType.manrope(10.5, "SemiBold"))
+                    .foregroundStyle(WidgetInk.teal)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .widgetURL(URL(string: "suonote://"))
+        }
+    }
+}
+
+// MARK: - Widget
 
 struct SuonoteWidget: Widget {
     let kind: String = "SuonoteWidget"
@@ -251,17 +355,36 @@ struct SuonoteWidget: Widget {
         StaticConfiguration(kind: kind, provider: SuonoteProvider()) { entry in
             SuonoteWidgetEntryView(entry: entry)
         }
-        .configurationDisplayName("Suonote")
+        .configurationDisplayName("Keep writing")
         .description("Quick access to your latest songwriting project.")
-        .supportedFamilies([.systemSmall, .systemMedium])
+        .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular])
     }
 }
-
-// MARK: - Widget Bundle
 
 @main
 struct SuonoteWidgetBundle: WidgetBundle {
     var body: some Widget {
         SuonoteWidget()
     }
+}
+
+// MARK: - Previews
+
+#Preview("Small", as: .systemSmall) {
+    SuonoteWidget()
+} timeline: {
+    SuonoteEntry(date: .now, song: .sample)
+    SuonoteEntry(date: .now, song: nil)
+}
+
+#Preview("Medium", as: .systemMedium) {
+    SuonoteWidget()
+} timeline: {
+    SuonoteEntry(date: .now, song: .sample)
+}
+
+#Preview("Lock screen", as: .accessoryRectangular) {
+    SuonoteWidget()
+} timeline: {
+    SuonoteEntry(date: .now, song: .sample)
 }

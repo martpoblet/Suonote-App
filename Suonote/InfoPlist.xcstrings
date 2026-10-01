@@ -26,13 +26,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Suonote needs microphone to record audio takes"
+            "value" : "Suonote uses the microphone to record your takes."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Suonote necesita el micrófono para grabar tus tomas de audio"
+            "value" : "Suonote usa el micrófono para grabar tus tomas."
           }
         }
       }

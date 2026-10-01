@@ -16,6 +16,12 @@ final class ChordEvent {
     
     var sectionTemplateStore: SectionTemplate?
     
+    /// What to show for this chord: `display`, with rests in the user's language
+    /// (`display` is persisted, so it stays the English "Rest").
+    var localizedDisplay: String {
+        isRest ? String(localized: "Rest") : display
+    }
+
     /// Recomputes the display string from current chord properties
     func updateDisplay() {
         if isRest {

@@ -41,40 +41,40 @@ enum DemoSong {
         )
         context.insert(project)
 
-        let intro = section("Intro", .sky, project: project, context: context, bars: [
+        let intro = section(String(localized: "Intro", comment: "Song section name"), .sky, project: project, context: context, bars: [
             bar("G", .major7), bar("C", .major7), bar("E", .minor7), bar("D", .sus4)
         ])
-        let verse = section("Verse", .ocean, project: project, context: context, bars: [
+        let verse = section(String(localized: "Verse", comment: "Song section name"), .ocean, project: project, context: context, bars: [
             bar("G"), bar("D", over: "F#"), bar("E", .minor7), bar("C", .major7),
             bar("G"), bar("D", over: "F#"), bar("A", .minor7), bar("C", .major7)
-        ], lyrics: """
+        ], lyrics: String(localized: """
         Streetlights hum a quiet tune
         Your shadow leaning into mine
         We never planned to stay this late
         But nothing here is keeping time
-        """)
-        let pre = section("Pre-Chorus", .sand, project: project, context: context, bars: [
+        """, comment: "Demo song lyrics"))
+        let pre = section(String(localized: "Pre-Chorus", comment: "Song section name"), .sand, project: project, context: context, bars: [
             bar("A", .minor7), bar("B", .minor7), bar("C", .major7), split(("D", .sus4), ("D", .major))
-        ], lyrics: """
+        ], lyrics: String(localized: """
         And if the night is running out
         Let it run
-        """)
-        let chorus = section("Chorus", .coral, project: project, context: context, bars: [
+        """, comment: "Demo song lyrics"))
+        let chorus = section(String(localized: "Chorus", comment: "Song section name"), .coral, project: project, context: context, bars: [
             bar("C"), bar("G", over: "B"), bar("E", .minor7), bar("D"),
             bar("C"), bar("G"), bar("A", .minor7), split(("D", .sus4), ("D", .major))
-        ], lyrics: """
+        ], lyrics: String(localized: """
         Stay in the golden hour with me
         Where every light is soft and slow
         Hold on, the sky is burning gently
         Don't let it go, don't let it go
-        """)
-        let bridge = section("Bridge", .berry, project: project, context: context, bars: [
+        """, comment: "Demo song lyrics"))
+        let bridge = section(String(localized: "Bridge", comment: "Song section name"), .berry, project: project, context: context, bars: [
             bar("E", .minor), bar("C"), bar("G"), bar("D")
-        ], lyrics: """
+        ], lyrics: String(localized: """
         Maybe tomorrow forgets our names
         Tonight it knows them all
-        """)
-        let outro = section("Outro", .sage, project: project, context: context, bars: [
+        """, comment: "Demo song lyrics"))
+        let outro = section(String(localized: "Outro", comment: "Song section name"), .sage, project: project, context: context, bars: [
             bar("C", .major7), bar("G", over: "B"), bar("A", .minor7), bar("G", .major7)
         ])
 

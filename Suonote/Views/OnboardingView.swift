@@ -136,11 +136,11 @@ private struct OnboardingComposeArt: View {
     let animated: Bool
     private let chords = ["Am", "F", "C", "G"]
     private let demo = LibraryStarter(id: "demo", name: "", detail: "", parts: [
-        .init(name: "Intro", bars: 2, color: .sky),
-        .init(name: "Verse", bars: 4, color: .sage),
-        .init(name: "Chorus", bars: 4, color: .coral),
-        .init(name: "Bridge", bars: 2, color: .lavender),
-        .init(name: "Chorus", bars: 4, color: .coral),
+        .init(name: String(localized: "Intro", comment: "Song section name"), bars: 2, color: .sky),
+        .init(name: String(localized: "Verse", comment: "Song section name"), bars: 4, color: .sage),
+        .init(name: String(localized: "Chorus", comment: "Song section name"), bars: 4, color: .coral),
+        .init(name: String(localized: "Bridge", comment: "Song section name"), bars: 2, color: .lavender),
+        .init(name: String(localized: "Chorus", comment: "Song section name"), bars: 4, color: .coral),
     ])
 
     var body: some View {

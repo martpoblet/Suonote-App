@@ -12,7 +12,7 @@ struct ProjectService {
         _ section: SectionTemplate,
         in project: Project,
         transpose semitones: Int = 0,
-        nameSuffix: String = " (copy)"
+        nameSuffix: String = String(localized: " (copy)", comment: "Suffix for a duplicated section")
     ) -> SectionTemplate {
         let copy = SectionTemplate()
         copy.name = section.name + nameSuffix
@@ -62,9 +62,9 @@ struct ProjectService {
         case .transposeDown:
             return duplicateSection(section, in: project, transpose: -2, nameSuffix: " (-2)")
         case .relativeMinor:
-            return duplicateSection(section, in: project, transpose: -3, nameSuffix: " (rel. min)")
+            return duplicateSection(section, in: project, transpose: -3, nameSuffix: String(localized: " (rel. min)", comment: "Suffix: section moved to the relative minor"))
         case .relativeMajor:
-            return duplicateSection(section, in: project, transpose: 3, nameSuffix: " (rel. maj)")
+            return duplicateSection(section, in: project, transpose: 3, nameSuffix: String(localized: " (rel. maj)", comment: "Suffix: section moved to the relative major"))
         }
     }
     

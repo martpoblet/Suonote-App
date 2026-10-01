@@ -28,7 +28,7 @@ enum StudioMusic {
     }
 
     static func chordText(_ chord: ChordEvent) -> String {
-        if !chord.display.isEmpty { return chord.display }
+        if !chord.display.isEmpty { return chord.localizedDisplay }
         if chord.isRest { return String(localized: "Rest") }
         var text = chord.root + chord.quality.symbol
         if !chord.extensions.isEmpty { text += chord.extensions.joined() }

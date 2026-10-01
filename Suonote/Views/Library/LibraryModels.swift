@@ -192,10 +192,10 @@ struct LibraryStarter: Identifiable, Equatable {
             name: String(localized: "Verse–Chorus"),
             detail: String(localized: "The classic shape"),
             parts: [
-                .init(name: "Verse", bars: 8, color: .sage),
-                .init(name: "Chorus", bars: 8, color: .coral),
-                .init(name: "Verse", bars: 8, color: .sage),
-                .init(name: "Chorus", bars: 8, color: .coral),
+                .init(name: String(localized: "Verse", comment: "Song section name"), bars: 8, color: .sage),
+                .init(name: String(localized: "Chorus", comment: "Song section name"), bars: 8, color: .coral),
+                .init(name: String(localized: "Verse", comment: "Song section name"), bars: 8, color: .sage),
+                .init(name: String(localized: "Chorus", comment: "Song section name"), bars: 8, color: .coral),
             ]
         ),
         LibraryStarter(
@@ -203,16 +203,16 @@ struct LibraryStarter: Identifiable, Equatable {
             name: String(localized: "Verse–Chorus–Bridge"),
             detail: String(localized: "Intro to outro, with a turn"),
             parts: [
-                .init(name: "Intro", bars: 4, color: .sky),
-                .init(name: "Verse", bars: 8, color: .sage),
-                .init(name: "Pre-Chorus", bars: 4, color: .sand),
-                .init(name: "Chorus", bars: 8, color: .coral),
-                .init(name: "Verse", bars: 8, color: .sage),
-                .init(name: "Pre-Chorus", bars: 4, color: .sand),
-                .init(name: "Chorus", bars: 8, color: .coral),
-                .init(name: "Bridge", bars: 8, color: .lavender),
-                .init(name: "Chorus", bars: 8, color: .coral),
-                .init(name: "Outro", bars: 4, color: .sky),
+                .init(name: String(localized: "Intro", comment: "Song section name"), bars: 4, color: .sky),
+                .init(name: String(localized: "Verse", comment: "Song section name"), bars: 8, color: .sage),
+                .init(name: String(localized: "Pre-Chorus", comment: "Song section name"), bars: 4, color: .sand),
+                .init(name: String(localized: "Chorus", comment: "Song section name"), bars: 8, color: .coral),
+                .init(name: String(localized: "Verse", comment: "Song section name"), bars: 8, color: .sage),
+                .init(name: String(localized: "Pre-Chorus", comment: "Song section name"), bars: 4, color: .sand),
+                .init(name: String(localized: "Chorus", comment: "Song section name"), bars: 8, color: .coral),
+                .init(name: String(localized: "Bridge", comment: "Song section name"), bars: 8, color: .lavender),
+                .init(name: String(localized: "Chorus", comment: "Song section name"), bars: 8, color: .coral),
+                .init(name: String(localized: "Outro", comment: "Song section name"), bars: 4, color: .sky),
             ]
         ),
         LibraryStarter(
@@ -231,7 +231,7 @@ struct LibraryStarter: Identifiable, Equatable {
             name: String(localized: "12-bar blues"),
             detail: String(localized: "Three lines, one feeling"),
             parts: [
-                .init(name: "Blues", bars: 12, color: .ocean),
+                .init(name: String(localized: "Blues", comment: "Song section name"), bars: 12, color: .ocean),
             ]
         ),
         LibraryStarter(
@@ -239,7 +239,7 @@ struct LibraryStarter: Identifiable, Equatable {
             name: String(localized: "Loop"),
             detail: String(localized: "One idea, on repeat"),
             parts: [
-                .init(name: "Loop", bars: 4, color: .moss),
+                .init(name: String(localized: "Loop", comment: "Song section name"), bars: 4, color: .moss),
             ]
         ),
     ]

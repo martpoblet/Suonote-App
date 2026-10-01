@@ -124,16 +124,7 @@ struct ProjectDetailView: View {
     // MARK: - Helper Methods
 
     private func updateWidgetData() {
-        guard let defaults = UserDefaults(suiteName: "group.MartinCode.Suonote.shared") else { return }
-        defaults.set(project.id.uuidString, forKey: "widget_projectId")
-        defaults.set(project.title, forKey: "widget_projectName")
-        defaults.set(project.keyRoot, forKey: "widget_keyRoot")
-        defaults.set(project.keyMode.rawValue == "minor" ? "Minor" : "Major", forKey: "widget_keyMode")
-        defaults.set(project.bpm, forKey: "widget_bpm")
-        let sectionCount = project.arrangementItems.filter { $0.sectionTemplate != nil }.count
-        defaults.set(sectionCount, forKey: "widget_sectionCount")
-        defaults.set(project.updatedAt, forKey: "widget_lastEdited")
-        WidgetCenter.shared.reloadAllTimelines()
+        WidgetSongSnapshot.publish(project)
     }
 }
 

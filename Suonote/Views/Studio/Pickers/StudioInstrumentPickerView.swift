@@ -206,7 +206,7 @@ struct StudioRecordingPicker: View {
                                 .font(DesignSystem.Typography.headline)
                                 .foregroundStyle(DesignSystem.Colors.textPrimary)
                                 .lineLimit(1)
-                            Text(recording.recordingType.rawValue)
+                            Text(recording.recordingType.recordDisplayName)
                                 .font(DesignSystem.Typography.caption)
                                 .foregroundStyle(DesignSystem.Colors.textSecondary)
                         }

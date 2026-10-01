@@ -20,10 +20,10 @@ enum StudioArranger {
             let n = name.lowercased()
                 .folding(options: .diacriticInsensitive, locale: nil)
             func has(_ keys: String...) -> Bool { keys.contains { n.contains($0) } }
-            if has("pre-chorus", "prechorus", "pre chorus", "pre-coro", "precoro", "pre coro", "pre-estribillo", "build") { return .preChorus }
+            if has("pre-chorus", "prechorus", "pre chorus", "pre-coro", "precoro", "pre coro", "pre-estribillo", "preestribillo", "build", "subida") { return .preChorus }
             if has("post-chorus", "postchorus", "post coro") { return .postChorus }
             if has("chorus", "coro", "estribillo", "hook", "refrain", "drop") { return .chorus }
-            if has("verse", "estrofa", "verso") { return .verse }
+            if has("verse", "estrofa", "verso", "cuerpo") { return .verse }
             if has("bridge", "puente", "middle 8") { return .bridge }
             if has("intro") { return .intro }
             if has("outro", "final", "coda", "ending", "cierre") { return .outro }
@@ -252,10 +252,12 @@ enum StudioArranger {
                     pitch = map.ride
                     velocity = Int(Double(velocity) * 1.05)
                 }
-                // Chorus lift: hats open up on the "&" of 2 and 4.
+                // Chorus lift: the hat opens on the "&" of 4 (and on the "&"
+                // of 2 too in funk/EDM, where that's the groove).
                 else if note.pitch == map.hatClosed, ![.jazz, .lofi].contains(style) {
-                    let offbeat = positionInBar.truncatingRemainder(dividingBy: 2)
-                    if abs(offbeat - 1.5) < 0.05 { pitch = map.hatOpen; duration = 0.45 }
+                    let bothAnds = [.funk, .edm].contains(style)
+                    let target = bothAnds ? positionInBar.truncatingRemainder(dividingBy: 2) : positionInBar
+                    if abs(target - (bothAnds ? 1.5 : beatsPerBar - 0.5)) < 0.05 { pitch = map.hatOpen; duration = 0.45 }
                 }
             }
         case .bass:
@@ -339,16 +341,37 @@ enum StudioArranger {
             let drumsHere = thinBand || plays(.drums, in: span, style: style)
             let drumsNext = next.map { thinBand || plays(.drums, in: $0, style: style) } ?? false
 
-            // Fill into the next section (bigger into a chorus).
+            // Fill into the next section (bigger into a chorus, a light
+            // pickup into calmer parts).
             if let next, drumsNext {
-                let fillBeats: Double = next.energy >= 5 || (!drumsHere) ? 2 : (next.energy > span.energy ? 1 : 0)
-                if fillBeats > 0 {
-                    let fillEnd = next.startBeat
-                    let fillStart = fillEnd - min(fillBeats, beatsPerBar)
-                    if limit == nil || limit!.contains(fillStart) {
-                        result.removeAll { $0.startBeat >= fillStart - 0.01 && $0.startBeat < fillEnd - 0.01 && $0.pitch != kit.kick }
-                        result.append(contentsOf: fill(from: fillStart, to: fillEnd, kit: kit, style: style, intensity: next.energy))
-                    }
+                let big = next.energy >= 5 || !drumsHere
+                let fillBeats: Double = big ? 2 : 1
+                let fillEnd = next.startBeat
+                let fillStart = fillEnd - min(fillBeats, beatsPerBar)
+                if limit == nil || limit!.contains(fillStart) {
+                    let toms: Set<Int> = [kit.tomLow, kit.tomMid, kit.tomHigh]
+                    // The groove generator's own tom run would double ours.
+                    result.removeAll { toms.contains($0.pitch) && $0.startBeat >= fillEnd - 2.01 && $0.startBeat < fillEnd - 0.01 }
+                    result.removeAll { $0.startBeat >= fillStart - 0.01 && $0.startBeat < fillEnd - 0.01 && $0.pitch != kit.kick }
+                    let calmer = next.energy < span.energy
+                    result.append(contentsOf: fill(
+                        from: fillStart, to: fillEnd, kit: kit, style: style,
+                        intensity: calmer ? max(1, next.energy - 1) : next.energy,
+                        variation: index + span.occurrence, big: big
+                    ))
+                }
+            }
+
+            // Choruses push harder: an extra kick on the "and" of 2 (the bass
+            // follows the kick, so the whole band lifts).
+            if drumsHere, span.energy >= 5, [.pop, .rock, .funk].contains(style) {
+                for bar in 0..<span.bars where bar % 4 != 3 {
+                    let beat = span.startBeat + Double(bar) * beatsPerBar + 1.5
+                    guard limit == nil || limit!.contains(beat) else { continue }
+                    let barStart = beat - 1.5
+                    let kicksInBar = result.filter { $0.pitch == kit.kick && $0.startBeat >= barStart - 0.01 && $0.startBeat < barStart + beatsPerBar - 0.01 }
+                    guard kicksInBar.count <= 2, !kicksInBar.contains(where: { abs($0.startBeat - beat) < 0.05 }) else { continue }
+                    result.append(StudioNote(startBeat: beat, duration: 0.25, pitch: kit.kick, velocity: 92))
                 }
             }
 
@@ -377,7 +400,10 @@ enum StudioArranger {
                         let fillStart = phraseStart - 1
                         if limit == nil || limit!.contains(fillStart) {
                             result.removeAll { $0.startBeat >= fillStart - 0.01 && $0.startBeat < phraseStart - 0.01 && $0.pitch != kit.kick && $0.pitch != kit.hatClosed }
-                            result.append(contentsOf: fill(from: fillStart, to: phraseStart, kit: kit, style: style, intensity: span.energy - 1))
+                            result.append(contentsOf: fill(
+                                from: fillStart, to: phraseStart, kit: kit, style: style,
+                                intensity: span.energy - 1, variation: index * 3 + phraseBar / 4 + span.occurrence, big: false
+                            ))
                         }
                         if span.energy >= 5 { crash(at: phraseStart, velocity: 98) }
                         phraseBar += 4
@@ -398,29 +424,59 @@ enum StudioArranger {
         return result
     }
 
-    /// A short fill: snare/tom 16ths that rise in volume and fall in pitch.
-    /// Lo-fi / hip-hop / jazz get a softer snare-only pickup.
-    private static func fill(from start: Double, to end: Double, kit: SoundFontManager.DrumPitchMap, style: StudioStyle, intensity: Int) -> [StudioNote] {
+    /// A fill from a small vocabulary, so the song doesn't repeat one figure:
+    /// tom runs, snare rolls into toms, snare/tom conversations, an 8th→16th
+    /// snare build into big sections, and short snare pickups. Volume rises
+    /// through the fill; lo-fi / hip-hop / jazz get a softer snare-only pickup.
+    private static func fill(
+        from start: Double,
+        to end: Double,
+        kit: SoundFontManager.DrumPitchMap,
+        style: StudioStyle,
+        intensity: Int,
+        variation: Int = 0,
+        big: Bool = false
+    ) -> [StudioNote] {
         let step = 0.25
         let count = Int(((end - start) / step).rounded())
         guard count > 0 else { return [] }
-        let tomRun = [kit.snare, kit.snare, kit.tomHigh, kit.tomHigh, kit.tomMid, kit.tomMid, kit.tomLow, kit.tomLow]
         var notes: [StudioNote] = []
-        for i in 0..<count {
+        func hit(_ i: Int, _ pitch: Int, accent: Int = 0) {
             let t = Double(i) / Double(max(1, count - 1))
-            let beat = start + Double(i) * step
-            let pitch: Int
-            let velocity: Int
-            if [.lofi, .hiphop, .jazz, .ambient].contains(style) {
-                // Pickup: a few snare hits, not a tom roll.
-                guard i % 2 == 0 || i == count - 1 else { continue }
-                pitch = kit.snare
-                velocity = Int(52 + 38 * t)
-            } else {
-                pitch = tomRun[min(tomRun.count - 1, Int(t * Double(tomRun.count - 1) + 0.5))]
-                velocity = Int(68 + Double(intensity) * 6 + 30 * t)
+            let base = 66 + Double(intensity) * 6 + 30 * t
+            let onBeat = i % 4 == 0 ? 6 : 0
+            notes.append(StudioNote(startBeat: start + Double(i) * step, duration: 0.2, pitch: pitch,
+                                    velocity: max(30, min(124, Int(base) + onBeat + accent))))
+        }
+
+        if [.lofi, .hiphop, .jazz, .ambient].contains(style) {
+            // Pickup: a few snare hits, not a tom roll.
+            for i in 0..<count where i % 2 == 0 || i == count - 1 {
+                let t = Double(i) / Double(max(1, count - 1))
+                notes.append(StudioNote(startBeat: start + Double(i) * step, duration: 0.2, pitch: kit.snare,
+                                        velocity: Int(52 + 38 * t)))
             }
-            notes.append(StudioNote(startBeat: beat, duration: 0.2, pitch: pitch, velocity: min(124, velocity)))
+        } else {
+            let sn = kit.snare, hi = kit.tomHigh, mid = kit.tomMid, low = kit.tomLow
+            let figures: [[Int?]]
+            if count >= 8 {
+                figures = big
+                    ? [[sn, nil, sn, nil, sn, sn, sn, sn],            // 8ths → 16ths build
+                       [sn, sn, sn, sn, hi, hi, mid, low],            // snare roll into toms
+                       [sn, sn, hi, hi, mid, mid, low, low]]          // classic tom run
+                    : [[sn, hi, sn, mid, sn, low, sn, low],
+                       [sn, sn, hi, hi, mid, mid, low, low]]
+            } else {
+                figures = [[sn, sn, sn, sn],                         // snare 16ths
+                           [sn, nil, sn, sn],                        // "ta . ta-ka"
+                           [sn, sn, hi, low],                        // into the toms
+                           [hi, hi, mid, low]]                       // quick tom run
+            }
+            let figure = figures[((variation % figures.count) + figures.count) % figures.count]
+            for i in 0..<count {
+                guard let pitch = figure[i % figure.count] else { continue }
+                hit(i, pitch)
+            }
         }
         // Anchor the fill with a kick on its first beat.
         notes.append(StudioNote(startBeat: start, duration: 0.25, pitch: kit.kick, velocity: 96))

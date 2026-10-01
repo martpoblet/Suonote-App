@@ -331,6 +331,63 @@ final class StudioSoundTests: XCTestCase {
         }
     }
 
+    // MARK: - Drummer
+
+    @MainActor
+    func testPopGhostNotesAreSparse() throws {
+        let project = try makeBandProject(style: .pop)
+        let drums = try XCTUnwrap(project.studioTracks.first { $0.instrument == .drums })
+        // Second verse (energy 3): bars 17–24, beats 64–96, outside phrase-end fills.
+        for bar in [16, 17, 18, 20, 21, 22] {
+            let start = Double(bar * 4)
+            let ghosts = drums.notes.filter { $0.pitch == 38 && $0.velocity < 45 && $0.startBeat >= start && $0.startBeat < start + 4 }
+            XCTAssertLessThanOrEqual(ghosts.count, 2, "Bar \(bar + 1) has \(ghosts.count) ghost notes")
+        }
+    }
+
+    @MainActor
+    func testFillsVaryThroughTheSong() throws {
+        let project = try makeBandProject(style: .pop)
+        let drums = try XCTUnwrap(project.studioTracks.first { $0.instrument == .drums })
+        let fillPitches: Set<Int> = [38, 45, 47, 50]
+        var shapes: Set<[Int]> = []
+        // The last beat of every 4-bar phrase.
+        for phrase in 1..<8 {
+            let end = Double(phrase * 16)
+            let shape = drums.notes
+                .filter { fillPitches.contains($0.pitch) && $0.velocity >= 45 && $0.startBeat >= end - 1.01 && $0.startBeat < end - 0.01 }
+                .sorted { $0.startBeat < $1.startBeat }
+                .map(\.pitch)
+            if !shape.isEmpty { shapes.insert(shape) }
+        }
+        XCTAssertGreaterThanOrEqual(shapes.count, 3, "Fills repeat: \(shapes)")
+    }
+
+    @MainActor
+    func testPopChorusKickPushesOnTheAndOfTwo() throws {
+        let project = try makeBandProject(style: .pop)
+        let drums = try XCTUnwrap(project.studioTracks.first { $0.instrument == .drums })
+        // First chorus, bars 9–11 (not the phrase-end bar).
+        for bar in 8..<11 {
+            let beat = Double(bar * 4) + 1.5
+            XCTAssertTrue(drums.notes.contains { $0.pitch == 36 && abs($0.startBeat - beat) < 0.05 }, "No push kick in bar \(bar + 1)")
+        }
+    }
+
+    @MainActor
+    func testSixteenthHatsHaveAHandShape() throws {
+        let notes = StudioGenerator.generateDrumNotes(
+            totalBars: 4, beatsPerBar: 4, timeBottom: 4, style: .rock, preset: .drive
+        )
+        let hats = notes.filter { $0.pitch == 42 }
+        func meanVelocity(at position: Double) -> Double {
+            let hits = hats.filter { abs($0.startBeat.truncatingRemainder(dividingBy: 1) - position) < 0.01 }
+            return Double(hits.map(\.velocity).reduce(0, +)) / Double(max(1, hits.count))
+        }
+        XCTAssertGreaterThan(meanVelocity(at: 0), meanVelocity(at: 0.5), "Beat louder than the \"and\"")
+        XCTAssertGreaterThan(meanVelocity(at: 0.5), meanVelocity(at: 0.25), "\"And\" louder than the \"e\"")
+    }
+
     // MARK: - Helpers
 
     private var bandContainer: ModelContainer?

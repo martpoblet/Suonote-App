@@ -2597,17 +2597,36 @@ struct StudioGenerator {
                     )
                 )
             }
-            // Ghost notes on snare — low velocity hits on off-beat 16ths
+            // Ghost notes on snare — low velocity hits on off-beat 16ths.
+            // A drummer plays one or two per bar, leading into the backbeat
+            // and moving around; only funk keeps the full sixteenth chatter.
             if density > 0.45 && !isBeforeSectionChange {
                 let snareSet = Set(snareSteps)
+                var candidates: [Int] = []
                 for step in offbeatSteps where !snareSet.contains(step) {
                     let ghostStep = step + (stepsPerBeat > 2 ? 1 : 0)
                     guard ghostStep < stepsPerBar, !snareSet.contains(ghostStep) else { continue }
+                    candidates.append(ghostStep)
+                }
+                let leadIns = candidates.filter { snareSet.contains($0 + 1) }
+                let chosen: [Int]
+                if style == .funk || density > 0.8 {
+                    chosen = candidates
+                } else if style == .rock {
+                    chosen = bar % 2 == 1 ? Array(leadIns.suffix(1)) : []
+                } else {
+                    switch bar % 4 {
+                    case 0, 2: chosen = Array(leadIns.suffix(1))
+                    case 1: chosen = leadIns
+                    default: chosen = Array(leadIns.prefix(1))
+                    }
+                }
+                for ghostStep in chosen {
                     notes.append(StudioNote(
                         startBeat: barStart + Double(ghostStep) * stepLength,
                         duration: stepLength * 0.5,
                         pitch: pitchMap.snare,
-                        velocity: Int.random(in: 22...35)
+                        velocity: Int.random(in: 24...36)
                     ))
                 }
             }
@@ -2627,9 +2646,8 @@ struct StudioGenerator {
             }
             var effectiveOpenHatSteps = openHatSteps
             // Hi-hat variation: open on off-beats for rock, 16th-note hats for funk
-            if style == .rock && density > 0.5 {
-                let rockOpenSteps = offbeatSteps.filter { !Set(openHatSteps).contains($0) }
-                effectiveOpenHatSteps = uniqueSorted(openHatSteps + Array(rockOpenSteps.prefix(2)))
+            if style == .rock && density > 0.5, bar % 2 == 1, let lastOffbeat = offbeatSteps.last {
+                effectiveOpenHatSteps = uniqueSorted(openHatSteps + [lastOffbeat])
             }
             if style == .funk && density > 0.6 {
                 // Add 16th-note subdivision hats
@@ -2646,9 +2664,20 @@ struct StudioGenerator {
             }
             let closedHatSteps = hatClosedSteps.filter { !effectiveOpenHatSteps.contains($0) }
             for step in closedHatSteps {
-                let velocity = accentSteps.contains(step)
-                    ? scaledVelocity(base: hatVelocityBase + 8, intensity: intensity, range: 18)
-                    : scaledVelocity(base: hatVelocityBase, intensity: intensity, range: 16)
+                // Strong on the beat, medium on the "and", soft on the "e"/"a".
+                let positionInBeat = step % stepsPerBeat
+                let contour: Int
+                if accentSteps.contains(step) {
+                    contour = 8
+                } else if stepsPerBeat == 4 {
+                    contour = positionInBeat == 2 ? 0 : (positionInBeat == 1 ? -12 : -8)
+                } else {
+                    contour = -4
+                }
+                let velocity = clampVelocity(
+                    scaledVelocity(base: hatVelocityBase + contour, intensity: intensity, range: 16)
+                        + Int.random(in: -3...3)
+                )
                 notes.append(
                     StudioNote(
                         startBeat: barStart + Double(step) * stepLength,

@@ -35,7 +35,11 @@ struct SectionNameLabel: View {
             ("pre-chorus", "Pre"), ("prechorus", "Pre"), ("pre chorus", "Pre"),
             ("post-chorus", "Post"), ("chorus", "Ch"), ("hook", "Hk"),
             ("verse", "V"), ("bridge", "Br"), ("intro", "In"), ("outro", "Out"),
-            ("interlude", "Int"), ("breakdown", "Bd"), ("solo", "Solo"), ("drop", "Drop"), ("loop", "Lp")
+            ("interlude", "Int"), ("breakdown", "Bd"), ("solo", "Solo"), ("drop", "Drop"), ("loop", "Lp"),
+            // Spanish section names.
+            ("pre-estribillo", "Pre"), ("preestribillo", "Pre"), ("pre-coro", "Pre"), ("precoro", "Pre"),
+            ("estribillo", "Est"), ("estrofa", "E"), ("coro", "Co"), ("puente", "P"), ("final", "Fin"),
+            ("interludio", "Int"), ("subida", "Sub"), ("cuerpo", "Cu")
         ]
         for (key, short) in known where lower.hasPrefix(key) {
             return short + number

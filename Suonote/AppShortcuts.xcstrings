@@ -1,0 +1,36 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "Create a new song in ${applicationName}": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crear una canción nueva en ${applicationName}"
+          }
+        }
+      }
+    },
+    "New project in ${applicationName}": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nuevo proyecto en ${applicationName}"
+          }
+        }
+      }
+    },
+    "Start songwriting in ${applicationName}": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empezar a componer en ${applicationName}"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}
