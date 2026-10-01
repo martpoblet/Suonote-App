@@ -36,7 +36,7 @@ final class Project {
     var studioTracksStore: [StudioTrack]? = []
     
     init(
-        title: String = "New Idea",
+        title: String = String(localized: "New Idea"),
         status: ProjectStatus = ProjectStatus.idea,
         tags: [String] = [],
         keyRoot: String = "C",
@@ -45,7 +45,7 @@ final class Project {
         timeTop: Int = 4,
         timeBottom: Int = 4
     ) {
-        self.title = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "New Idea" : title
+        self.title = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? String(localized: "New Idea") : title
         self.status = status
         self.tags = Array(Set(tags)) // Deduplicate
         self.keyRoot = MusicTheory.normalize(keyRoot)

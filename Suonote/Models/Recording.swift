@@ -57,7 +57,7 @@ final class Recording {
     }
     
     init(
-        name: String = "Take",
+        name: String = String(localized: "Take"),
         fileName: String,
         duration: TimeInterval = 0,
         bpm: Int = 120,

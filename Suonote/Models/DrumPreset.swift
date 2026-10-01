@@ -13,23 +13,25 @@ enum DrumPreset: String, Codable, CaseIterable, Identifiable {
     case breakbeat
     case bossa
     case latin
+    case boomBap
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .basic: return "Basic"
-        case .drive: return "Drive"
-        case .halfTime: return "Half Time"
-        case .sparse: return "Sparse"
-        case .fourOnFloor: return "4 On Floor"
-        case .offbeat: return "Offbeat"
-        case .shuffle: return "Shuffle"
-        case .swing: return "Swing"
-        case .trap: return "Trap"
-        case .breakbeat: return "Breakbeat"
-        case .bossa: return "Bossa"
-        case .latin: return "Latin"
+        case .basic: return String(localized: "Basic")
+        case .drive: return String(localized: "Drive")
+        case .halfTime: return String(localized: "Half Time")
+        case .sparse: return String(localized: "Sparse")
+        case .fourOnFloor: return String(localized: "4 On Floor")
+        case .offbeat: return String(localized: "Offbeat")
+        case .shuffle: return String(localized: "Shuffle")
+        case .swing: return String(localized: "Swing")
+        case .trap: return String(localized: "Trap")
+        case .breakbeat: return String(localized: "Breakbeat")
+        case .bossa: return String(localized: "Bossa")
+        case .latin: return String(localized: "Latin")
+        case .boomBap: return String(localized: "Boom Bap")
         }
     }
 
@@ -46,13 +48,13 @@ enum DrumPreset: String, Codable, CaseIterable, Identifiable {
         case .rock:
             return [.drive, .halfTime, .basic, .breakbeat, .shuffle]
         case .lofi:
-            return [.sparse, .basic, .offbeat, .swing, .bossa]
+            return [.boomBap, .sparse, .basic, .offbeat, .swing, .bossa]
         case .edm:
             return canFourOnFloor ? [.fourOnFloor, .offbeat, .drive, .trap, .breakbeat] : [.offbeat, .drive, .trap, .basic]
         case .jazz:
             return [.swing, .sparse, .offbeat, .bossa, .shuffle]
         case .hiphop:
-            return [.trap, .halfTime, .drive, .basic]
+            return [.boomBap, .trap, .halfTime, .drive, .basic]
         case .funk:
             return [.offbeat, .drive, .breakbeat, .basic, .shuffle]
         case .ambient:

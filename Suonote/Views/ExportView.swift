@@ -1,194 +1,307 @@
 import SwiftUI
+import os
 
+/// Export & share: a clear menu of formats grouped by who they're for.
+/// Each option builds its file(s), then hands off to the system share sheet.
 struct ExportView: View {
     @Environment(\.dismiss) private var dismiss
     let project: Project
-    @State private var showingShareSheet = false
     @State private var shareItem: ShareItem?
-    
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                // Background
-                DesignSystem.Colors.backgroundSecondary
-                    .ignoresSafeArea()
-                
-                ScrollView {
-                    VStack(spacing: 24) {
-                        // Header
-                        VStack(spacing: 8) {
-                            Image(systemName: "square.and.arrow.up.circle.fill")
-                                .font(DesignSystem.Typography.jumbo)
-                                .foregroundStyle(DesignSystem.Colors.primary)
-                            
-                            Text("Export Project")
-                                .font(DesignSystem.Typography.title)
-                                .fontWeight(.bold)
-                                .foregroundStyle(DesignSystem.Colors.textPrimary)
-                            
-                            Text(project.title)
-                                .font(DesignSystem.Typography.body)
-                                .foregroundStyle(DesignSystem.Colors.textSecondary)
-                        }
-                        .padding(.top, 20)
-                        
-                        // Export options
-                        VStack(spacing: 16) {
-                            ExportOptionCard(
-                                title: "MIDI File",
-                                subtitle: "For DAWs like Logic, Ableton, FL Studio",
-                                icon: "pianokeys",
-                                color: DesignSystem.Colors.primary
-                            ) {
-                                exportMIDI()
-                            }
-                            
-                            ExportOptionCard(
-                                title: "Chord Chart (Text)",
-                                subtitle: "Lyrics and chords in plain text",
-                                icon: "doc.text",
-                                color: DesignSystem.Colors.info
-                            ) {
-                                exportText()
-                            }
-                            
-                            ExportOptionCard(
-                                title: "Full Project (Text)",
-                                subtitle: "Complete project information",
-                                icon: "doc.plaintext",
-                                color: DesignSystem.Colors.accent
-                            ) {
-                                exportFullText()
-                            }
-                            
-                            ExportOptionCard(
-                                title: "Chord Chart (PDF)",
-                                subtitle: "Printable chord chart with sections",
-                                icon: "doc.richtext",
-                                color: DesignSystem.Colors.success
-                            ) {
-                                exportPDF()
-                            }
-                        }
-                        .padding(.horizontal, 24)
-                    }
-                }
-            }
-            .navigationTitle("Export")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") {
-                        dismiss()
-                    }
-                    .foregroundStyle(DesignSystem.Colors.textSecondary)
-                }
-            }
-        }
-        .toolbarBackground(DesignSystem.Colors.backgroundSecondary, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .presentationBackground(DesignSystem.Colors.backgroundSecondary)
-        
-        .sheet(isPresented: $showingShareSheet) {
-            if let item = shareItem {
-                ShareSheet(items: [item.url])
-            }
-        }
-    }
-    
-    private func exportMIDI() {
-        let exporter = MIDIExporter()
-        if let url = exporter.exportProject(project) {
-            shareItem = ShareItem(url: url, type: .midi)
-            showingShareSheet = true
-        }
-    }
-    
-    private func exportText() {
-        let exporter = TextExporter()
-        if let url = exporter.exportChordChart(project) {
-            shareItem = ShareItem(url: url, type: .text)
-            showingShareSheet = true
-        }
-    }
-    
-    private func exportFullText() {
-        let exporter = TextExporter()
-        if let url = exporter.exportFullProject(project) {
-            shareItem = ShareItem(url: url, type: .text)
-            showingShareSheet = true
-        }
-    }
-    
-    private func exportPDF() {
-        let data = ChordChartPDFGenerator.generatePDF(for: project)
-        let fileName = "\(project.title.replacingOccurrences(of: " ", with: "_"))_chords.pdf"
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-        do {
-            try data.write(to: url)
-            shareItem = ShareItem(url: url, type: .text)
-            showingShareSheet = true
-        } catch {
-            print("PDF export error: \(error)")
-        }
-    }
-}
+    @State private var working: ExportFormat?
+    @State private var failedFormat: ExportFormat?
+    @State private var mixProgress: Double = 0
+    @State private var mixTask: Task<Void, Never>?
 
-struct ExportOptionCard: View {
-    let title: String
-    let subtitle: String
-    let icon: String
-    let color: Color
-    let action: () -> Void
-    
+    enum ExportFormat: String, Identifiable {
+        case pdf, chordText, lyrics, studioMix, midi, takes, fullText, projectFile
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .pdf: return String(localized: "Chord chart")
+            case .chordText: return String(localized: "Chord chart, plain text")
+            case .lyrics: return String(localized: "Lyric sheet")
+            case .studioMix: return String(localized: "Studio mix")
+            case .midi: return String(localized: "MIDI")
+            case .takes: return String(localized: "Recorded takes")
+            case .fullText: return String(localized: "Song notes")
+            case .projectFile: return String(localized: "Suonote file")
+            }
+        }
+
+        var badge: String {
+            switch self {
+            case .pdf: return "PDF"
+            case .chordText, .lyrics, .fullText: return "TXT"
+            case .midi: return "MID"
+            case .studioMix: return "M4A"
+            case .takes: return "AUDIO"
+            case .projectFile: return "SUONOTE"
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .pdf: return "doc.richtext"
+            case .chordText: return "text.alignleft"
+            case .lyrics: return "text.quote"
+            case .midi: return "pianokeys"
+            case .studioMix: return "hifispeaker.2"
+            case .takes: return "waveform"
+            case .fullText: return "doc.plaintext"
+            case .projectFile: return "shippingbox"
+            }
+        }
+    }
+
+    // MARK: Availability
+
+    private var sections: [SectionTemplate] { project.libraryArrangement }
+    private var hasChords: Bool { sections.contains { !$0.chordEvents.isEmpty } }
+    private var hasLyrics: Bool {
+        sections.contains { !$0.lyricsText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
+    private var hasStudioTracks: Bool { !project.studioTracks.isEmpty && project.libraryTotalBars > 0 }
+    private var takeURLs: [URL] {
+        project.recordings
+            .sorted { $0.createdAt < $1.createdAt }
+            .compactMap { FileManagerUtils.existingRecordingURL(for: $0.fileName) }
+    }
+
+    private func description(for format: ExportFormat) -> String {
+        switch format {
+        case .pdf: return String(localized: "Printable chart with every section and its chords.")
+        case .chordText: return String(localized: "Chords bar by bar, with lyrics — paste anywhere.")
+        case .lyrics: return hasLyrics ? String(localized: "Just the words, in song order.") : String(localized: "No lyrics written yet.")
+        case .studioMix:
+            if working == .studioMix { return String(localized: "Rendering… \(Int(mixProgress * 100))%") }
+            return hasStudioTracks ? String(localized: "Your Studio arrangement as one finished audio file.") : String(localized: "Add instruments in Studio to export a mix.")
+        case .midi: return hasChords ? String(localized: "Chords, bass and drums for Logic, Ableton, FL…") : String(localized: "Add chords in Compose to export MIDI.")
+        case .takes:
+            let count = takeURLs.count
+            return count == 0 ? String(localized: "No takes recorded yet.") : String(localized: "\(count) audio files from Record.")
+        case .fullText: return String(localized: "Everything: details, arrangement, chords, lyrics, takes.")
+        case .projectFile: return String(localized: "The whole song, to open in Suonote on another device.")
+        }
+    }
+
+    private func isAvailable(_ format: ExportFormat) -> Bool {
+        switch format {
+        case .lyrics: return hasLyrics
+        case .midi: return hasChords
+        case .studioMix: return hasStudioTracks
+        case .takes: return !takeURLs.isEmpty
+        default: return true
+        }
+    }
+
+    // MARK: Body
+
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 16) {
-                ZStack {
-                    Circle()
-                        .fill(color.opacity(0.2))
-                        .frame(width: 60, height: 60)
-                    
-                    Image(systemName: icon)
-                        .font(DesignSystem.Typography.title2)
-                        .foregroundStyle(color)
+        SheetScaffold(title: String(localized: "Export"), subtitle: String(localized: "Share “\(project.title)” with the band, the studio, or the printer.")) {
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xl) {
+                summary
+                group(String(localized: "For the band"), [.pdf, .chordText, .lyrics])
+                group(String(localized: "For production"), [.studioMix, .midi, .takes])
+                group(String(localized: "Keep a copy"), [.fullText, .projectFile])
+            }
+        }
+        .presentationDetents([.large])
+        .studioModalStyle()
+        .onDisappear { mixTask?.cancel() }
+        .sheet(item: $shareItem) { item in
+            ShareSheet(items: item.urls)
+                .presentationDetents([.medium, .large])
+                .ignoresSafeArea()
+        }
+        .alert(
+            "Couldn't export",
+            isPresented: Binding(get: { failedFormat != nil }, set: { if !$0 { failedFormat = nil } }),
+            presenting: failedFormat
+        ) { _ in
+            Button("OK", role: .cancel) {}
+        } message: { format in
+            Text("The \(format.title.lowercased()) file couldn't be created. Please try again.")
+        }
+    }
+
+    private var summary: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+            LibraryFactsRow(project: project)
+            if !sections.isEmpty {
+                LibraryArrangementStrip(project: project, height: 5)
+                Text("\(sections.count) sections · \(project.libraryTotalBars) bars")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundStyle(DesignSystem.Colors.textTertiary)
+            }
+        }
+        .padding(DesignSystem.Spacing.md)
+        .cardStyle()
+    }
+
+    private func group(_ title: String, _ formats: [ExportFormat]) -> some View {
+        LibraryFormGroup(title: title) {
+            VStack(spacing: 0) {
+                ForEach(Array(formats.enumerated()), id: \.element) { index, format in
+                    if index > 0 { Hairline().padding(.leading, 64) }
+                    row(format)
                 }
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(DesignSystem.Typography.headline)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    
-                    Text(subtitle)
+            }
+            .cardStyle()
+        }
+    }
+
+    private func row(_ format: ExportFormat) -> some View {
+        let available = isAvailable(format)
+        return Button {
+            export(format)
+        } label: {
+            HStack(spacing: DesignSystem.Spacing.sm) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md, style: .continuous)
+                        .fill(available ? DesignSystem.Colors.primaryLight : DesignSystem.Colors.surfaceSecondary)
+                        .frame(width: 40, height: 40)
+                    Image(systemName: format.icon)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(available ? DesignSystem.Colors.primaryDark : DesignSystem.Colors.textMuted)
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(format.title)
+                            .font(DesignSystem.Typography.headline)
+                            .foregroundStyle(available ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textTertiary)
+                        Text(format.badge)
+                            .font(DesignSystem.Typography.nano)
+                            .tracking(0.8)
+                            .foregroundStyle(DesignSystem.Colors.textTertiary)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .overlay(Capsule().stroke(DesignSystem.Colors.border, lineWidth: 1))
+                    }
+                    Text(description(for: format))
                         .font(DesignSystem.Typography.caption)
                         .foregroundStyle(DesignSystem.Colors.textSecondary)
                         .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                
-                Spacer()
-                
-                Image(systemName: "arrow.right.circle.fill")
-                    .font(DesignSystem.Typography.title3)
-                    .foregroundStyle(DesignSystem.Colors.textTertiary)
+                Spacer(minLength: 0)
+                Group {
+                    if working == format {
+                        ProgressView()
+                    } else if available {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(DesignSystem.Colors.textTertiary)
+                    }
+                }
+                .frame(width: 24)
             }
-            .padding(20)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(DesignSystem.Colors.surfaceSecondary)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(color.opacity(0.3), lineWidth: 1)
-                    )
-            )
+            .padding(.horizontal, DesignSystem.Spacing.md)
+            .padding(.vertical, DesignSystem.Spacing.sm)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(!available || working != nil)
+        .accessibilityLabel("\(format.title), \(format.badge)")
+        .accessibilityHint(description(for: format))
+    }
+
+    // MARK: Export
+
+    private func export(_ format: ExportFormat) {
+        HapticFeedback.light.trigger()
+        working = format
+        if format == .studioMix {
+            exportMix()
+            return
+        }
+        // Yield a frame so the spinner shows before synchronous file work.
+        DispatchQueue.main.async {
+            let urls = makeFiles(for: format)
+            working = nil
+            if urls.isEmpty {
+                HapticFeedback.error.trigger()
+                failedFormat = format
+            } else {
+                shareItem = ShareItem(urls: urls, type: format == .midi ? .midi : .text)
+            }
+        }
+    }
+
+    /// Renders the Studio arrangement offline (faster than realtime) through
+    /// the same mix as playback, then shares the file.
+    private func exportMix() {
+        mixProgress = 0
+        mixTask = Task { @MainActor in
+            do {
+                let url = try await StudioOfflineRenderer.render(project: project, format: .m4a) { value in
+                    mixProgress = value
+                }
+                working = nil
+                HapticFeedback.success.trigger()
+                shareItem = ShareItem(urls: [url], type: .text)
+            } catch is CancellationError {
+                working = nil
+            } catch {
+                AppLog.general.error("Mix export failed: \(error.localizedDescription)")
+                working = nil
+                HapticFeedback.error.trigger()
+                failedFormat = .studioMix
+            }
+        }
+    }
+
+    private var safeFileStem: String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+        let stem = project.title
+            .replacingOccurrences(of: " ", with: "_")
+            .unicodeScalars.filter { allowed.contains($0) }
+        let result = String(String.UnicodeScalarView(stem))
+        return result.isEmpty ? "Song" : result
+    }
+
+    private func makeFiles(for format: ExportFormat) -> [URL] {
+        switch format {
+        case .midi:
+            return MIDIExporter().exportProject(project).map { [$0] } ?? []
+        case .chordText:
+            return TextExporter().exportChordChart(project).map { [$0] } ?? []
+        case .fullText:
+            return TextExporter().exportFullProject(project).map { [$0] } ?? []
+        case .lyrics:
+            return TextExporter().exportLyrics(project).map { [$0] } ?? []
+        case .takes:
+            return takeURLs
+        case .pdf:
+            let data = ChordChartPDFGenerator.generatePDF(for: project)
+            return write(data, name: "\(safeFileStem)_chords.pdf")
+        case .projectFile:
+            guard let data = SuonoteProjectExchange.export(project: project) else { return [] }
+            return write(data, name: "\(safeFileStem).suonote")
+        case .studioMix:
+            return []   // rendered asynchronously in exportMix()
+        }
+    }
+
+    private func write(_ data: Data, name: String) -> [URL] {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+        do {
+            try data.write(to: url, options: .atomic)
+            return [url]
+        } catch {
+            AppLog.general.error("Export write failed: \(error.localizedDescription)")
+            return []
+        }
     }
 }
 
-struct ShareItem {
-    let url: URL
+struct ShareItem: Identifiable {
+    let id = UUID()
+    let urls: [URL]
     let type: ExportType
-    
+
+    var url: URL? { urls.first }
+
     enum ExportType {
         case midi, text
     }
@@ -488,9 +601,9 @@ class MIDIExporter {
 class TextExporter {
     func exportChordChart(_ project: Project) -> URL? {
         var text = "\(project.title)\n"
-        text += "Key: \(project.keyRoot) \(project.keyMode.rawValue)\n"
-        text += "Tempo: \(project.bpm) BPM\n"
-        text += "Time: \(project.timeTop)/\(project.timeBottom)\n\n"
+        text += String(localized: "Key: \(project.keyRoot) \(project.keyMode.libraryDisplayName)") + "\n"
+        text += String(localized: "Tempo: \(project.bpm) BPM") + "\n"
+        text += String(localized: "Time: \(project.timeTop)/\(project.timeBottom)") + "\n\n"
         text += String(repeating: "=", count: 40) + "\n\n"
         
         for item in project.arrangementItems.sorted(by: { $0.orderIndex < $1.orderIndex }) {
@@ -500,13 +613,13 @@ class TextExporter {
             
             // Chords
             if !section.chordEvents.isEmpty {
-                text += "Chords:\n"
+                text += String(localized: "Chords:") + "\n"
                 for bar in 0..<section.bars {
                     let barChords = section.chordEvents.filter { $0.barIndex == bar }
                         .sorted { $0.beatOffset < $1.beatOffset }
                     
                     if !barChords.isEmpty {
-                        text += "  Bar \(bar + 1): "
+                        text += "  " + String(localized: "Bar \(bar + 1):") + " "
                         text += barChords.map { $0.display }.joined(separator: " - ")
                         text += "\n"
                     }
@@ -515,7 +628,7 @@ class TextExporter {
             
             // Lyrics
             if !section.lyricsText.isEmpty {
-                text += "\nLyrics:\n"
+                text += "\n" + String(localized: "Lyrics:") + "\n"
                 text += section.lyricsText + "\n"
             }
             
@@ -525,25 +638,40 @@ class TextExporter {
         return saveToFile(text, fileName: "\(project.title)_ChordChart.txt")
     }
     
+    /// Lyric sheet in arrangement order; sections without words are skipped.
+    func exportLyrics(_ project: Project) -> URL? {
+        var text = "\(project.title)\n\n"
+        var wroteAny = false
+        for item in project.arrangementItems.sorted(by: { $0.orderIndex < $1.orderIndex }) {
+            guard let section = item.sectionTemplate else { continue }
+            let lyrics = section.lyricsText.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !lyrics.isEmpty else { continue }
+            text += "[\(item.labelOverride ?? section.name)]\n\(lyrics)\n\n"
+            wroteAny = true
+        }
+        guard wroteAny else { return nil }
+        return saveToFile(text, fileName: "\(project.title)_Lyrics.txt")
+    }
+
     func exportFullProject(_ project: Project) -> URL? {
-        var text = "PROJECT: \(project.title)\n\n"
-        text += "STATUS: \(project.status.rawValue)\n"
-        text += "KEY: \(project.keyRoot) \(project.keyMode.rawValue)\n"
-        text += "TEMPO: \(project.bpm) BPM\n"
-        text += "TIME SIGNATURE: \(project.timeTop)/\(project.timeBottom)\n"
+        var text = String(localized: "PROJECT: \(project.title)") + "\n\n"
+        text += String(localized: "STATUS: \(project.status.libraryDisplayName)") + "\n"
+        text += String(localized: "KEY: \(project.keyRoot) \(project.keyMode.libraryDisplayName)") + "\n"
+        text += String(localized: "TEMPO: \(project.bpm) BPM") + "\n"
+        text += String(localized: "TIME SIGNATURE: \(project.timeTop)/\(project.timeBottom)") + "\n"
         
         if !project.tags.isEmpty {
-            text += "TAGS: \(project.tags.joined(separator: ", "))\n"
+            text += String(localized: "TAGS: \(project.tags.joined(separator: ", "))") + "\n"
         }
         
-        text += "\nCREATED: \(project.createdAt.formatted())\n"
-        text += "UPDATED: \(project.updatedAt.formatted())\n"
+        text += "\n" + String(localized: "CREATED: \(project.createdAt.formatted())") + "\n"
+        text += String(localized: "UPDATED: \(project.updatedAt.formatted())") + "\n"
         text += "\n" + String(repeating: "=", count: 60) + "\n\n"
         
-        text += "ARRANGEMENT\n\n"
+        text += String(localized: "ARRANGEMENT") + "\n\n"
         for (index, item) in project.arrangementItems.sorted(by: { $0.orderIndex < $1.orderIndex }).enumerated() {
             guard let section = item.sectionTemplate else { continue }
-            text += "\(index + 1). \(section.name) (\(section.bars) bars)\n"
+            text += "\(index + 1). " + String(localized: "\(section.name) (\(section.bars) bars)") + "\n"
         }
         
         text += "\n" + String(repeating: "=", count: 60) + "\n\n"
@@ -555,18 +683,18 @@ class TextExporter {
                   !seenSections.contains(section.id) else { continue }
             seenSections.insert(section.id)
             
-            text += "SECTION: \(section.name)\n"
-            text += "Bars: \(section.bars)\n\n"
+            text += String(localized: "SECTION: \(section.name)") + "\n"
+            text += String(localized: "Bars: \(section.bars)") + "\n\n"
             
             if !section.chordEvents.isEmpty {
-                text += "CHORDS:\n"
+                text += String(localized: "CHORDS:") + "\n"
                 for bar in 0..<section.bars {
                     let barChords = section.chordEvents.filter { $0.barIndex == bar }
                         .sorted { $0.beatOffset < $1.beatOffset }
                     
                     if !barChords.isEmpty {
-                        text += "  Bar \(bar + 1): "
-                        text += barChords.map { "\($0.display) (beat \($0.beatOffset + 1), \($0.duration)b)" }
+                        text += "  " + String(localized: "Bar \(bar + 1):") + " "
+                        text += barChords.map { String(localized: "\($0.display) (beat \($0.beatOffset + 1), \($0.duration)b)") }
                             .joined(separator: ", ")
                         text += "\n"
                     }
@@ -575,18 +703,18 @@ class TextExporter {
             }
             
             if !section.lyricsText.isEmpty {
-                text += "LYRICS:\n\(section.lyricsText)\n\n"
+                text += String(localized: "LYRICS:") + "\n\(section.lyricsText)\n\n"
             }
             
             text += String(repeating: "-", count: 60) + "\n\n"
         }
         
         if !project.recordings.isEmpty {
-            text += "RECORDINGS (\(project.recordings.count))\n\n"
+            text += String(localized: "RECORDINGS (\(project.recordings.count))") + "\n\n"
             for recording in project.recordings.sorted(by: { $0.createdAt > $1.createdAt }) {
                 text += "- \(recording.name)\n"
-                text += "  Duration: \(formatDuration(recording.duration))\n"
-                text += "  Created: \(recording.createdAt.formatted())\n\n"
+                text += "  " + String(localized: "Duration: \(formatDuration(recording.duration))") + "\n"
+                text += "  " + String(localized: "Created: \(recording.createdAt.formatted())") + "\n\n"
             }
         }
         

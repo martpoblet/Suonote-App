@@ -1,8 +1,16 @@
 import SwiftUI
+import os
 
 // MARK: - App Typography
-/// Erode: Títulos, headlines, display, chord names
-/// Manrope: Body, captions, UI elements
+/// Suonote speaks in two voices:
+/// - **Erode** (serif) — the brand voice. Titles, display numerals (BPM, key),
+///   chord names, section names, editorial italics.
+/// - **Manrope** (sans) — the working voice. Labels, buttons, captions, body.
+///
+/// Both families ship as *variable* fonts whose default instance is the
+/// lightest weight. `Font.custom(...).weight(...)` is unreliable with variable
+/// fonts (and `.italic()` only synthesizes a slant), so every weight below
+/// resolves to the font's real named instance by PostScript name.
 
 struct AppFonts {
     static let erode = "Erode Variable"
@@ -10,11 +18,55 @@ struct AppFonts {
 
     static func checkFonts() {
         #if DEBUG
-        let erodeOK = UIFont(name: erode, size: 12) != nil
-        let manropeOK = UIFont(name: manrope, size: 12) != nil
-        print("Erode: \(erodeOK ? "✓" : "✗")")
-        print("Manrope: \(manropeOK ? "✓" : "✗")")
+        let missing = (ErodeWeight.allCases.map(\.postScriptName)
+            + ErodeWeight.allCases.map(\.italicPostScriptName)
+            + ManropeWeight.allCases.map(\.postScriptName))
+            .filter { UIFont(name: $0, size: 12) == nil }
+        if missing.isEmpty {
+            AppLog.ui.debug("Brand fonts OK")
+        } else {
+            AppLog.ui.error("Missing font instances: \(missing.joined(separator: ", "))")
+        }
         #endif
+    }
+}
+
+enum ErodeWeight: CaseIterable {
+    case light, regular, medium, semibold, bold
+
+    var postScriptName: String {
+        switch self {
+        case .light: return "Erode-Variable-Light"
+        case .regular: return "Erode-Variable-Light_Regular"
+        case .medium: return "Erode-Variable-Light_Medium"
+        case .semibold: return "Erode-Variable-Light_Semibold"
+        case .bold: return "Erode-Variable-Light_Bold"
+        }
+    }
+
+    var italicPostScriptName: String {
+        switch self {
+        case .light: return "Erode-Variable-Light-Italic"
+        case .regular: return "Erode-Variable-Light-Italic_Italic"
+        case .medium: return "Erode-Variable-Light-Italic_Medium-Italic"
+        case .semibold: return "Erode-Variable-Light-Italic_Semibold-Italic"
+        case .bold: return "Erode-Variable-Light-Italic_Bold-Italic"
+        }
+    }
+}
+
+enum ManropeWeight: CaseIterable {
+    case light, regular, medium, semibold, bold, extrabold
+
+    var postScriptName: String {
+        switch self {
+        case .light: return "Manrope-Light"
+        case .regular: return "Manrope-Regular"
+        case .medium: return "Manrope-Medium"
+        case .semibold: return "Manrope-SemiBold"
+        case .bold: return "Manrope-Bold"
+        case .extrabold: return "Manrope-ExtraBold"
+        }
     }
 }
 
@@ -23,7 +75,7 @@ extension Font {
 
     /// Maps a design size to the closest system text style so custom fonts
     /// scale with Dynamic Type.
-    private static func inferredTextStyle(for size: CGFloat) -> TextStyle {
+    static func inferredTextStyle(for size: CGFloat) -> TextStyle {
         switch size {
         case ..<11: return .caption2
         case ..<13: return .caption
@@ -38,85 +90,59 @@ extension Font {
         }
     }
 
-    // MARK: - Erode (Primary - Titles & Display)
+    // MARK: Erode (brand serif)
 
-    static func erode(_ size: CGFloat, relativeTo style: TextStyle? = nil) -> Font {
-        .custom(AppFonts.erode, size: size, relativeTo: style ?? inferredTextStyle(for: size))
+    static func erode(
+        _ size: CGFloat,
+        weight: ErodeWeight = .regular,
+        relativeTo style: TextStyle? = nil
+    ) -> Font {
+        .custom(weight.postScriptName, size: size, relativeTo: style ?? inferredTextStyle(for: size))
     }
 
-    static func erodeItalic(_ size: CGFloat, relativeTo style: TextStyle? = nil) -> Font {
-        erode(size, relativeTo: style).italic()
+    /// True Erode italic (not a synthesized slant) — for editorial accents.
+    static func erodeItalic(
+        _ size: CGFloat,
+        weight: ErodeWeight = .regular,
+        relativeTo style: TextStyle? = nil
+    ) -> Font {
+        .custom(weight.italicPostScriptName, size: size, relativeTo: style ?? inferredTextStyle(for: size))
     }
 
-    // MARK: - Manrope (Secondary - Body & UI)
+    // MARK: Manrope (UI sans)
 
-    static func manrope(_ size: CGFloat, relativeTo style: TextStyle? = nil) -> Font {
-        .custom(AppFonts.manrope, size: size, relativeTo: style ?? inferredTextStyle(for: size))
+    static func manrope(
+        _ size: CGFloat,
+        weight: ManropeWeight = .regular,
+        relativeTo style: TextStyle? = nil
+    ) -> Font {
+        .custom(weight.postScriptName, size: size, relativeTo: style ?? inferredTextStyle(for: size))
     }
 
-    // MARK: - Display Sizes (Erode)
+    // MARK: Legacy aliases (kept so older call sites compile)
 
-    static var appHero: Font { erode(120) }
-    static var appMega: Font { erode(72) }
-    static var appJumbo: Font { erode(60) }
-    static var appGiant: Font { erode(56) }
-    static var appHuge: Font { erode(48) }
-    static var appXXL: Font { erode(44) }
-    static var appXL: Font { erode(40) }
-    static var appLG: Font { erode(36) }
-    static var appMD: Font { erode(32) }
-    static var appSM: Font { erode(24) }
+    static var appHero: Font { erode(120, weight: .semibold) }
+    static var appMega: Font { erode(72, weight: .semibold) }
+    static var appJumbo: Font { erode(60, weight: .semibold) }
+    static var appGiant: Font { erode(56, weight: .semibold) }
+    static var appHuge: Font { erode(48, weight: .semibold) }
+    static var appXXL: Font { erode(44, weight: .medium) }
+    static var appXL: Font { erode(40, weight: .medium) }
+    static var appLG: Font { erode(36, weight: .medium) }
+    static var appMD: Font { erode(32, weight: .medium) }
+    static var appSM: Font { erode(24, weight: .medium) }
 
-    // MARK: - Title Sizes (Erode)
-
-    static var delightDisplayLarge: Font { erode(48) }
-    static var delightDisplay: Font { erode(40) }
-    static var delightLargeTitle: Font { erode(34) }
-    static var delightTitle: Font { erode(28) }
-    static var delightTitle2: Font { erode(22) }
-    static var delightTitle3: Font { erode(20) }
-
-    // MARK: - Headline (Erode for emphasis)
-
-    static var delightHeadline: Font { erode(17) }
-
-    // MARK: - Body Sizes (Manrope)
-
-    static var delightSubheadline: Font { manrope(15) }
-    static var delightBody: Font { manrope(15) }
-    static var delightBodyBold: Font { manrope(15) }
-    static var delightBodyMedium: Font { manrope(15) }
-
-    // MARK: - Small Sizes (Manrope)
-
-    static var delightCallout: Font { manrope(13) }
-    static var delightCalloutBold: Font { manrope(13) }
-    static var delightCaption: Font { manrope(12) }
-    static var delightCaption2: Font { manrope(11) }
-    static var delightFootnote: Font { manrope(13) }
-    static var appMicro: Font { manrope(10) }
-    static var appNano: Font { manrope(8) }
-
-    // MARK: - Legacy aliases
-
-    static func app(size: CGFloat) -> Font { erode(size) }
-    static func delight(size: CGFloat) -> Font { erode(size) }
+    static func app(size: CGFloat) -> Font { erode(size, weight: .semibold) }
     static func appItalic(size: CGFloat) -> Font { erodeItalic(size) }
-    static func delightItalic(size: CGFloat) -> Font { erodeItalic(size) }
-    static func primary(size: CGFloat) -> Font { erode(size) }
-    static func secondary(size: CGFloat) -> Font { manrope(size) }
 }
 
 // MARK: - UIFont Extension
 extension UIFont {
-    static func erode(_ size: CGFloat) -> UIFont {
-        UIFont(name: AppFonts.erode, size: size) ?? .systemFont(ofSize: size)
+    static func erode(_ size: CGFloat, weight: ErodeWeight = .semibold) -> UIFont {
+        UIFont(name: weight.postScriptName, size: size) ?? .systemFont(ofSize: size, weight: .semibold)
     }
 
-    static func manrope(_ size: CGFloat) -> UIFont {
-        UIFont(name: AppFonts.manrope, size: size) ?? .systemFont(ofSize: size)
+    static func manrope(_ size: CGFloat, weight: ManropeWeight = .medium) -> UIFont {
+        UIFont(name: weight.postScriptName, size: size) ?? .systemFont(ofSize: size, weight: .medium)
     }
-
-    static func app(size: CGFloat) -> UIFont { erode(size) }
-    static func delight(size: CGFloat) -> UIFont { erode(size) }
 }

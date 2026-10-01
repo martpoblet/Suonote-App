@@ -1,51 +1,27 @@
 import SwiftUI
 
-// MARK: - Progression Analysis Badge Component
-
+// MARK: - Progression Analysis Badge
+/// Quiet chip summarising a section's harmony: the progression's nickname
+/// when it's a known one ("The Axis"), otherwise how much sits in the key.
 struct ProgressionAnalysisBadge: View {
     let section: SectionTemplate
     let project: Project
-    
-    private var analysis: ProgressionAnalysis {
-        ChordSuggestionEngine.analyzeProgression(
-            section.chordEvents,
-            inKey: project.keyRoot,
-            mode: project.keyMode
-        )
-    }
-    
-    private var statusColor: Color {
-        if analysis.totalChords == 0 { return DesignSystem.Colors.textTertiary }
-        if analysis.diatonicPercentage > 80 { return DesignSystem.Colors.success }
-        if analysis.diatonicPercentage > 50 { return DesignSystem.Colors.warning }
-        return DesignSystem.Colors.error
-    }
-    
-    private var statusIcon: String {
-        if analysis.totalChords == 0 { return "music.note" }
-        if analysis.diatonicPercentage > 80 { return "checkmark.circle.fill" }
-        if analysis.diatonicPercentage > 50 { return "exclamationmark.triangle.fill" }
-        return "xmark.circle.fill"
-    }
-    
+
     var body: some View {
-        if analysis.totalChords > 0 {
-            HStack(spacing: DesignSystem.Spacing.xxs) {
-                Image(systemName: statusIcon)
-                    .font(DesignSystem.Typography.nano)
-                Text("\(Int(analysis.diatonicPercentage))%")
+        if let text = ComposeInsightEngine.badge(for: section) {
+            HStack(spacing: 4) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(DesignSystem.Colors.primaryDark)
+                Text(text)
                     .font(DesignSystem.Typography.caption2)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
             }
-            .foregroundStyle(DesignSystem.Colors.textPrimary)
-            .padding(.horizontal, DesignSystem.Spacing.xs)
-            .padding(.vertical, DesignSystem.Spacing.xxxs)
-            .background(
-                Capsule()
-                    .fill(statusColor.opacity(0.3))
-                    .overlay(
-                        Capsule().stroke(statusColor, lineWidth: 1)
-                    )
-            )
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(DesignSystem.Colors.primaryLight.opacity(0.7)))
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Harmony: \(text)")
         }
     }
 }
@@ -55,24 +31,16 @@ struct ProgressionAnalysisBadge: View {
 struct ChordCountBadge: View {
     let count: Int
     let color: Color
-    
+
     var body: some View {
-        HStack(spacing: DesignSystem.Spacing.xxxs) {
-            Image(systemName: "music.note")
-                .font(DesignSystem.Typography.nano)
-            Text("\(count)")
-                .font(DesignSystem.Typography.caption2)
-        }
-        .foregroundStyle(DesignSystem.Colors.textPrimary)
-        .padding(.horizontal, DesignSystem.Spacing.xs)
-        .padding(.vertical, DesignSystem.Spacing.xxxs)
-        .background(
-            Capsule()
-                .fill(color.opacity(0.3))
-                .overlay(
-                    Capsule().stroke(color, lineWidth: 1)
-                )
+        AppChip(
+            text: "\(count)",
+            icon: "music.note",
+            tint: color,
+            textColor: DesignSystem.Colors.textSecondary,
+            font: DesignSystem.Typography.caption2
         )
+        .accessibilityLabel("\(count) chords")
     }
 }
 
@@ -81,37 +49,28 @@ struct ChordCountBadge: View {
 struct RecordingCountBadge: View {
     let count: Int
     let color: Color
-    
+
     var body: some View {
-        HStack(spacing: DesignSystem.Spacing.xxxs) {
-            Image(systemName: "waveform.badge.mic")
-                .font(DesignSystem.Typography.nano)
-            Text("\(count)")
-                .font(DesignSystem.Typography.caption2)
-        }
-        .foregroundStyle(DesignSystem.Colors.textPrimary)
-        .padding(.horizontal, DesignSystem.Spacing.xs)
-        .padding(.vertical, DesignSystem.Spacing.xxxs)
-        .background(
-            Capsule()
-                .fill(color.opacity(0.3))
-                .overlay(
-                    Capsule().stroke(color, lineWidth: 1)
-                )
+        AppChip(
+            text: "\(count)",
+            icon: "waveform",
+            tint: color,
+            textColor: DesignSystem.Colors.textSecondary,
+            font: DesignSystem.Typography.caption2
         )
+        .accessibilityLabel("\(count) recordings")
     }
 }
 
-// MARK: - Preview
 #Preview {
     VStack(spacing: DesignSystem.Spacing.md) {
         ProgressionAnalysisBadge(
             section: SectionTemplate(name: "Test"),
             project: Project(title: "Test", keyRoot: "C", keyMode: .major, bpm: 120)
         )
-        
         ChordCountBadge(count: 8, color: DesignSystem.Colors.primary)
+        RecordingCountBadge(count: 2, color: DesignSystem.Colors.accent)
     }
     .padding()
-    .preferredColorScheme(.dark)
+    .paperBackground()
 }

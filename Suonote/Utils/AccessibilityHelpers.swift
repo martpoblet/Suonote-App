@@ -44,11 +44,11 @@ struct ColorBlindIndicator: View {
         HStack(spacing: 4) {
             Image(systemName: status.icon)
                 .font(DesignSystem.Typography.caption2)
-            Text(status.rawValue)
+            Text(status.libraryDisplayName)
                 .font(DesignSystem.Typography.caption2)
         }
         .foregroundStyle(status.swiftUIColor)
-        .accessibilityLabel("\(status.rawValue) status")
+        .accessibilityLabel("\(status.libraryDisplayName) status")
     }
 }
 

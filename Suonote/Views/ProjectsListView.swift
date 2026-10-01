@@ -1,721 +1,468 @@
 import SwiftUI
 import SwiftData
 
+/// The library — Suonote's home. An editorial page: greeting, a "Continue"
+/// card for the song you touched last, then every song as a quiet row
+/// with its shape (section colors), key, tempo and status.
 struct ProjectsListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Project.updatedAt, order: .reverse) private var allProjects: [Project]
-    
+
     @State private var searchText = ""
     @State private var selectedStatus: ProjectStatus?
     @State private var selectedTag: String?
     @State private var showingCreateSheet = false
-    @State private var scrollOffset: CGFloat = 0
+    @State private var showingSettings = false
     @State private var projectToDelete: Project?
-    @State private var showDeleteConfirmation = false
-    @State private var showingSoundFontCredits = false
-    @State private var deepLinkedProject: Project?
-    @State private var settings = AppSettings.shared
-    
-    var filteredProjects: [Project] {
-        var projects = allProjects
-        
-        // Always exclude archived unless explicitly filtering for archived
-        if selectedStatus != .archived {
-            projects = projects.filter { $0.status != .archived }
-        }
-        
-        if !searchText.isEmpty {
-            projects = projects.filter { project in
-                project.title.localizedCaseInsensitiveContains(searchText) ||
-                project.tags.contains { $0.localizedCaseInsensitiveContains(searchText) } ||
-                project.sectionTemplates.contains { section in
-                    section.lyricsText.localizedCaseInsensitiveContains(searchText)
-                }
-            }
-        }
-        
+    @State private var pushedRoute: LibraryRoute?
+    @AppStorage("librarySort") private var sortRaw: String = LibrarySort.recent.rawValue
+
+    // MARK: Derived data
+
+    private var sort: LibrarySort { LibrarySort(rawValue: sortRaw) ?? .recent }
+
+    private var trimmedSearch: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var isFiltering: Bool {
+        !trimmedSearch.isEmpty || selectedStatus != nil || selectedTag != nil
+    }
+
+    private var activeProjects: [Project] {
+        allProjects.filter { $0.status != .archived }
+    }
+
+    /// The most recently edited song, featured while browsing.
+    private var continueProject: Project? {
+        isFiltering ? nil : activeProjects.first
+    }
+
+    private var listedProjects: [Project] {
+        var projects = selectedStatus == .archived ? allProjects : activeProjects
+
         if let status = selectedStatus {
             projects = projects.filter { $0.status == status }
         }
-        
         if let tag = selectedTag {
             projects = projects.filter { $0.tags.contains(tag) }
         }
-        
-        return projects
+        if !trimmedSearch.isEmpty {
+            projects = projects.filter { $0.libraryMatches(trimmedSearch) }
+        }
+        if let hero = continueProject {
+            projects.removeAll { $0.id == hero.id }
+        }
+
+        switch sort {
+        case .recent:
+            return projects
+        case .created:
+            return projects.sorted { $0.createdAt > $1.createdAt }
+        case .title:
+            return projects.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        }
     }
-    
-    var allTags: [String] {
-        Array(Set(allProjects.flatMap { $0.tags })).sorted()
+
+    private var allTags: [String] {
+        Array(Set(allProjects.flatMap(\.tags))).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
-    
+
+    private var hasArchived: Bool {
+        allProjects.contains { $0.status == .archived }
+    }
+
+    // MARK: Body
+
     var body: some View {
-        ZStack {
-            // Background usando Design System
-            ProjectBackgroundView()
-            
-            VStack(spacing: 0) {
-                // Custom header - always at top
-                customHeader
-                    .padding(.horizontal, DesignSystem.Spacing.xl)
-                    .padding(.top, DesignSystem.Spacing.xs)
-                
-                // Filter chips
-                if !allProjects.isEmpty {
-                    filterChipsView
-                        .padding(.top, DesignSystem.Spacing.md)
-                }
-                
-                // Projects grid
-                if filteredProjects.isEmpty {
-                    VStack(spacing: 0) {
-                        Spacer()
-                        emptyStateView
-                            .padding(.horizontal, DesignSystem.Spacing.xxl)
-                        Spacer()
-                    }
-                } else {
-                    List {
-                        ForEach(filteredProjects) { project in
-                            NavigationLink(destination: ProjectDetailView(project: project)) {
-                                ModernProjectCard(project: project)
-                            }
-                            .listRowInsets(EdgeInsets(
-                                top: DesignSystem.Spacing.xs,
-                                leading: DesignSystem.Spacing.xl,
-                                bottom: DesignSystem.Spacing.xs,
-                                trailing: DesignSystem.Spacing.xl
-                            ))
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button(role: .destructive) {
-                                    projectToDelete = project
-                                    showDeleteConfirmation = true
-                                } label: {
-                                    Label("Delete", systemImage: DesignSystem.Icons.delete)
-                                }
-                                
-                                Button {
-                                    archiveProject(project)
-                                } label: {
-                                    Label(project.status == .archived ? "Unarchive" : "Archive", 
-                                          systemImage: project.status == .archived ? "tray.and.arrow.up.fill" : "archivebox.fill")
-                                }
-                                .tint(DesignSystem.Colors.warning)
-                                
-                                Button {
-                                    cloneProject(project)
-                                } label: {
-                                    Label("Clone", systemImage: "doc.on.doc.fill")
-                                }
-                                .tint(DesignSystem.Colors.info)
-                            }
-                        }
-                    }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
-                    .contentMargins(.top, 16, for: .scrollContent)
-                    .scrollEdgeEffectStyle(.soft, for: .top)
-                }
+        Group {
+            if allProjects.isEmpty {
+                emptyLibrary
+            } else {
+                library
             }
-            
-            // Floating action button
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    FloatingActionButton {
-                        showingCreateSheet = true
-                    }
-                    .padding(24)
-                }
-            }
+        }
+        .paperBackground()
+        .navigationTitle("Library")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(removing: .title)
+        .toolbar { toolbarContent }
+        .searchable(text: $searchText, prompt: "Titles, lyrics, tags")
+        .navigationDestination(for: LibraryRoute.self) { route in
+            ProjectDetailView(project: route.project, initialTab: route.tab)
+        }
+        .navigationDestination(item: $pushedRoute) { route in
+            ProjectDetailView(project: route.project, initialTab: route.tab)
         }
         .sheet(isPresented: $showingCreateSheet) {
-            CreateProjectView()
-        }
-        .sheet(isPresented: $showingSoundFontCredits) {
-            SoundFontCreditsView()
-        }
-        .alert("Delete Project?", isPresented: $showDeleteConfirmation, presenting: projectToDelete) { project in
-            Button("Cancel", role: .cancel) {}
-            Button("Delete", role: .destructive) {
-                deleteProject(project)
+            CreateProjectView { project in
+                pushedRoute = LibraryRoute(project: project)
             }
-        } message: { project in
-            Text("Are you sure you want to delete '\(project.title)'? This action cannot be undone.")
         }
-        .navigationDestination(item: $deepLinkedProject) { project in
-            ProjectDetailView(project: project)
+        .sheet(isPresented: $showingSettings) {
+            LibrarySettingsView()
+        }
+        .confirmationDialog(
+            "Delete “\(projectToDelete?.title ?? String(localized: "song"))”?",
+            isPresented: Binding(
+                get: { projectToDelete != nil },
+                set: { if !$0 { projectToDelete = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: projectToDelete
+        ) { project in
+            Button("Delete song", role: .destructive) { deleteProject(project) }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("Its sections, lyrics and Studio parts will be removed. This can't be undone.")
         }
         .onOpenURL { url in
-            guard url.scheme == "suonote",
-                  url.host == "project",
+            guard url.scheme == "suonote", url.host == "project",
                   let idString = url.pathComponents.dropFirst().first,
-                  let projectId = UUID(uuidString: idString) else { return }
-            if let project = allProjects.first(where: { $0.id == projectId }) {
-                deepLinkedProject = project
-            }
-        }
-            }
-    
-    private var customHeader: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-            HStack {
-                AppLogoView(height: 24)
-                    .padding(.bottom, 2)
-                Spacer()
-
-                Menu {
-                    ForEach(AppSettings.AppTheme.allCases, id: \.self) { theme in
-                        Button {
-                            settings.theme = theme
-                        } label: {
-                            Label(theme.rawValue, systemImage: theme.icon)
-                            if settings.theme == theme {
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
-                } label: {
-                    Image(systemName: settings.theme.icon)
-                        .font(DesignSystem.Typography.body)
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                        .frame(width: 32, height: 32)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityLabel("Appearance")
-
-                Button {
-                    showingSoundFontCredits = true
-                } label: {
-                    Image(systemName: "info.circle")
-                        .font(DesignSystem.Typography.body)
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                }
-                .accessibilityLabel("SoundFont Credits")
-            }
-
-            Text("Your Ideas")
-                .font(DesignSystem.Typography.xxl)
-                .fontWeight(.bold)
-                .foregroundStyle(DesignSystem.Colors.textPrimary)
-            
-            if !allProjects.isEmpty {
-                HStack(spacing: 8) {
-                    Text("\(allProjects.count) project\(allProjects.count == 1 ? "" : "s")")
-                        .font(DesignSystem.Typography.callout)
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                    SyncStatusIndicator()
-                }
-            }
-            
-            // Search bar con glassmorphism
-            HStack(spacing: DesignSystem.Spacing.sm) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(DesignSystem.Colors.textSecondary)
-                
-                TextField("Search ideas...", text: $searchText)
-                    .textFieldStyle(.plain)
-                    .foregroundStyle(DesignSystem.Colors.textPrimary)
-                
-                if !searchText.isEmpty {
-                    Button {
-                        withAnimation(DesignSystem.Animations.quickSpring) {
-                            searchText = ""
-                        }
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(DesignSystem.Colors.textSecondary)
-                    }
-                }
-            }
-            .padding(DesignSystem.Spacing.md)
-            .cardStyle(cornerRadius: DesignSystem.CornerRadius.lg)
-            .padding(.top, DesignSystem.Spacing.xs)
+                  let projectId = UUID(uuidString: idString),
+                  let project = allProjects.first(where: { $0.id == projectId }) else { return }
+            pushedRoute = LibraryRoute(project: project)
         }
     }
-    
-    private var filterChipsView: some View {
+
+    // MARK: Toolbar
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            AppLogoView(height: 20)
+                .accessibilityLabel("Suonote")
+        }
+        .sharedBackgroundVisibility(.hidden)
+
+        ToolbarItem(placement: .topBarTrailing) {
+            Button {
+                showingSettings = true
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+            }
+            .accessibilityLabel("Settings")
+        }
+
+        DefaultToolbarItem(kind: .search, placement: .bottomBar)
+        ToolbarSpacer(.fixed, placement: .bottomBar)
+        ToolbarItem(placement: .bottomBar) {
+            Button {
+                HapticFeedback.medium.trigger()
+                showingCreateSheet = true
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 17, weight: .semibold))
+            }
+            .buttonStyle(.glassProminent)
+            .tint(DesignSystem.Colors.primary)
+            .accessibilityLabel("New song")
+        }
+    }
+
+    // MARK: Library list
+
+    private var library: some View {
+        List {
+            Section {
+                LibraryGreetingHeader(
+                    songCount: activeProjects.count,
+                    inProgressCount: activeProjects.filter { $0.status == .inProgress }.count
+                )
+                .clearLibraryRow(top: DesignSystem.Spacing.xs)
+            }
+
+            if let hero = continueProject {
+                Section {
+                    LibraryContinueCard(project: hero) { tab in
+                        HapticFeedback.light.trigger()
+                        pushedRoute = LibraryRoute(project: hero, tab: tab)
+                    }
+                    .contextMenu { contextMenu(for: hero) }
+                    .clearLibraryRow()
+                }
+            }
+
+            Section {
+                filterBar
+                    .clearLibraryRow()
+            }
+
+            Section {
+                if listedProjects.isEmpty {
+                    noResults
+                        .listRowBackground(DesignSystem.Colors.surface)
+                } else {
+                    ForEach(listedProjects) { project in
+                        NavigationLink(value: LibraryRoute(project: project)) {
+                            LibraryProjectRow(project: project)
+                        }
+                        .listRowBackground(DesignSystem.Colors.surface)
+                        .listRowSeparatorTint(DesignSystem.Colors.border)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                projectToDelete = project
+                            } label: {
+                                Label("Delete", systemImage: DesignSystem.Icons.delete)
+                            }
+                            Button {
+                                duplicate(project)
+                            } label: {
+                                Label("Duplicate", systemImage: DesignSystem.Icons.duplicate)
+                            }
+                            .tint(DesignSystem.Colors.info)
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                            Button {
+                                toggleArchive(project)
+                            } label: {
+                                Label(project.status == .archived ? "Unarchive" : "Archive",
+                                      systemImage: project.status == .archived ? "tray.and.arrow.up" : "archivebox")
+                            }
+                            .tint(DesignSystem.Colors.warning)
+                        }
+                        .contextMenu { contextMenu(for: project) }
+                    }
+                }
+            } header: {
+                songsHeader
+            }
+        }
+        .listStyle(.insetGrouped)
+        .listSectionSpacing(DesignSystem.Spacing.md)
+        .scrollContentBackground(.hidden)
+        .scrollDismissesKeyboard(.immediately)
+        .animation(DesignSystem.Animations.smoothSpring, value: listedProjects.map(\.id))
+        .animation(DesignSystem.Animations.smoothSpring, value: continueProject?.id)
+    }
+
+    private var songsHeader: some View {
+        HStack(alignment: .firstTextBaseline, spacing: DesignSystem.Spacing.xs) {
+            Text(isFiltering ? "Results" : (continueProject == nil ? "Songs" : "More songs"))
+                .eyebrow()
+            Text("\(listedProjects.count)")
+                .font(DesignSystem.Typography.caption)
+                .foregroundStyle(DesignSystem.Colors.textTertiary)
+            Spacer(minLength: 0)
+            Menu {
+                Picker("Sort by", selection: $sortRaw) {
+                    ForEach(LibrarySort.allCases) { option in
+                        Label(option.displayName, systemImage: option.icon).tag(option.rawValue)
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(sort.displayName)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 9, weight: .bold))
+                }
+                .font(DesignSystem.Typography.buttonSmall)
+                .foregroundStyle(DesignSystem.Colors.primaryDark)
+            }
+            .accessibilityLabel("Sort songs, currently \(sort.displayName)")
+        }
+        .textCase(nil)
+    }
+
+    // MARK: Filters
+
+    private var filterBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DesignSystem.Spacing.xxs) {
-                ForEach(ProjectStatus.allCases, id: \.self) { status in
-                    ModernFilterChip(
-                        title: status.rawValue,
-                        icon: status.icon,
-                        isSelected: selectedStatus == status,
-                        color: status.swiftUIColor
-                    ) {
-                        withAnimation(DesignSystem.Animations.smoothSpring) {
+            HStack(spacing: 8) {
+                SelectableChip(title: String(localized: "All"), isSelected: selectedStatus == nil && selectedTag == nil) {
+                    withAnimation(DesignSystem.Animations.quickSpring) {
+                        selectedStatus = nil
+                        selectedTag = nil
+                    }
+                }
+
+                ForEach(ProjectStatus.allCases.filter { $0 != .archived || hasArchived }, id: \.self) { status in
+                    SelectableChip(title: status.libraryDisplayName, dot: status.swiftUIColor, isSelected: selectedStatus == status) {
+                        HapticFeedback.selection.trigger()
+                        withAnimation(DesignSystem.Animations.quickSpring) {
                             selectedStatus = selectedStatus == status ? nil : status
                         }
                     }
                 }
-                
+
                 if !allTags.isEmpty {
-                    Divider()
-                        .frame(height: 30)
-                        .overlay(DesignSystem.Colors.border.opacity(0.5))
-                    
+                    Rectangle()
+                        .fill(DesignSystem.Colors.border)
+                        .frame(width: 1, height: 20)
+                        .padding(.horizontal, 4)
+
                     ForEach(allTags, id: \.self) { tag in
-                        ModernFilterChip(
-                            title: tag,
-                            icon: "tag.fill",
-                            isSelected: selectedTag == tag,
-                            color: DesignSystem.Colors.info
-                        ) {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        SelectableChip(title: tag, icon: "number", isSelected: selectedTag == tag) {
+                            HapticFeedback.selection.trigger()
+                            withAnimation(DesignSystem.Animations.quickSpring) {
                                 selectedTag = selectedTag == tag ? nil : tag
                             }
                         }
                     }
                 }
             }
-            .padding(.horizontal, 24)
+            .padding(.vertical, 2)
         }
+        .scrollClipDisabled()
     }
-    
-    private var emptyStateView: some View {
-        // Usar el componente EmptyStateView del Design System
-        EmptyStateView(
-            icon: "music.note.list",
-            title: allProjects.isEmpty ? "No Ideas Yet" : "No Results",
-            message: allProjects.isEmpty ? 
-                "Tap the + button to capture your first idea" : 
-                "Try adjusting your filters",
-            actionTitle: allProjects.isEmpty ? "Create Project" : nil
-        ) {
-            showingCreateSheet = true
-        }
-    }
-    
-    private func deleteProject(_ project: Project) {
-        // The confirmation alert is handled by swipeActions' role: .destructive
-        modelContext.delete(project)
-        try? modelContext.save()
-    }
-    
-    private func archiveProject(_ project: Project) {
-        project.status = project.status == .archived ? .idea : .archived
-        project.updatedAt = Date()
-        try? modelContext.save()
-    }
-    
-    private func cloneProject(_ project: Project) {
-        // Create clone in background to avoid animation conflicts
-        DispatchQueue.main.async {
-            let clonedProject = Project(
-                title: "\(project.title) (Copy)",
-                status: project.status,
-                tags: project.tags,
-                keyRoot: project.keyRoot,
-                keyMode: project.keyMode,
-                bpm: project.bpm,
-                timeTop: project.timeTop,
-                timeBottom: project.timeBottom
-            )
-            clonedProject.studioStyleRaw = project.studioStyleRaw
-            
-            // Clone arrangement items and sections
-            for item in project.arrangementItems {
-                if let originalSection = item.sectionTemplate {
-                    let clonedSection = SectionTemplate(
-                        name: originalSection.name,
-                        bars: originalSection.bars,
-                        patternPreset: originalSection.patternPreset,
-                        lyricsText: originalSection.lyricsText,
-                        notesText: originalSection.notesText,
-                        colorHex: originalSection.colorHex ?? SectionColor.sage.hex
-                    )
-                    clonedSection.project = clonedProject
-                    clonedProject.sectionTemplates.append(clonedSection)
-                    
-                    // Clone chord events
-                    for chordEvent in originalSection.chordEvents {
-                        let clonedChord = ChordEvent(
-                            barIndex: chordEvent.barIndex,
-                            beatOffset: chordEvent.beatOffset,
-                            duration: chordEvent.duration,
-                            isRest: chordEvent.isRest,
-                            root: chordEvent.root,
-                            quality: chordEvent.quality,
-                            extensions: chordEvent.extensions,
-                            slashRoot: chordEvent.slashRoot
-                        )
-                        clonedChord.sectionTemplate = clonedSection
-                        clonedSection.chordEvents.append(clonedChord)
-                    }
-                    
-                    let clonedArrangementItem = ArrangementItem(
-                        orderIndex: item.orderIndex,
-                        labelOverride: item.labelOverride
-                    )
-                    clonedArrangementItem.sectionTemplate = clonedSection
-                    clonedArrangementItem.project = clonedProject
-                    clonedProject.arrangementItems.append(clonedArrangementItem)
+
+    // MARK: Empty & no results
+
+    private var emptyLibrary: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxl) {
+                LibraryGreetingHeader(songCount: 0, inProgressCount: 0)
+                LibraryEmptyState {
+                    HapticFeedback.medium.trigger()
+                    showingCreateSheet = true
                 }
             }
-
-            for track in project.studioTracks {
-                let clonedTrack = StudioTrack(
-                    name: track.name,
-                    instrument: track.instrument,
-                    orderIndex: track.orderIndex,
-                    isMuted: track.isMuted,
-                    isSolo: track.isSolo,
-                    audioRecordingId: track.audioRecordingId,
-                    audioStartBeat: track.audioStartBeat
-                )
-                clonedTrack.octaveShift = track.octaveShift
-                clonedTrack.volume = track.volume
-                clonedTrack.pan = track.pan
-                clonedTrack.variant = track.variant
-                clonedTrack.drumPreset = track.drumPreset
-
-                for note in track.notes {
-                    let clonedNote = StudioNote(
-                        startBeat: note.startBeat,
-                        duration: note.duration,
-                        pitch: note.pitch,
-                        velocity: note.velocity
-                    )
-                    clonedTrack.notes.append(clonedNote)
-                }
-
-                clonedProject.studioTracks.append(clonedTrack)
-            }
-            
-            self.modelContext.insert(clonedProject)
-            try? self.modelContext.save()
+            .padding(.horizontal, DesignSystem.Spacing.gutter)
+            .padding(.top, DesignSystem.Spacing.md)
         }
+        .scrollBounceBehavior(.basedOnSize)
     }
-}
 
-// MARK: - Modern Components
-
-struct ModernFilterChip: View {
-    let title: String
-    let icon: String
-    let isSelected: Bool
-    let color: Color
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(DesignSystem.Typography.caption)
-                    .fontWeight(.semibold)
-
-                Text(title)
-                    .font(DesignSystem.Typography.subheadline)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(
-                ZStack {
-                    if isSelected {
-                        RoundedRectangle(cornerRadius: 20)
-                            .fill(color.opacity(0.2))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 20)
-                                    .strokeBorder(color.opacity(0.6), lineWidth: 2)
-                            )
-                    } else {
-                        RoundedRectangle(cornerRadius: 20)
-                            .fill(DesignSystem.Colors.surfaceSecondary)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 20)
-                                    .strokeBorder(DesignSystem.Colors.border, lineWidth: 1)
-                            )
-                    }
-                }
-            )
-            .foregroundStyle(DesignSystem.Colors.textPrimary)
-        }
-        .scaleEffect(isSelected ? 1.0 : 0.95)
-        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isSelected)
-    }
-}
-
-struct ModernProjectCard: View {
-    @Environment(\.modelContext) private var modelContext
-    let project: Project
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            // Status indicator
-            RoundedRectangle(cornerRadius: 4)
-                .fill(statusColor)
-                .frame(width: 4)
-            
-            VStack(alignment: .leading, spacing: 6) {
-                // Title
-                HStack(spacing: 8) {
-                    Text(project.title)
-                        .font(DesignSystem.Typography.headline)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        .lineLimit(1)
-
-                    AppChip(
-                        text: project.status.rawValue,
-                        icon: project.status.icon,
-                        tint: statusColor,
-                        font: DesignSystem.Typography.caption2
-                    )
-                }
-                
-                // Metadata
-                HStack(spacing: 12) {
-                    HStack(spacing: 4) {
-                        Image(systemName: DesignSystem.Icons.key)
-                        Text("\(project.keyRoot)\(project.keyMode == .minor ? "m" : "")")
-                    }
-                    .font(DesignSystem.Typography.caption)
-                    
-                    HStack(spacing: 4) {
-                        Image(systemName: DesignSystem.Icons.tempo)
-                        Text("\(project.bpm)")
-                    }
-                    .font(DesignSystem.Typography.caption)
-                    
-                    HStack(spacing: 4) {
-                        Image(systemName: DesignSystem.Icons.timeSignature)
-                        Text("\(project.timeTop)/\(project.timeBottom)")
-                    }
-                    .font(DesignSystem.Typography.caption)
-                    
-                    if project.recordingsCount > 0 {
-                        HStack(spacing: 4) {
-                            Image(systemName: DesignSystem.Icons.waveform)
-                            Text("\(project.recordingsCount)")
-                        }
-                        .font(DesignSystem.Typography.caption)
-                    }
-                }
+    private var noResults: some View {
+        VStack(spacing: DesignSystem.Spacing.sm) {
+            Text("Nothing matches")
+                .font(DesignSystem.Typography.title3)
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
+            Text(isFiltering ? "Try another word, or clear the filters." : "Every other song is up there.")
+                .font(DesignSystem.Typography.italicSmall)
                 .foregroundStyle(DesignSystem.Colors.textSecondary)
-                
-                // Tags
-                if !project.tags.isEmpty {
-                    HStack(spacing: 6) {
-                        ForEach(project.tags.prefix(2), id: \.self) { tag in
-                            Text(tag)
-                                .font(DesignSystem.Typography.caption2)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(DesignSystem.Colors.info.opacity(0.15))
-                                .foregroundStyle(DesignSystem.Colors.info)
-                                .clipShape(Capsule())
-                        }
-                        if project.tags.count > 2 {
-                            Text("+\(project.tags.count - 2)")
-                                .font(DesignSystem.Typography.caption2)
-                                .foregroundStyle(DesignSystem.Colors.textSecondary)
-                        }
+                .multilineTextAlignment(.center)
+            if isFiltering {
+                Button("Clear filters") {
+                    withAnimation(DesignSystem.Animations.quickSpring) {
+                        searchText = ""
+                        selectedStatus = nil
+                        selectedTag = nil
                     }
                 }
+                .buttonStyle(OutlineButtonStyle(compact: true))
+                .padding(.top, DesignSystem.Spacing.xxs)
             }
-            
-            Spacer()
-            
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(DesignSystem.Colors.surfaceSecondary)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(DesignSystem.Colors.border, lineWidth: 1)
-                )
-        )
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, DesignSystem.Spacing.xl)
     }
-    
-    private var statusColor: Color {
-        switch project.status {
-        case .idea: return DesignSystem.Colors.info
-        case .inProgress: return DesignSystem.Colors.warning
-        case .polished: return DesignSystem.Colors.primary
-        case .finished: return DesignSystem.Colors.success
-        case .archived: return DesignSystem.Colors.secondary
+
+    // MARK: Context menu
+
+    @ViewBuilder
+    private func contextMenu(for project: Project) -> some View {
+        Button {
+            pushedRoute = LibraryRoute(project: project, tab: .studio)
+        } label: {
+            Label("Open in Studio", systemImage: ProjectDetailTab.studio.icon)
+        }
+        Button {
+            pushedRoute = LibraryRoute(project: project, tab: .record)
+        } label: {
+            Label("Record a take", systemImage: "mic")
+        }
+
+        Divider()
+
+        Menu {
+            ForEach(ProjectStatus.allCases, id: \.self) { status in
+                Button {
+                    setStatus(status, for: project)
+                } label: {
+                    Label(status.libraryDisplayName, systemImage: project.status == status ? "checkmark" : status.icon)
+                }
+            }
+        } label: {
+            Label("Status", systemImage: project.status.icon)
+        }
+        Button {
+            duplicate(project)
+        } label: {
+            Label("Duplicate", systemImage: DesignSystem.Icons.duplicate)
+        }
+        Button {
+            toggleArchive(project)
+        } label: {
+            Label(project.status == .archived ? "Unarchive" : "Archive",
+                  systemImage: project.status == .archived ? "tray.and.arrow.up" : "archivebox")
+        }
+
+        Divider()
+
+        Button(role: .destructive) {
+            projectToDelete = project
+        } label: {
+            Label("Delete", systemImage: DesignSystem.Icons.delete)
+        }
+    }
+
+    // MARK: Actions
+
+    private func deleteProject(_ project: Project) {
+        HapticFeedback.warning.trigger()
+        withAnimation(DesignSystem.Animations.smoothSpring) {
+            modelContext.delete(project)
+        }
+        try? modelContext.save()
+        projectToDelete = nil
+    }
+
+    private func toggleArchive(_ project: Project) {
+        HapticFeedback.light.trigger()
+        withAnimation(DesignSystem.Animations.smoothSpring) {
+            project.status = project.status == .archived ? .idea : .archived
+            project.updatedAt = Date()
+        }
+        try? modelContext.save()
+    }
+
+    private func setStatus(_ status: ProjectStatus, for project: Project) {
+        HapticFeedback.selection.trigger()
+        withAnimation(DesignSystem.Animations.smoothSpring) {
+            project.status = status
+            project.updatedAt = Date()
+        }
+        try? modelContext.save()
+    }
+
+    private func duplicate(_ project: Project) {
+        HapticFeedback.success.trigger()
+        // Deferred a runloop so the swipe/context-menu animation finishes first.
+        DispatchQueue.main.async {
+            withAnimation(DesignSystem.Animations.smoothSpring) {
+                _ = LibraryProjectCloner.duplicate(project, in: modelContext)
+            }
         }
     }
 }
 
-struct StatusBadge: View {
-    let status: ProjectStatus
-    
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(DesignSystem.Typography.micro)
-                .fontWeight(.bold)
-            Text(status.rawValue)
-                .font(DesignSystem.Typography.caption2)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(DesignSystem.Colors.surfaceSecondary)
-        .foregroundStyle(DesignSystem.Colors.textPrimary)
-        .clipShape(Capsule())
-    }
-    
-    private var icon: String {
-        switch status {
-        case .idea: return "lightbulb.fill"
-        case .inProgress: return "hammer.fill"
-        case .polished: return "sparkles"
-        case .finished: return "checkmark.seal.fill"
-        case .archived: return "archivebox.fill"
-        }
-    }
-}
+// MARK: - Row styling helper
 
-struct FloatingActionButton: View {
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: "plus")
-                .font(.system(size: 24, weight: .bold))
-                .frame(width: 60, height: 60)
-                .contentShape(.circle)
-        }
-        // Native glass button styles handle the tap + press animation together;
-        // applying `.glassEffect(...interactive())` on a plain Button swallowed
-        // the first tap.
-        .buttonStyle(.glassProminent)
-        .buttonBorderShape(.circle)
-        .tint(DesignSystem.Colors.primary)
+private extension View {
+    /// Transparent, edge-to-edge list row (header, hero, filters).
+    func clearLibraryRow(top: CGFloat = 0) -> some View {
+        self
+            .listRowInsets(EdgeInsets(top: top, leading: 0, bottom: 0, trailing: 0))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
     }
 }
 
 #Preview {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(for: Project.self, configurations: config)
-    
+
     let project1 = Project(title: "Summer Vibes", status: .idea, tags: ["Pop", "Upbeat"], bpm: 128)
-    let project2 = Project(title: "Midnight Jazz", status: .inProgress, tags: ["Jazz", "Chill"], keyRoot: "Dm", keyMode: .minor, bpm: 85)
-    
+    let project2 = Project(title: "Midnight Jazz", status: .inProgress, tags: ["Jazz", "Chill"], keyRoot: "D", keyMode: .minor, bpm: 85)
     container.mainContext.insert(project1)
     container.mainContext.insert(project2)
-    
+    LibraryStarter.all[2].apply(to: project2)
+
     return NavigationStack {
         ProjectsListView()
     }
     .modelContainer(container)
-}
-
-struct FilterChip: View {
-    let title: String
-    let isSelected: Bool
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(DesignSystem.Typography.subheadline)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(isSelected ? DesignSystem.Colors.primary.opacity(0.3) : DesignSystem.Colors.surface)
-                .foregroundStyle(DesignSystem.Colors.textPrimary)
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(isSelected ? DesignSystem.Colors.primary.opacity(0.6) : DesignSystem.Colors.border, lineWidth: 1)
-                )
-        }
-    }
-}
-
-struct ProjectCardView: View {
-    let project: Project
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(project.title)
-                    .font(DesignSystem.Typography.headline)
-                    .foregroundStyle(DesignSystem.Colors.textPrimary)
-                
-                Spacer()
-                
-                StatusPill(status: project.status)
-            }
-            
-            HStack(spacing: 12) {
-                if !project.keyRoot.isEmpty {
-                    Label("\(project.keyRoot) \(project.keyMode.rawValue)", systemImage: DesignSystem.Icons.key)
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                }
-                
-                Label("\(project.bpm) BPM", systemImage: DesignSystem.Icons.tempo)
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundStyle(DesignSystem.Colors.textSecondary)
-                
-                if project.recordingsCount > 0 {
-                    Label("\(project.recordingsCount) takes", systemImage: DesignSystem.Icons.waveform)
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                }
-            }
-            
-            if !project.tags.isEmpty {
-                HStack(spacing: 6) {
-                    ForEach(project.tags.prefix(3), id: \.self) { tag in
-                        Text(tag)
-                            .font(DesignSystem.Typography.caption2)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(DesignSystem.Colors.info.opacity(0.2))
-                            .foregroundStyle(DesignSystem.Colors.textPrimary)
-                            .clipShape(Capsule())
-                    }
-                    if project.tags.count > 3 {
-                        Text("+\(project.tags.count - 3)")
-                            .font(DesignSystem.Typography.caption2)
-                            .foregroundStyle(DesignSystem.Colors.textSecondary)
-                    }
-                }
-            }
-            
-            Text("Edited \(project.updatedAt.timeAgo())")
-                .font(DesignSystem.Typography.caption)
-                .foregroundStyle(DesignSystem.Colors.textTertiary)
-        }
-        .padding()
-        .background(DesignSystem.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-    }
-}
-
-struct StatusPill: View {
-    let status: ProjectStatus
-    
-    var body: some View {
-        Text(status.rawValue)
-            .font(DesignSystem.Typography.caption)
-            .fontWeight(.medium)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(statusColor)
-            .foregroundStyle(DesignSystem.Colors.textPrimary)
-            .clipShape(Capsule())
-    }
-    
-    private var statusColor: Color {
-        switch status {
-        case .idea: return DesignSystem.Colors.info
-        case .inProgress: return DesignSystem.Colors.warning
-        case .polished: return DesignSystem.Colors.primary
-        case .finished: return DesignSystem.Colors.success
-        case .archived: return DesignSystem.Colors.secondary
-        }
-    }
-}
-
-#Preview {
-    ProjectsListView()
-        .modelContainer(for: [Project.self])
 }

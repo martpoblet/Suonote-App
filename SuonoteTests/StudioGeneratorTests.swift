@@ -167,7 +167,7 @@ final class StudioGeneratorTests: XCTestCase {
     @MainActor
     func testGuitarChordsAreStrummed() throws {
         let project = try makeProject()
-        let notes = StudioGenerator.generateNotes(for: .guitar, project: project, style: .pop)
+        let notes = StudioGenerator.generateNotes(for: .guitar, project: project, style: .pop, compingPattern: .block)
 
         // Notes of the first chord hit should have staggered note-ons.
         let firstHit = notes.filter { $0.startBeat < 0.2 }
@@ -237,6 +237,47 @@ final class StudioGeneratorTests: XCTestCase {
                 "With a dedicated bass, piano should stay out of the bass register (>= C3)"
             )
         }
+    }
+
+    @MainActor
+    func testNewPianoDefaultAvoidsUnstableLowestOctave() throws {
+        let project = try makeProject()
+        let notes = StudioGenerator.generateNotes(
+            for: .piano,
+            project: project,
+            style: .pop,
+            variant: .acousticPiano,
+            octaveShift: StudioGenerator.initialOctaveShift(for: .piano, variant: .acousticPiano)
+        )
+        XCTAssertFalse(notes.isEmpty)
+        XCTAssertTrue(notes.contains { $0.pitch < 60 }, "Solo piano should still have a left hand")
+        XCTAssertGreaterThanOrEqual(
+            notes.map(\.pitch).min() ?? 0,
+            36,
+            "New piano default should avoid the unstable lowest soundfont octave"
+        )
+    }
+
+    @MainActor
+    func testFullBandUsesSeparateRegisterLanes() throws {
+        let project = try makeProject()
+        let fullBand = StudioGenerator.ArrangementContext(
+            instruments: [.piano, .guitar, .strings, .synth, .brass, .bass, .drums]
+        )
+
+        let guitar = StudioGenerator.generateNotes(for: .guitar, project: project, style: .pop, arrangement: fullBand)
+        let strings = StudioGenerator.generateNotes(for: .strings, project: project, style: .pop, arrangement: fullBand)
+        let synth = StudioGenerator.generateNotes(for: .synth, project: project, style: .pop, arrangement: fullBand)
+        let brass = StudioGenerator.generateNotes(for: .brass, project: project, style: .pop, arrangement: fullBand)
+
+        XCTAssertFalse(guitar.isEmpty)
+        XCTAssertFalse(strings.isEmpty)
+        XCTAssertFalse(synth.isEmpty)
+        XCTAssertFalse(brass.isEmpty)
+        XCTAssertGreaterThanOrEqual(guitar.map(\.pitch).min() ?? 0, 52, "Guitar should sit above the bass/piano low register")
+        XCTAssertGreaterThanOrEqual(strings.map(\.pitch).min() ?? 0, 55, "Strings should move to an upper pad lane in a full band")
+        XCTAssertGreaterThanOrEqual(synth.map(\.pitch).min() ?? 0, 60, "Synth should sit above strings/guitars when sharing harmony")
+        XCTAssertGreaterThanOrEqual(brass.map(\.pitch).min() ?? 0, 55, "Brass stabs should avoid the low-mid mud")
     }
 
     @MainActor
@@ -407,8 +448,28 @@ final class StudioGeneratorTests: XCTestCase {
     func testRecommendedBassPerStyle() {
         XCTAssertEqual(StudioGenerator.recommendedBass(for: .jazz), .walking)
         XCTAssertEqual(StudioGenerator.recommendedBass(for: .funk), .syncopated)
-        XCTAssertEqual(StudioGenerator.recommendedBass(for: .pop), .rootFifth)
-        XCTAssertEqual(StudioGenerator.recommendedBass(for: .rock), .octaves)
+        // Modern pop/rock: eighth-note drive, not the "oom-pah" root–fifth.
+        XCTAssertEqual(StudioGenerator.recommendedBass(for: .pop), .pocket)
+        XCTAssertEqual(StudioGenerator.recommendedBass(for: .rock), .drive)
+        XCTAssertEqual(StudioGenerator.recommendedBass(for: .edm), .offbeat)
+    }
+
+    func testPlayingStyleOptionsAreInstrumentSpecific() {
+        let piano = StudioGenerator.compingOptions(for: .piano, variant: nil, style: .pop)
+        let guitar = StudioGenerator.compingOptions(for: .guitar, variant: .acousticSteelGuitar, style: .pop)
+        let brass = StudioGenerator.compingOptions(for: .brass, variant: nil, style: .funk)
+
+        XCTAssertTrue(piano.contains(.alberti))
+        XCTAssertTrue(guitar.contains(.offbeat))
+        XCTAssertTrue(brass.contains(.stabs))
+        XCTAssertNotEqual(piano, guitar)
+        XCTAssertNotEqual(guitar, brass)
+    }
+
+    func testBassOptionsExposeStyleSpecificFeels() {
+        XCTAssertTrue(StudioGenerator.bassOptions(for: .funk).contains(.offbeat))
+        XCTAssertTrue(StudioGenerator.bassOptions(for: .edm).contains(.pedal))
+        XCTAssertTrue(StudioGenerator.bassOptions(for: .jazz).contains(.walking))
     }
 
     @MainActor
@@ -429,6 +490,42 @@ final class StudioGeneratorTests: XCTestCase {
         let auto = StudioGenerator.generateNotes(for: .piano, project: project, style: .lofi)
         let onsets = Set(auto.map { ($0.startBeat * 100).rounded() })
         XCTAssertGreaterThan(onsets.count, 6, "Auto piano in lo-fi should play the recommended broken pattern")
+    }
+
+    @MainActor
+    func testOffbeatCompingProducesUpbeatHits() throws {
+        let project = try makeProject()
+        let notes = StudioGenerator.generateNotes(
+            for: .guitar,
+            project: project,
+            style: .pop,
+            variant: .acousticSteelGuitar,
+            compingPattern: .offbeat
+        )
+
+        XCTAssertFalse(notes.isEmpty)
+        let hasUpbeat = notes.contains { note in
+            let fraction = note.startBeat.truncatingRemainder(dividingBy: 1.0)
+            return abs(fraction - 0.5) < 0.08
+        }
+        XCTAssertTrue(hasUpbeat, "Offbeat comping should place chord hits on upbeats")
+    }
+
+    @MainActor
+    func testOffbeatBassAddsUpbeatMotion() throws {
+        let project = try makeProject()
+        let notes = StudioGenerator.generateNotes(
+            for: .bass,
+            project: project,
+            style: .pop,
+            bassPattern: .offbeat
+        )
+
+        XCTAssertFalse(notes.isEmpty)
+        let hasUpbeat = notes.contains { note in
+            abs(note.startBeat.truncatingRemainder(dividingBy: 1.0) - 0.5) < 0.01
+        }
+        XCTAssertTrue(hasUpbeat, "Offbeat bass should add upbeat motion")
     }
 
     // MARK: - Harmonic accuracy

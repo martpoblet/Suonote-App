@@ -1,176 +1,191 @@
 import SwiftUI
 
-/// Persistent transport shown as the TabView bottom accessory on every tab.
-/// A compact, Studio-styled player (accent play button, current section,
-/// bar·beat, metronome, stop and a slim progress bar) so the arrangement can be
-/// auditioned and scrubbed from anywhere. This is the single transport for the
-/// project — the Studio tab no longer shows a separate in-content player.
+/// The project's single transport, shown as the TabView bottom accessory on
+/// every tab (Liquid Glass is supplied by the accessory itself).
+///
+/// Expanded: play · section + bar.beat · loop · click (hold for count-in) · stop,
+/// with a slim scrubbable progress line. Inline (tab bar minimized): play +
+/// section + timecode. The full-screen track editor uses the matching
+/// `StudioFloatingTransport`, so the controls read the same everywhere.
 struct MiniTransportView: View {
     @Bindable var project: Project
     @EnvironmentObject private var playback: StudioPlaybackEngine
+    @Environment(\.tabViewBottomAccessoryPlacement) private var placement
     @State private var isScrubbing = false
     @State private var scrubBeat: Double = 0
 
-    private var hasPlayableTracks: Bool {
-        !project.studioTracks.isEmpty
-    }
+    private var canPlay: Bool { StudioTransportActions.canPlay(project) }
 
-    private var beatsPerBar: Int {
-        max(1, project.timeTop)
-    }
-
-    private var accentColor: Color {
-        project.studioStyle?.accentColor ?? DesignSystem.Colors.primary
-    }
-
-    private var totalBars: Int {
-        let bars = project.arrangementItems
-            .compactMap { $0.sectionTemplate?.bars }
-            .reduce(0, +)
-        return max(1, bars)
-    }
+    private var beatsPerBar: Int { max(1, project.timeTop) }
 
     private var maxBeats: Double {
-        Double(max(1, totalBars * beatsPerBar))
-    }
-
-    /// Beat used to render the progress bar; reads the live sequencer position
-    /// at frame rate while playing.
-    private var renderedBeat: Double {
-        if isScrubbing { return scrubBeat }
-        if playback.isPlaying { return playback.livePositionBeats() }
-        return playback.currentBeat
+        Double(max(1, project.studioTotalBars * beatsPerBar))
     }
 
     private var displayBeat: Double {
         isScrubbing ? scrubBeat : playback.currentBeat
     }
 
-    private var currentBarIndex: Int {
-        Int(displayBeat / Double(beatsPerBar))
-    }
-
     private var hasStarted: Bool {
         playback.isPlaying || playback.currentBeat > 0
     }
 
-    /// Section label at the playhead, derived from the arrangement order.
-    private var currentSectionLabel: String? {
-        var startBar = 0
-        for item in project.arrangementItems.sorted(by: { $0.orderIndex < $1.orderIndex }) {
-            guard let section = item.sectionTemplate else { continue }
-            let bars = max(1, section.bars)
-            if currentBarIndex >= startBar && currentBarIndex < startBar + bars {
-                let override = item.labelOverride
-                return override?.isEmpty == false ? override : section.name
-            }
-            startBar += bars
-        }
-        return nil
-    }
+    private var isInline: Bool { placement == .inline }
 
     private var title: String {
-        if hasStarted, let section = currentSectionLabel {
-            return section
+        if playback.isCountingIn { return String(localized: "Count-in…") }
+        if hasStarted || isScrubbing,
+           let section = project.studioSection(atBar: Int(displayBeat / Double(beatsPerBar))) {
+            return section.name
         }
         return project.title
     }
 
-    private var subtitle: String {
-        guard hasPlayableTracks else { return "No Studio tracks yet" }
-        if hasStarted {
-            let bar = max(1, currentBarIndex + 1)
-            let beat = max(1, Int(displayBeat.truncatingRemainder(dividingBy: Double(beatsPerBar))) + 1)
-            return "Bar \(bar) · Beat \(beat)"
-        }
-        return "\(project.studioTracks.count) tracks · \(project.bpm) BPM"
+    private var idleSubtitle: String {
+        if !project.studioHasSections { return String(localized: "Add sections in Compose") }
+        if project.studioTracks.isEmpty { return String(localized: "Add a track in Studio") }
+        let count = project.studioTracks.count
+        return String(localized: "\(count) tracks · \(project.bpm) BPM")
     }
 
     var body: some View {
-        VStack(spacing: 3) {
-            HStack(spacing: DesignSystem.Spacing.sm) {
-                Button {
-                    togglePlayback()
-                } label: {
-                    Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(DesignSystem.Colors.textWhite)
-                        .contentTransition(.symbolEffect(.replace))
-                        .frame(width: 30, height: 30)
-                        .background(
-                            Circle().fill(hasPlayableTracks ? accentColor : Color.secondary)
-                        )
-                }
-                .buttonStyle(.plain)
-                .disabled(!hasPlayableTracks)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                        .font(DesignSystem.Typography.calloutBold)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        .lineLimit(1)
-                    Text(subtitle)
-                        .font(DesignSystem.Typography.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .contentTransition(.numericText())
-                }
-
-                Spacer(minLength: DesignSystem.Spacing.xs)
-
-                TransportCircleButton(
-                    icon: "metronome.fill",
-                    isActive: playback.isMetronomeEnabled,
-                    accentColor: accentColor
-                ) {
-                    playback.isMetronomeEnabled.toggle()
-                    haptic(.selection)
-                }
-
-                if hasStarted {
-                    TransportCircleButton(
-                        icon: "stop.fill",
-                        isActive: false,
-                        accentColor: accentColor
-                    ) {
-                        playback.stop(resetPosition: true)
-                        haptic(.light)
-                    }
-                }
-            }
-
-            if hasPlayableTracks {
-                progressBar
-                    .frame(height: 4)
+        Group {
+            if isInline {
+                inlineBody
+            } else {
+                expandedBody
             }
         }
-        .padding(.horizontal, DesignSystem.Spacing.md)
         .animation(DesignSystem.Animations.quickEase, value: playback.isPlaying)
         .onAppear {
             playback.ensurePlayheadTimer()
         }
     }
 
+    // MARK: Inline (minimized tab bar)
+
+    private var inlineBody: some View {
+        HStack(spacing: DesignSystem.Spacing.xs) {
+            StudioPlayButton(
+                isPlaying: playback.isPlaying,
+                isCountingIn: playback.isCountingIn,
+                isEnabled: canPlay,
+                size: 28
+            ) {
+                StudioTransportActions.togglePlay(project: project, playback: playback)
+            }
+            Text(title)
+                .font(DesignSystem.Typography.headline)
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
+                .lineLimit(1)
+            Spacer(minLength: 4)
+            if hasStarted {
+                StudioTimecodeText(
+                    beatsPerBar: beatsPerBar,
+                    font: DesignSystem.Typography.caption.monospacedDigit(),
+                    color: DesignSystem.Colors.textSecondary
+                )
+            }
+        }
+        .padding(.horizontal, DesignSystem.Spacing.sm)
+    }
+
+    // MARK: Expanded
+
+    private var expandedBody: some View {
+        VStack(spacing: 2) {
+            HStack(spacing: DesignSystem.Spacing.xs) {
+                StudioPlayButton(
+                    isPlaying: playback.isPlaying,
+                    isCountingIn: playback.isCountingIn,
+                    isEnabled: canPlay,
+                    size: 34
+                ) {
+                    StudioTransportActions.togglePlay(project: project, playback: playback)
+                }
+
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(title)
+                        .font(DesignSystem.Typography.headline)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
+                        .lineLimit(1)
+                    if hasStarted || isScrubbing {
+                        HStack(spacing: 4) {
+                            Text("Bar")
+                                .font(DesignSystem.Typography.caption2)
+                                .foregroundStyle(DesignSystem.Colors.textTertiary)
+                            if isScrubbing {
+                                Text(StudioMusic.timecode(beat: scrubBeat, beatsPerBar: beatsPerBar))
+                                    .font(DesignSystem.Typography.caption.monospacedDigit())
+                                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+                            } else {
+                                StudioTimecodeText(
+                                    beatsPerBar: beatsPerBar,
+                                    font: DesignSystem.Typography.caption.monospacedDigit(),
+                                    color: DesignSystem.Colors.textSecondary
+                                )
+                            }
+                            if playback.isLooping {
+                                Image(systemName: "repeat")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(DesignSystem.Colors.primaryDark)
+                                    .accessibilityLabel("Looping")
+                            }
+                        }
+                    } else {
+                        Text(idleSubtitle)
+                            .font(DesignSystem.Typography.caption2)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
+                            .lineLimit(1)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                StudioLoopButton(size: 32)
+                StudioMetronomeButton(project: project, size: 32)
+                if hasStarted {
+                    StudioStopButton(size: 32)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+
+            if canPlay {
+                progressBar
+                    .frame(height: 6)
+            }
+        }
+        .padding(.horizontal, DesignSystem.Spacing.sm)
+    }
+
     private var progressBar: some View {
         TimelineView(.animation(minimumInterval: nil, paused: !playback.isPlaying || isScrubbing)) { _ in
             GeometryReader { geo in
                 let width = geo.size.width
-                let progress = CGFloat(min(1, max(0, renderedBeat / maxBeats)))
+                let beat = isScrubbing ? scrubBeat : (playback.isPlaying ? playback.livePositionBeats() : playback.currentBeat)
+                let progress = CGFloat(min(1, max(0, beat / maxBeats)))
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(accentColor.opacity(0.2))
-                        .frame(height: 4)
+                        .fill(DesignSystem.Colors.textPrimary.opacity(0.1))
+                    if playback.isLooping, let end = playback.loopEndBeat {
+                        let startX = width * CGFloat(playback.loopStartBeat / maxBeats)
+                        let endX = width * CGFloat(min(1, end / maxBeats))
+                        Capsule()
+                            .fill(DesignSystem.Colors.primary.opacity(0.25))
+                            .frame(width: max(2, endX - startX))
+                            .offset(x: startX)
+                    }
                     Capsule()
-                        .fill(accentColor)
-                        .frame(width: max(4, width * progress), height: 4)
+                        .fill(DesignSystem.Colors.brand)
+                        .frame(width: max(3, width * progress))
                 }
+                .frame(height: 3)
                 .frame(maxHeight: .infinity, alignment: .center)
                 .contentShape(Rectangle().inset(by: -8))
                 .gesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { value in
                             let x = max(0, min(value.location.x, width))
-                            scrubBeat = Double(x / width) * maxBeats
+                            scrubBeat = Double(x / max(width, 1)) * maxBeats
                             isScrubbing = true
                         }
                         .onEnded { _ in
@@ -178,16 +193,15 @@ struct MiniTransportView: View {
                             isScrubbing = false
                         }
                 )
+                .accessibilityElement()
+                .accessibilityLabel("Song position")
+                .accessibilityValue("Bar \(Int(beat / Double(beatsPerBar)) + 1) of \(project.studioTotalBars)")
+                .accessibilityAdjustableAction { direction in
+                    let step = Double(beatsPerBar)
+                    let target = direction == .increment ? playback.currentBeat + step : playback.currentBeat - step
+                    playback.seek(to: max(0, min(maxBeats, target)))
+                }
             }
         }
-    }
-
-    private func togglePlayback() {
-        if playback.isPlaying {
-            playback.pause()
-        } else {
-            playback.playRebuildingIfNeeded(project: project)
-        }
-        haptic(.light)
     }
 }

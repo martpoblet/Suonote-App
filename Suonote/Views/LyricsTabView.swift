@@ -1,61 +1,136 @@
 import SwiftUI
 import SwiftData
 
+/// The lyrics as a writer's page: every section in song order, named in
+/// Erode with its color rule, chords above as a quiet reference, and the
+/// words set like a printed lyric sheet. Tap any section to write.
 struct LyricsTabView: View {
     @Bindable var project: Project
     @Environment(\.modelContext) private var modelContext
-    @State private var selectedSection: SectionTemplate?
-    
-    var uniqueSections: [SectionTemplate] {
-        var seen = Set<UUID>()
-        return project.arrangementItems.compactMap { item in
-            guard let section = item.sectionTemplate,
-                  !seen.contains(section.id) else { return nil }
-            seen.insert(section.id)
-            return section
-        }
+    @AppStorage("lyrics.showSyllables") private var showSyllables = true
+    @State private var editorStart: LyricsEditorStart?
+
+    /// Identifies which section the full-screen editor opens on.
+    private struct LyricsEditorStart: Identifiable {
+        let index: Int
+        var id: Int { index }
     }
-    
+
+    private var uniqueSections: [SectionTemplate] { project.recordUniqueSections }
+
+    private var allLyrics: String {
+        uniqueSections.map(\.lyricsText).joined(separator: "\n")
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            if uniqueSections.isEmpty {
-                emptyStateView
+        let sections = uniqueSections
+        Group {
+            if sections.isEmpty {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        header(sections: sections)
+                        emptyStateView
+                            .padding(.top, DesignSystem.Spacing.xxl)
+                    }
+                    .padding(.horizontal, DesignSystem.Spacing.gutter)
+                    .padding(.top, DesignSystem.Spacing.md)
+                }
             } else {
                 ScrollView {
-                    LazyVStack(spacing: DesignSystem.Spacing.md) {
-                        ForEach(uniqueSections) { section in
-                            LyricsSectionCard(
+                    VStack(alignment: .leading, spacing: 0) {
+                        header(sections: sections)
+                            .padding(.bottom, DesignSystem.Spacing.sm)
+
+                        ForEach(Array(sections.enumerated()), id: \.element.id) { offset, section in
+                            if offset > 0 { Hairline() }
+                            LyricsSectionBlock(
                                 section: section,
-                                usageCount: usageCount(for: section)
+                                usageCount: usageCount(for: section),
+                                showSyllables: showSyllables
                             ) {
-                                selectedSection = section
+                                HapticFeedback.light.trigger()
+                                editorStart = LyricsEditorStart(index: offset)
                             }
                         }
                     }
-                    .padding(.horizontal, DesignSystem.Spacing.xl)
-                    .padding(.top, DesignSystem.Spacing.lg)
-                    .padding(.bottom, DesignSystem.Spacing.lg)
+                    .padding(.horizontal, DesignSystem.Spacing.gutter)
+                    .padding(.top, DesignSystem.Spacing.md)
+                    .padding(.bottom, DesignSystem.Spacing.xxxl)
                 }
+                .scrollIndicators(.hidden)
             }
         }
-        .fullScreenCover(item: $selectedSection) { section in
-            ImmersiveLyricsEditor(section: section) {
-                selectedSection = nil
+        .fullScreenCover(item: $editorStart) { start in
+            ImmersiveLyricsEditor(sections: uniqueSections, startIndex: start.index) {
+                editorStart = nil
+                project.updatedAt = Date()
             }
         }
     }
-    
+
+    // MARK: Header
+
+    private func header(sections: [SectionTemplate]) -> some View {
+        ScreenHeader(eyebrow: String(localized: "Lyrics"), title: project.title, subtitle: subtitle(sections: sections)) {
+            if !sections.isEmpty {
+                HStack(spacing: DesignSystem.Spacing.xs) {
+                    Menu {
+                        Toggle(isOn: $showSyllables) {
+                            Label("Syllable counts", systemImage: "number")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
+                            .frame(width: 36, height: 36)
+                    }
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.circle)
+                    .accessibilityLabel("Lyrics options")
+
+                    Button {
+                        HapticFeedback.light.trigger()
+                        editorStart = LyricsEditorStart(index: firstSectionToWrite(in: sections))
+                    } label: {
+                        Image(systemName: "pencil.line")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
+                            .frame(width: 36, height: 36)
+                    }
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.circle)
+                    .accessibilityLabel("Open writing page")
+                }
+            }
+        }
+    }
+
+    private func subtitle(sections: [SectionTemplate]) -> String {
+        guard !sections.isEmpty else { return String(localized: "Every song starts as a sketch.") }
+        let words = LyricsAnalysis.wordCount(allLyrics)
+        let written = sections.filter { !$0.lyricsText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
+        if words == 0 { return String(localized: "A blank page, \(sections.count) sections waiting.") }
+        return String(localized: "\(words) words · \(written) of \(sections.count) sections written")
+    }
+
     private var emptyStateView: some View {
         EmptyStateView(
             icon: "text.quote",
-            title: "No sections yet",
-            message: "Start with lyrics and Suonote will create the first section for you",
-            actionTitle: "Start Lyrics"
+            title: String(localized: "No sections yet"),
+            message: String(localized: "Start with the words — Suonote will make the first verse for you."),
+            actionTitle: String(localized: "Start writing")
         ) {
             startLyricsSection()
         }
     }
-    
+
+    // MARK: Helpers
+
+    /// Opens on the first section without lyrics, or the first one.
+    private func firstSectionToWrite(in sections: [SectionTemplate]) -> Int {
+        sections.firstIndex { $0.lyricsText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } ?? 0
+    }
+
     private func usageCount(for section: SectionTemplate) -> Int {
         project.arrangementItems.filter { $0.sectionTemplate?.id == section.id }.count
     }
@@ -76,185 +151,8 @@ struct LyricsTabView: View {
         project.updatedAt = Date()
 
         try? modelContext.save()
-        selectedSection = section
-    }
-}
-
-// MARK: - Lyrics Section Card
-
-struct LyricsSectionCard: View {
-    let section: SectionTemplate
-    let usageCount: Int
-    let onTap: () -> Void
-    
-    var body: some View {
-        Button(action: onTap) {
-            VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
-                // Header
-                HStack {
-                    SectionColorDot(section.color, size: 10)
-                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxs) {
-                        Text(section.name)
-                            .font(DesignSystem.Typography.title3)
-                            .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        
-                        if usageCount > 1 {
-                            Text("Used \(usageCount) times")
-                                .font(DesignSystem.Typography.caption)
-                                .foregroundStyle(DesignSystem.Colors.textSecondary)
-                        }
-                    }
-                    
-                    Spacer()
-                    
-                    Image(systemName: "chevron.right")
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                }
-                
-                // Lyrics preview
-                if !section.lyricsText.isEmpty {
-                    Text(section.lyricsText)
-                        .font(DesignSystem.Typography.body)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        .lineLimit(3)
-                        .padding(DesignSystem.Spacing.md)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(
-                            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
-                                .fill(DesignSystem.Colors.surface.opacity(0.6))
-                        )
-                } else {
-                    HStack {
-                        Image(systemName: "text.cursor")
-                            .font(DesignSystem.Typography.title2)
-                            .foregroundStyle(DesignSystem.Colors.textSecondary)
-                        
-                        Text("No lyrics yet")
-                            .font(DesignSystem.Typography.callout)
-                            .foregroundStyle(DesignSystem.Colors.textSecondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DesignSystem.Spacing.xl)
-                }
-            }
-            .padding(DesignSystem.Spacing.lg)
-            .background(
-                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
-                    .fill(DesignSystem.Colors.surface)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
-                            .stroke(DesignSystem.Colors.border, lineWidth: 1)
-                    )
-            )
-        }
-        .buttonStyle(.plain)
-        .animatedPress()
-    }
-}
-
-// MARK: - Immersive Lyrics Editor
-
-struct ImmersiveLyricsEditor: View {
-    @Bindable var section: SectionTemplate
-    var onDismiss: () -> Void
-    @FocusState private var isTextEditorFocused: Bool
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            ZStack {
-                // Center: dot + section name in a floating glass capsule
-                HStack(spacing: DesignSystem.Spacing.xs) {
-                    SectionColorDot(section.color, size: 10)
-                    Text(section.name)
-                        .font(DesignSystem.Typography.title3)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                }
-                .padding(.horizontal, DesignSystem.Spacing.md)
-                .padding(.vertical, DesignSystem.Spacing.xxs)
-                .glassEffect(.regular.tint(section.color.opacity(0.2)), in: .capsule)
-
-                // Leading: back chevron
-                HStack {
-                    Button {
-                        isTextEditorFocused = false
-                        onDismiss()
-                    } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(DesignSystem.Colors.primaryDark)
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.glass)
-                    Spacer()
-                }
-            }
-            .padding(.horizontal, DesignSystem.Spacing.md)
-            .padding(.vertical, DesignSystem.Spacing.xs)
-            
-            // Text Editor
-            ZStack(alignment: .topLeading) {
-                if section.lyricsText.isEmpty {
-                    VStack(spacing: DesignSystem.Spacing.md) {
-                        Image(systemName: "text.quote")
-                            .font(DesignSystem.Typography.jumbo)
-                            .foregroundStyle(DesignSystem.Colors.textTertiary)
-
-                        Text("Start writing your lyrics..")
-                            .font(DesignSystem.Typography.title3)
-                            .foregroundStyle(DesignSystem.Colors.textTertiary)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-                
-                TextEditor(text: $section.lyricsText)
-                    .font(DesignSystem.Typography.title3)
-                    .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    .scrollContentBackground(.hidden)
-                    .focused($isTextEditorFocused)
-                    .padding(.horizontal, DesignSystem.Spacing.xl)
-                    .padding(.vertical, DesignSystem.Spacing.lg)
-            }
-            .frame(maxHeight: .infinity)
-            
-            // Bottom toolbar
-            HStack {
-                Text("\(section.lyricsText.count) characters")
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundStyle(DesignSystem.Colors.textSecondary)
-                Spacer()
-                if isTextEditorFocused {
-                    Button {
-                        isTextEditorFocused = false
-                    } label: {
-                        Text("Done")
-                            .font(DesignSystem.Typography.bodyBold)
-                    }
-                    .buttonStyle(.glassProminent)
-                    .tint(section.color)
-                }
-            }
-            .padding(.horizontal, DesignSystem.Spacing.xl)
-            .padding(.vertical, DesignSystem.Spacing.sm)
-        }
-        .background(
-            ZStack {
-                DesignSystem.Colors.background
-                LinearGradient(
-                    colors: [section.color.opacity(0.10), .clear],
-                    startPoint: .top,
-                    endPoint: .center
-                )
-            }
-            .ignoresSafeArea()
-        )
-        .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                isTextEditorFocused = true
-            }
-        }
+        HapticFeedback.success.trigger()
+        editorStart = LyricsEditorStart(index: max(0, uniqueSections.firstIndex { $0.id == section.id } ?? 0))
     }
 }
 

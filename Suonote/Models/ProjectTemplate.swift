@@ -16,8 +16,8 @@ struct ProjectTemplate: Identifiable {
     
     static let templates: [ProjectTemplate] = [
         ProjectTemplate(
-            name: "Pop Song",
-            description: "Standard verse-chorus structure",
+            name: String(localized: "Pop Song"),
+            description: String(localized: "Standard verse-chorus structure"),
             icon: "music.mic",
             bpm: 120,
             keyRoot: "C",
@@ -37,8 +37,8 @@ struct ProjectTemplate: Identifiable {
             tags: ["pop"]
         ),
         ProjectTemplate(
-            name: "Rock Anthem",
-            description: "Driving rock structure with solo section",
+            name: String(localized: "Rock Anthem"),
+            description: String(localized: "Driving rock structure with solo section"),
             icon: "guitars.fill",
             bpm: 140,
             keyRoot: "E",
@@ -60,8 +60,8 @@ struct ProjectTemplate: Identifiable {
             tags: ["rock"]
         ),
         ProjectTemplate(
-            name: "Jazz Standard",
-            description: "32-bar AABA form",
+            name: String(localized: "Jazz Standard"),
+            description: String(localized: "32-bar AABA form"),
             icon: "pianokeys",
             bpm: 140,
             keyRoot: "F",
@@ -77,8 +77,8 @@ struct ProjectTemplate: Identifiable {
             tags: ["jazz"]
         ),
         ProjectTemplate(
-            name: "Blues 12-Bar",
-            description: "Classic 12-bar blues form",
+            name: String(localized: "Blues 12-Bar"),
+            description: String(localized: "Classic 12-bar blues form"),
             icon: "music.quarternote.3",
             bpm: 100,
             keyRoot: "A",
@@ -91,8 +91,8 @@ struct ProjectTemplate: Identifiable {
             tags: ["blues"]
         ),
         ProjectTemplate(
-            name: "Ballad",
-            description: "Slow, emotional structure",
+            name: String(localized: "Ballad"),
+            description: String(localized: "Slow, emotional structure"),
             icon: "heart.fill",
             bpm: 72,
             keyRoot: "G",
@@ -112,8 +112,8 @@ struct ProjectTemplate: Identifiable {
             tags: ["ballad"]
         ),
         ProjectTemplate(
-            name: "EDM Drop",
-            description: "Build-up and drop structure",
+            name: String(localized: "EDM Drop"),
+            description: String(localized: "Build-up and drop structure"),
             icon: "waveform.path.ecg",
             bpm: 128,
             keyRoot: "A",
@@ -132,8 +132,8 @@ struct ProjectTemplate: Identifiable {
             tags: ["edm", "electronic"]
         ),
         ProjectTemplate(
-            name: "Latin Rhythm",
-            description: "Son/Salsa influenced structure",
+            name: String(localized: "Latin Rhythm"),
+            description: String(localized: "Son/Salsa influenced structure"),
             icon: "music.note.list",
             bpm: 180,
             keyRoot: "C",
@@ -151,8 +151,8 @@ struct ProjectTemplate: Identifiable {
             tags: ["latin", "salsa"]
         ),
         ProjectTemplate(
-            name: "Blank Canvas",
-            description: "Start from scratch",
+            name: String(localized: "Blank Canvas"),
+            description: String(localized: "Start from scratch"),
             icon: "doc.text",
             bpm: 120,
             keyRoot: "C",

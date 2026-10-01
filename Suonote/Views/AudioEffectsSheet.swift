@@ -1,246 +1,50 @@
 import SwiftUI
 
+/// Standalone effects editor: the pedalboard in a sheet with an Apply action.
+/// (The take detail embeds the same `RecordPedalboard` inline, live.)
 struct AudioEffectsSheet: View {
     @Binding var settings: AudioEffectsProcessor.EffectSettings
     @Environment(\.dismiss) private var dismiss
     let onApply: () -> Void
-    
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    // Reverb Section
-                    EffectSection(
-                        title: "Reverb",
-                        icon: "waveform.path.ecg",
-                        color: DesignSystem.Colors.primary,
-                        isEnabled: $settings.reverbEnabled
-                    ) {
-                        VStack(spacing: 16) {
-                            SliderControl(
-                                title: "Mix",
-                                value: $settings.reverbMix,
-                                range: 0...1,
-                                icon: "speaker.wave.2"
-                            )
-                            
-                            SliderControl(
-                                title: "Room Size",
-                                value: $settings.reverbSize,
-                                range: 0...1,
-                                icon: "square.resize"
-                            )
-                        }
-                    }
-                    
-                    // Delay Section
-                    EffectSection(
-                        title: "Delay",
-                        icon: "arrow.triangle.2.circlepath",
-                        color: DesignSystem.Colors.info,
-                        isEnabled: $settings.delayEnabled
-                    ) {
-                        VStack(spacing: 16) {
-                            SliderControl(
-                                title: "Time",
-                                value: $settings.delayTime,
-                                range: 0.1...2.0,
-                                icon: "timer",
-                                format: "%.2fs"
-                            )
-                            
-                            SliderControl(
-                                title: "Feedback",
-                                value: $settings.delayFeedback,
-                                range: 0...0.9,
-                                icon: "repeat"
-                            )
-                            
-                            SliderControl(
-                                title: "Mix",
-                                value: $settings.delayMix,
-                                range: 0...1,
-                                icon: "speaker.wave.2"
-                            )
-                        }
-                    }
-                    
-                    // EQ Section
-                    EffectSection(
-                        title: "Equalizer",
-                        icon: "slider.horizontal.3",
-                        color: DesignSystem.Colors.success,
-                        isEnabled: $settings.eqEnabled
-                    ) {
-                        VStack(spacing: 16) {
-                            SliderControl(
-                                title: "Low (80 Hz)",
-                                value: $settings.lowGain,
-                                range: -24...24,
-                                icon: "waveform.path",
-                                format: "%.0f dB"
-                            )
-                            
-                            SliderControl(
-                                title: "Mid (1 kHz)",
-                                value: $settings.midGain,
-                                range: -24...24,
-                                icon: "waveform.path",
-                                format: "%.0f dB"
-                            )
-                            
-                            SliderControl(
-                                title: "High (10 kHz)",
-                                value: $settings.highGain,
-                                range: -24...24,
-                                icon: "waveform.path",
-                                format: "%.0f dB"
-                            )
-                        }
-                    }
-                    
-                    // Compression Section
-                    EffectSection(
-                        title: "Compression",
-                        icon: "waveform.badge.minus",
-                        color: DesignSystem.Colors.warning,
-                        isEnabled: $settings.compressionEnabled
-                    ) {
-                        VStack(spacing: 16) {
-                            SliderControl(
-                                title: "Threshold",
-                                value: $settings.compressionThreshold,
-                                range: -60...0,
-                                icon: "level",
-                                format: "%.0f dB"
-                            )
-                            
-                            SliderControl(
-                                title: "Ratio",
-                                value: $settings.compressionRatio,
-                                range: 1...20,
-                                icon: "dial.low",
-                                format: "%.1f:1"
-                            )
-                        }
-                    }
-                    
-                    // Apply Button
-                    AppButton(title: "Apply Effects", icon: "checkmark.circle.fill", kind: .primary(DesignSystem.Colors.primary)) {
-                        onApply()
-                        dismiss()
-                    }
-                }
-                .padding(24)
-            }
-            .background(DesignSystem.Colors.background)
-            .navigationTitle("Audio Effects")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                }
-                
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        resetAll()
-                    } label: {
-                        Text("Reset")
-                            .foregroundStyle(DesignSystem.Colors.warning)
-                    }
-                }
-            }
-        }
-        .toolbarBackground(DesignSystem.Colors.backgroundSecondary, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .presentationBackground(DesignSystem.Colors.backgroundSecondary)
-        
-    }
-    
-    private func resetAll() {
-        settings = AudioEffectsProcessor.EffectSettings()
-    }
-}
 
-// MARK: - Effect Section
-
-struct EffectSection<Content: View>: View {
-    let title: String
-    let icon: String
-    let color: Color
-    @Binding var isEnabled: Bool
-    @ViewBuilder let content: Content
-    
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Toggle(isOn: $isEnabled) {
-                HStack(spacing: 12) {
-                    Image(systemName: icon)
-                        .font(DesignSystem.Typography.title3)
-                        .foregroundStyle(color)
-                        .frame(width: 32)
-                    
-                    Text(title)
-                        .font(DesignSystem.Typography.headline)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                }
+        SheetScaffold(
+            title: String(localized: "Effects"),
+            subtitle: subtitle,
+            primaryTitle: String(localized: "Apply effects"),
+            primaryIcon: "checkmark",
+            primaryAction: {
+                HapticFeedback.success.trigger()
+                onApply()
+                dismiss()
             }
-            .tint(color)
-            
-            if isEnabled {
-                content
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-        }
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(DesignSystem.Colors.surfaceSecondary)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(isEnabled ? color.opacity(0.5) : DesignSystem.Colors.border, lineWidth: isEnabled ? 2 : 1)
+        ) {
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+                SectionHeader(
+                    title: String(localized: "Pedalboard"),
+                    detail: String(localized: "EQ → Comp → Delay → Reverb"),
+                    actionTitle: settings.recordActiveCount > 0 ? String(localized: "Reset") : nil,
+                    action: settings.recordActiveCount > 0 ? { resetAll() } : nil
                 )
-        )
-        .animation(.spring(response: 0.3), value: isEnabled)
-    }
-}
-
-// MARK: - Slider Control
-
-struct SliderControl: View {
-    let title: String
-    @Binding var value: Float
-    let range: ClosedRange<Float>
-    let icon: String
-    var format: String = "%.2f"
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: icon)
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundStyle(DesignSystem.Colors.textSecondary)
-                
-                Text(title)
-                    .font(DesignSystem.Typography.subheadline)
-                    .foregroundStyle(DesignSystem.Colors.textPrimary)
-                
-                Spacer()
-                
-                Text(String(format: format, value))
-                    .font(DesignSystem.Typography.subheadline.monospacedDigit())
-                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+                RecordPedalboard(settings: $settings)
             }
-            
-            Slider(value: $value, in: range)
-                .tint(DesignSystem.Colors.primary)
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(DesignSystem.Colors.surfaceSecondary)
-        )
+        .presentationDetents([.large])
+        .studioModalStyle()
+    }
+
+    private var subtitle: String {
+        switch settings.recordActiveCount {
+        case 0: return String(localized: "Everything bypassed — the dry take.")
+        default: return String(localized: "\(settings.recordActiveCount) pedals on.")
+        }
+    }
+
+    private func resetAll() {
+        HapticFeedback.warning.trigger()
+        withAnimation(DesignSystem.Animations.smoothSpring) {
+            settings = AudioEffectsProcessor.EffectSettings()
+        }
     }
 }
 

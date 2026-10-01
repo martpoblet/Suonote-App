@@ -93,19 +93,19 @@ enum ScaleType {
     
     var displayName: String {
         switch self {
-        case .major: return "Major"
-        case .naturalMinor: return "Natural Minor"
-        case .harmonicMinor: return "Harmonic Minor"
-        case .melodicMinor: return "Melodic Minor"
-        case .dorian: return "Dorian"
-        case .phrygian: return "Phrygian"
-        case .lydian: return "Lydian"
-        case .mixolydian: return "Mixolydian"
-        case .aeolian: return "Aeolian"
-        case .locrian: return "Locrian"
-        case .pentatonicMajor: return "Pentatonic Major"
-        case .pentatonicMinor: return "Pentatonic Minor"
-        case .blues: return "Blues"
+        case .major: return String(localized: "Major")
+        case .naturalMinor: return String(localized: "Natural Minor")
+        case .harmonicMinor: return String(localized: "Harmonic Minor")
+        case .melodicMinor: return String(localized: "Melodic Minor")
+        case .dorian: return String(localized: "Dorian")
+        case .phrygian: return String(localized: "Phrygian")
+        case .lydian: return String(localized: "Lydian")
+        case .mixolydian: return String(localized: "Mixolydian")
+        case .aeolian: return String(localized: "Aeolian")
+        case .locrian: return String(localized: "Locrian")
+        case .pentatonicMajor: return String(localized: "Pentatonic Major")
+        case .pentatonicMinor: return String(localized: "Pentatonic Minor")
+        case .blues: return String(localized: "Blues")
         }
     }
 }
@@ -117,14 +117,14 @@ struct RhythmUtils {
     /// Convert beats to musical notation
     static func beatsToNotation(beats: Double) -> String {
         switch beats {
-        case 0.25: return "16th note"
-        case 0.5: return "8th note"
-        case 1.0: return "Quarter note"
-        case 1.5: return "Dotted quarter"
-        case 2.0: return "Half note"
-        case 3.0: return "Dotted half"
-        case 4.0: return "Whole note"
-        default: return "\(beats) beats"
+        case 0.25: return String(localized: "16th note")
+        case 0.5: return String(localized: "8th note")
+        case 1.0: return String(localized: "Quarter note")
+        case 1.5: return String(localized: "Dotted quarter")
+        case 2.0: return String(localized: "Half note")
+        case 3.0: return String(localized: "Dotted half")
+        case 4.0: return String(localized: "Whole note")
+        default: return String(localized: "\(beats) beats")
         }
     }
     
@@ -208,6 +208,18 @@ struct TempoUtils {
             }
         }
         
+        /// Localized display label (rawValue stays the stable English identifier).
+        var displayName: String {
+            switch self {
+            case .largo: return String(localized: "Largo (40-60)")
+            case .adagio: return String(localized: "Adagio (66-76)")
+            case .andante: return String(localized: "Andante (76-108)")
+            case .moderato: return String(localized: "Moderato (108-120)")
+            case .allegro: return String(localized: "Allegro (120-168)")
+            case .presto: return String(localized: "Presto (168-200)")
+            }
+        }
+        
         static func marking(for bpm: Int) -> TempoMarking? {
             allCases.first { $0.bpmRange.contains(bpm) }
         }
@@ -216,11 +228,11 @@ struct TempoUtils {
     /// Get a descriptive tempo name for a BPM value
     static func tempoDescription(for bpm: Int) -> String {
         if let marking = TempoMarking.marking(for: bpm) {
-            return marking.rawValue
+            return marking.displayName
         } else if bpm < 40 {
-            return "Very Slow"
+            return String(localized: "Very Slow")
         } else {
-            return "Very Fast"
+            return String(localized: "Very Fast")
         }
     }
     

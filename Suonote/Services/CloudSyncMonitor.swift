@@ -22,9 +22,9 @@ enum SyncFailureCode: Int {
         case .none:
             return ""
         case .unknown:
-            return "Cloud sync failed."
+            return String(localized: "Cloud sync failed.")
         case .quotaExceeded:
-            return "iCloud storage is full (quota exceeded)."
+            return String(localized: "iCloud storage is full (quota exceeded).")
         }
     }
 }

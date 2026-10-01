@@ -14,25 +14,52 @@ struct SuonoteApp: App {
         AppFonts.checkFonts()
         #endif
 
-        // Brand font on segmented controls; everything else uses the
-        // system Liquid Glass appearance (nav bars, tab bars, toolbars).
-        let segmentedAppearance = UISegmentedControl.appearance()
-        segmentedAppearance.setTitleTextAttributes([.font: UIFont.manrope(11)], for: .normal)
-        segmentedAppearance.setTitleTextAttributes([.font: UIFont.manrope(11)], for: .selected)
+        Self.configureSystemChrome()
+    }
 
-        // Soften unselected tab items from pure black/white to the app's ink.
-        // Transparent background keeps the system Liquid Glass tab bar intact;
-        // selected items still follow the SwiftUI `.tint`.
-        let unselected = UIColor { trait in
-            trait.userInterfaceStyle == .dark
-                ? UIColor(hexString: "A4A9B6")   // textSecondary (dark)
-                : UIColor(hexString: "6E7480")   // textSecondary (light)
+    /// Makes UIKit-backed chrome speak the brand: Erode for navigation
+    /// titles, Manrope for controls, one teal accent for tab selection.
+    /// Backgrounds are left alone so iOS 26 Liquid Glass bars stay intact.
+    private static func configureSystemChrome() {
+        // DesignSystem colors wrap dynamic UIColors, so these stay light/dark aware.
+        let ink = UIColor(DesignSystem.Colors.textPrimary)
+        let inkSecondary = UIColor(DesignSystem.Colors.textSecondary)
+        let teal = UIColor(DesignSystem.Colors.primaryDark)
+
+        // Navigation bar titles — Erode semibold, ink.
+        let navigationBar = UINavigationBar.appearance()
+        navigationBar.titleTextAttributes = [
+            .font: UIFont.erode(17, weight: .semibold),
+            .foregroundColor: ink
+        ]
+        navigationBar.largeTitleTextAttributes = [
+            .font: UIFont.erode(34, weight: .semibold),
+            .foregroundColor: ink
+        ]
+
+        // Bar button titles (Cancel, Done, Back) — Manrope.
+        let barButton = UIBarButtonItem.appearance()
+        for state: UIControl.State in [.normal, .highlighted] {
+            barButton.setTitleTextAttributes([.font: UIFont.manrope(17, weight: .semibold)], for: state)
         }
+        barButton.setTitleTextAttributes([.font: UIFont.manrope(17, weight: .medium)], for: .disabled)
+
+        // Segmented controls — Manrope semibold.
+        let segmented = UISegmentedControl.appearance()
+        segmented.setTitleTextAttributes([.font: UIFont.manrope(13, weight: .semibold), .foregroundColor: inkSecondary], for: .normal)
+        segmented.setTitleTextAttributes([.font: UIFont.manrope(13, weight: .semibold), .foregroundColor: ink], for: .selected)
+
+        // Tab bar items — Manrope labels, ink when idle, teal when selected.
+        // Transparent background keeps the system Liquid Glass tab bar.
         let itemAppearance = UITabBarItemAppearance()
+        let tabFont = UIFont.manrope(10, weight: .semibold)
         for state in [itemAppearance.normal, itemAppearance.disabled] {
-            state.iconColor = unselected
-            state.titleTextAttributes = [.foregroundColor: unselected]
+            state.iconColor = inkSecondary
+            state.titleTextAttributes = [.foregroundColor: inkSecondary, .font: tabFont]
         }
+        itemAppearance.selected.iconColor = teal
+        itemAppearance.selected.titleTextAttributes = [.foregroundColor: teal, .font: tabFont]
+
         let tabAppearance = UITabBarAppearance()
         tabAppearance.configureWithTransparentBackground()
         tabAppearance.stackedLayoutAppearance = itemAppearance
@@ -85,6 +112,7 @@ struct SuonoteApp: App {
                 .font(DesignSystem.Typography.body)
                 .tint(DesignSystem.Colors.primaryDark)
                 .preferredColorScheme(settings.theme.colorScheme)
+                .environment(\.locale, settings.appLanguage.locale ?? .autoupdatingCurrent)
                 .environmentObject(cloudSyncMonitor)
                 .alert("Using Local Storage", isPresented: $showMigrationAlert) {
                     Button("OK", role: .cancel) { }

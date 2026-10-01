@@ -19,6 +19,15 @@ class AppSettings {
             }
         }
 
+        /// Localized display name (rawValue is persisted — never translate it).
+        var title: String {
+            switch self {
+            case .system: return String(localized: "System")
+            case .light: return String(localized: "Light")
+            case .dark: return String(localized: "Dark")
+            }
+        }
+
         var icon: String {
             switch self {
             case .system: return "circle.lefthalf.filled"
@@ -28,6 +37,30 @@ class AppSettings {
         }
     }
     
+    /// In-app language override. `.system` follows the device language.
+    enum AppLanguage: String, CaseIterable {
+        case system
+        case english = "en"
+        case spanish = "es"
+
+        /// Shown in each language's own name so it's always recognisable.
+        var title: String {
+            switch self {
+            case .system: return String(localized: "System")
+            case .english: return "English"
+            case .spanish: return "Español"
+            }
+        }
+
+        /// Locale to inject into the SwiftUI environment (nil = device locale).
+        var locale: Locale? {
+            switch self {
+            case .system: return nil
+            case .english, .spanish: return Locale(identifier: rawValue)
+            }
+        }
+    }
+
     var theme: AppTheme {
         didSet { UserDefaults.standard.set(theme.rawValue, forKey: "appTheme") }
     }
@@ -46,6 +79,23 @@ class AppSettings {
         didSet { UserDefaults.standard.set(showNashvilleNumbers, forKey: "showNashvilleNumbers") }
     }
     
+    /// Language override. Bundle localization is resolved at launch from
+    /// `AppleLanguages`, so a change fully applies the next time the app opens.
+    var appLanguage: AppLanguage {
+        didSet {
+            UserDefaults.standard.set(appLanguage.rawValue, forKey: "appLanguage")
+            Self.applyLanguageOverride(appLanguage)
+        }
+    }
+
+    private static func applyLanguageOverride(_ language: AppLanguage) {
+        if language == .system {
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        } else {
+            UserDefaults.standard.set([language.rawValue], forKey: "AppleLanguages")
+        }
+    }
+
     private init() {
         let themeRaw = UserDefaults.standard.string(forKey: "appTheme") ?? "System"
         self.theme = AppTheme(rawValue: themeRaw) ?? .system
@@ -55,6 +105,9 @@ class AppSettings {
         
         self.showRomanNumerals = UserDefaults.standard.bool(forKey: "showRomanNumerals")
         self.showNashvilleNumbers = UserDefaults.standard.bool(forKey: "showNashvilleNumbers")
+
+        let languageRaw = UserDefaults.standard.string(forKey: "appLanguage") ?? AppLanguage.system.rawValue
+        self.appLanguage = AppLanguage(rawValue: languageRaw) ?? .system
     }
     
     func completeOnboarding() {

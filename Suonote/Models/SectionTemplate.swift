@@ -70,7 +70,7 @@ final class SectionTemplate {
     }
     
     init(
-        name: String = "New Section",
+        name: String = String(localized: "New Section"),
         bars: Int = 4,
         patternPreset: PatternPreset = PatternPreset.simple,
         lyricsText: String = "",
@@ -123,6 +123,20 @@ enum SectionColor: String, CaseIterable, Identifiable {
     case lavender = "Lavender"
 
     var id: String { rawValue }
+
+    /// Localized color name for display (e.g. accessibility labels).
+    var localizedName: String {
+        switch self {
+        case .sage: return String(localized: "Sage")
+        case .ocean: return String(localized: "Ocean")
+        case .sky: return String(localized: "Sky")
+        case .moss: return String(localized: "Moss")
+        case .sand: return String(localized: "Sand")
+        case .coral: return String(localized: "Coral")
+        case .berry: return String(localized: "Berry")
+        case .lavender: return String(localized: "Lavender")
+        }
+    }
 
     var hex: String {
         switch self {

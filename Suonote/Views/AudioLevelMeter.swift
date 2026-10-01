@@ -1,59 +1,85 @@
 import SwiftUI
 
-/// Audio level meter with clipping indicator (P-09)
+/// Input level meter with a peak-hold tick and clipping indicator (P-09).
+/// Brand teal while healthy, warm as it gets hot, record red when clipping.
 struct AudioLevelMeter: View {
     let level: Float  // 0.0 to 1.0
     let peakLevel: Float
     var orientation: Orientation = .vertical
     var showClipping: Bool = true
-    
+    var thickness: CGFloat = 8
+
     enum Orientation {
         case vertical, horizontal
     }
-    
+
     private var clipping: Bool {
         peakLevel >= 0.95
     }
-    
+
+    private var clampedLevel: CGFloat { CGFloat(max(0, min(1, level))) }
+    private var clampedPeak: CGFloat { CGFloat(max(0, min(1, peakLevel))) }
+
     var body: some View {
         GeometryReader { geo in
+            let length = orientation == .horizontal ? geo.size.width : geo.size.height
             ZStack(alignment: orientation == .vertical ? .bottom : .leading) {
-                // Background
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(Color(.systemGray5))
-                
-                // Level fill
-                RoundedRectangle(cornerRadius: 3)
+                Capsule()
+                    .fill(DesignSystem.Colors.surfaceSecondary)
+                    .overlay(Capsule().stroke(DesignSystem.Colors.border, lineWidth: 0.5))
+
+                Capsule()
                     .fill(levelGradient)
-                    .frame(
-                        width: orientation == .horizontal ? geo.size.width * CGFloat(level) : nil,
-                        height: orientation == .vertical ? geo.size.height * CGFloat(level) : nil
-                    )
-                
-                // Peak indicator
+                    .mask(alignment: orientation == .vertical ? .bottom : .leading) {
+                        Rectangle().frame(
+                            width: orientation == .horizontal ? length * clampedLevel : nil,
+                            height: orientation == .vertical ? length * clampedLevel : nil
+                        )
+                    }
+                    .animation(.linear(duration: 0.06), value: level)
+
+                // Peak-hold tick
+                if clampedPeak > 0.02 {
+                    Capsule()
+                        .fill(clipping && showClipping ? DesignSystem.Colors.record : DesignSystem.Colors.textPrimary.opacity(0.55))
+                        .frame(
+                            width: orientation == .horizontal ? 2 : nil,
+                            height: orientation == .vertical ? 2 : nil
+                        )
+                        .offset(
+                            x: orientation == .horizontal ? max(0, length * clampedPeak - 2) : 0,
+                            y: orientation == .vertical ? -max(0, length * clampedPeak - 2) : 0
+                        )
+                }
+            }
+            .overlay(alignment: orientation == .vertical ? .top : .trailing) {
                 if showClipping && clipping {
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(Color.red)
-                        .frame(
-                            width: orientation == .horizontal ? 4 : nil,
-                            height: orientation == .vertical ? 4 : nil
-                        )
-                        .frame(
-                            maxWidth: orientation == .vertical ? .infinity : nil,
-                            maxHeight: orientation == .horizontal ? .infinity : nil
-                        )
-                        .position(
-                            x: orientation == .horizontal ? geo.size.width * CGFloat(peakLevel) : geo.size.width / 2,
-                            y: orientation == .vertical ? geo.size.height * (1 - CGFloat(peakLevel)) : geo.size.height / 2
+                    Circle()
+                        .fill(DesignSystem.Colors.record)
+                        .frame(width: thickness, height: thickness)
+                        .offset(
+                            x: orientation == .horizontal ? thickness + 4 : 0,
+                            y: orientation == .vertical ? -(thickness + 4) : 0
                         )
                 }
             }
         }
-        .frame(width: orientation == .vertical ? 8 : nil, height: orientation == .horizontal ? 8 : nil)
+        .frame(
+            width: orientation == .vertical ? thickness : nil,
+            height: orientation == .horizontal ? thickness : nil
+        )
+        .accessibilityElement()
+        .accessibilityLabel("Input level")
+        .accessibilityValue(clipping ? "Clipping" : "\(Int(clampedLevel * 100)) percent")
     }
-    
+
     private var levelGradient: LinearGradient {
-        let colors: [Color] = [.green, .green, .yellow, .orange, .red]
+        let colors: [Color] = [
+            DesignSystem.Colors.brand,
+            DesignSystem.Colors.brand,
+            DesignSystem.Colors.warning,
+            DesignSystem.Colors.record
+        ]
         let startPoint: UnitPoint = orientation == .vertical ? .bottom : .leading
         let endPoint: UnitPoint = orientation == .vertical ? .top : .trailing
         return LinearGradient(colors: colors, startPoint: startPoint, endPoint: endPoint)
@@ -66,7 +92,7 @@ struct StereoMeterView: View {
     let rightLevel: Float
     let leftPeak: Float
     let rightPeak: Float
-    
+
     var body: some View {
         HStack(spacing: 2) {
             AudioLevelMeter(level: leftLevel, peakLevel: leftPeak)

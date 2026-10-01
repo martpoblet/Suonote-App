@@ -2,756 +2,593 @@ import SwiftUI
 import AVFoundation
 import UIKit
 
+/// Full-screen capture: set up (type, section, count-in, click), then one big
+/// record button. Count-in and the click come from the recording manager's
+/// metronome so what you hear and what you see are the same clock.
 struct ActiveRecordingView: View {
     @Bindable var project: Project
     @ObservedObject var audioManager: AudioRecordingManager
     @Environment(\.dismiss) private var dismiss
-    
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var selectedRecordingType: RecordingType
-    @State private var audioLevels: [Float] = Array(repeating: 0, count: 50)
-    @State private var currentBeat = 0
-    @State private var currentBar = 0
-    @State private var countInTimer: Timer?
-    @State private var beatTimer: Timer?
-    @State private var timeTimer: Timer?
-    @State private var elapsedTime: TimeInterval = 0
-    @State private var isInCountIn = false
-    @State private var countInBeats = 0
-    @State private var pulseScale: CGFloat = 1.0
-    @State private var isReadyToRecord = true
-    @State private var showingTypePicker = false
     @State private var selectedLinkedSectionId: UUID?
-    @State private var countInEnabled = true
-    @State private var clickEnabled = false
-    
-    private var accentColor: Color {
-        selectedRecordingType.color
+    @State private var liveLevels: [Float] = Array(repeating: 0, count: 64)
+    @State private var micDenied = false
+    @State private var showingCloseOptions = false
+    @State private var showingDiscardConfirm = false
+    @State private var recPulse = false
+
+    @AppStorage(RecordPreferenceKey.countInBars) private var countInBars = 1
+    @AppStorage(RecordPreferenceKey.clickEnabled) private var clickEnabled = false
+    @AppStorage(RecordPreferenceKey.lastType) private var lastTypeRaw = RecordingType.voice.rawValue
+
+    private let autoStart: Bool
+
+    init(
+        project: Project,
+        audioManager: AudioRecordingManager,
+        recordingType: RecordingType,
+        initialLinkedSectionId: UUID? = nil,
+        autoStart: Bool = false
+    ) {
+        self.project = project
+        self.audioManager = audioManager
+        self.autoStart = autoStart
+        self._selectedRecordingType = State(initialValue: recordingType)
+        self._selectedLinkedSectionId = State(initialValue: initialLinkedSectionId)
     }
-    
-    private var uniqueSections: [SectionTemplate] {
-        var seen = Set<UUID>()
-        return project.arrangementItems.compactMap { item in
-            guard let section = item.sectionTemplate,
-                  seen.insert(section.id).inserted else {
-                return nil
-            }
-            return section
-        }
+
+    private enum Phase { case ready, countIn, recording }
+
+    private var phase: Phase {
+        if audioManager.isRecording { return .recording }
+        if audioManager.isCountingIn { return .countIn }
+        return .ready
     }
+
+    private var uniqueSections: [SectionTemplate] { project.recordUniqueSections }
 
     private var selectedLinkedSection: SectionTemplate? {
         guard let selectedLinkedSectionId else { return nil }
         return uniqueSections.first { $0.id == selectedLinkedSectionId }
     }
-    
-    init(
-        project: Project,
-        audioManager: AudioRecordingManager,
-        recordingType: RecordingType,
-        initialLinkedSectionId: UUID? = nil
-    ) {
-        self.project = project
-        self.audioManager = audioManager
-        self._selectedRecordingType = State(initialValue: recordingType)
-        self._selectedLinkedSectionId = State(initialValue: initialLinkedSectionId)
-    }
-    
+
+    private var beatsPerBar: Int { max(1, project.tempoBeatsPerBar) }
+    private var takeNumber: Int { project.recordings.count + 1 }
+
+    // MARK: Body
+
     var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .top) {
-                // Background
-                DesignSystem.Colors.backgroundSecondary
-                    .ignoresSafeArea()
-                
-                // Pulse border overlay with blur
-                if !isInCountIn && audioManager.isRecording {
-                    RoundedRectangle(cornerRadius: 50)
-                        .strokeBorder(currentBeat == 0 ? DesignSystem.Colors.error : DesignSystem.Colors.warning, lineWidth: 12)
-                        .scaleEffect(pulseScale)
-                        .blur(radius: 8)
-                        .opacity(0.8)
-                        .ignoresSafeArea()
-                        .animation(.easeOut(duration: 0.1), value: pulseScale)
+        VStack(spacing: 0) {
+            topBar
+                .padding(.horizontal, DesignSystem.Spacing.gutter)
+                .padding(.top, DesignSystem.Spacing.xs)
+
+            Group {
+                switch phase {
+                case .ready: readyView
+                case .countIn: countInView
+                case .recording: recordingView
                 }
-                
-                VStack(spacing: 0) {
-                    // Header
-                    headerView
-                    
-                    Spacer()
-                    
-                    // Main recording interface
-                    if isReadyToRecord {
-                        readyToRecordView
-                    } else if isInCountIn {
-                        countInView
-                    } else {
-                        recordingInterfaceView
-                    }
-                    
-                    Spacer()
-                    
-                    // Controls
-                    if !isReadyToRecord {
-                        controlsView
-                    }
-                }
-                .padding(.top, max(geometry.safeAreaInsets.top - 40, 10))
-                .padding(.bottom, max(geometry.safeAreaInsets.bottom + 20, 32))
-                .frame(maxHeight: .infinity, alignment: .top)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, DesignSystem.Spacing.gutter)
+            .animation(DesignSystem.Animations.smoothSpring, value: phase)
+
+            transport
+                .padding(.horizontal, DesignSystem.Spacing.gutter)
+                .padding(.bottom, DesignSystem.Spacing.md)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .sheet(isPresented: $showingTypePicker) {
-            RecordingTypePickerSheet(selectedType: $selectedRecordingType)
-                .studioModalStyle()
+        .background(DesignSystem.Colors.background.ignoresSafeArea())
+        .overlay(alignment: .top) {
+            // A thin red rule while the tape is rolling.
+            if phase == .recording {
+                Rectangle()
+                    .fill(DesignSystem.Colors.record)
+                    .frame(height: 3)
+                    .ignoresSafeArea(edges: .top)
+                    .transition(.opacity)
+            }
+        }
+        .onReceive(audioManager.$currentMeterLevel) { level in
+            guard audioManager.isRecording else { return }
+            liveLevels.removeFirst()
+            liveLevels.append(level)
+        }
+        .onChange(of: audioManager.countInBeatsRemaining) { _, remaining in
+            if remaining > 0 { HapticFeedback.light.trigger() }
+        }
+        .task {
+            await checkMicrophone()
+            if autoStart, !micDenied, !audioManager.isBusy {
+                start()
+            }
         }
         .onDisappear {
-            cleanup()
-        }
-    }
-    
-    private var headerView: some View {
-        VStack(spacing: 8) {
-            HStack {
-                Button {
-                    if audioManager.isRecording {
-                        audioManager.stopRecording()
-                    }
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(DesignSystem.Typography.title3)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        .frame(width: 44, height: 44)
-                        .background(
-                            Circle()
-                                .fill(DesignSystem.Colors.surfaceSecondary)
-                                .overlay(
-                                    Circle()
-                                        .stroke(DesignSystem.Colors.border, lineWidth: 1)
-                                )
-                        )
-                }
-                
-                Spacer()
-                
-                VStack(spacing: 2) {
-                    Text(project.title)
-                        .font(DesignSystem.Typography.headline)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                    
-                    HStack(spacing: 6) {
-                        Image(systemName: selectedRecordingType.icon)
-                            .font(DesignSystem.Typography.caption2)
-                        Text("Take \(project.recordings.count + 1) • \(selectedRecordingType.rawValue)")
-                            .font(DesignSystem.Typography.caption)
-                            .lineLimit(1)
-                    }
-                    .foregroundStyle(selectedRecordingType.color)
-                }
-                .frame(maxWidth: .infinity)
-                
-                Spacer()
-                
-                // Spacer for symmetry
-                Color.clear
-                    .frame(width: 44, height: 44)
-            }
-            .padding(.horizontal, 24)
-        }
-    }
-    
-    private var countInView: some View {
-        VStack(spacing: 40) {
-            VStack(spacing: 12) {
-                Text("Get Ready")
-                    .font(DesignSystem.Typography.title3)
-                    .foregroundStyle(DesignSystem.Colors.textSecondary)
-                
-                Text("\(max(0, tempoBeatsPerBar - countInBeats))")
-                    .font(DesignSystem.Typography.hero)
-                    .fontWeight(.bold)
-                    .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-            }
-            
-            HStack(spacing: 20) {
-                ForEach(0..<tempoBeatsPerBar, id: \.self) { beat in
-                    Circle()
-                        .fill(beat < countInBeats % tempoBeatsPerBar ? accentColor : DesignSystem.Colors.border.opacity(0.5))
-                        .frame(width: 16, height: 16)
-                        .shadow(color: beat < countInBeats % tempoBeatsPerBar ? accentColor.opacity(0.6) : .clear, radius: 8)
-                }
+            // Never lose a take: anything still rolling is kept.
+            if audioManager.isRecording {
+                audioManager.stopRecording()
+            } else if audioManager.isCountingIn {
+                audioManager.cancelRecording()
             }
         }
+        .confirmationDialog("Keep this take?", isPresented: $showingCloseOptions, titleVisibility: .visible) {
+            Button("Save take") { stopAndSave() }
+            Button("Discard take", role: .destructive) { discard() }
+            Button("Keep recording", role: .cancel) {}
+        }
+        .confirmationDialog("Discard this take?", isPresented: $showingDiscardConfirm, titleVisibility: .visible) {
+            Button("Discard take", role: .destructive) { discard() }
+            Button("Keep recording", role: .cancel) {}
+        } message: {
+            Text("The audio recorded so far will be deleted.")
+        }
     }
-    
-    private var readyToRecordView: some View {
-        VStack(spacing: 28) {
-            // Project info
-            VStack(spacing: 12) {
-                Text("Ready to Record")
-                    .font(DesignSystem.Typography.title)
-                    .fontWeight(.bold)
-                    .foregroundStyle(DesignSystem.Colors.textPrimary)
-                
-                Text("Take \(project.recordings.count + 1)")
-                    .font(DesignSystem.Typography.title3)
-                    .foregroundStyle(DesignSystem.Colors.textSecondary)
-            }
-            
-            // Recording type badge
+
+    // MARK: Top bar
+
+    private var topBar: some View {
+        HStack(spacing: DesignSystem.Spacing.sm) {
             Button {
-                showingTypePicker = true
+                close()
             } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: selectedRecordingType.icon)
-                        .font(DesignSystem.Typography.title2)
-                    Text("Recording Type: \(selectedRecordingType.rawValue)")
-                        .font(DesignSystem.Typography.title3)
-                }
-                .foregroundStyle(accentColor)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 12)
-                .background(
-                    Capsule()
-                        .fill(accentColor.opacity(0.15))
-                        .overlay(Capsule().stroke(accentColor, lineWidth: 2))
-                )
+                Image(systemName: "xmark")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+                    .frame(width: 36, height: 36)
             }
+            .buttonStyle(.glass)
+            .buttonBorderShape(.circle)
+            .accessibilityLabel("Close")
 
-            recordingContextControls
-            
-            // Project settings
-            HStack(spacing: 40) {
-                VStack(spacing: 8) {
-                    Text("\(project.bpm)")
-                        .font(DesignSystem.Typography.huge)
-                        .fontWeight(.bold)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    Text("BPM")
-                        .font(DesignSystem.Typography.subheadline)
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                }
+            Spacer(minLength: 0)
 
-                VStack(spacing: 8) {
-                    Text("\(project.timeTop)/\(project.timeBottom)")
-                        .font(DesignSystem.Typography.huge)
-                        .fontWeight(.bold)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    Text("Time")
-                        .font(DesignSystem.Typography.subheadline)
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                }
+            VStack(spacing: 2) {
+                Text("Take \(takeNumber)")
+                    .eyebrow(color: phase == .recording ? DesignSystem.Colors.record : DesignSystem.Colors.textTertiary)
+                Text(project.title)
+                    .font(DesignSystem.Typography.headline)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
-            .padding(32)
-            .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(DesignSystem.Colors.surfaceSecondary)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(DesignSystem.Colors.border, lineWidth: 1)
-                    )
-            )
-            
-            Spacer()
-            
-            // Record button
-            Button {
-                isReadyToRecord = false
-                if countInEnabled {
-                    isInCountIn = true
-                    startCountIn()
-                } else {
-                    startRecording()
-                }
-            } label: {
-                ZStack {
-                    // Outer ring matching the instrument/type
-                    Circle()
-                        .stroke(DesignSystem.Colors.error.opacity(0.3), lineWidth: 3)
-                        .frame(width: 100, height: 100)
-                    
-                    // Outer glow/background
-                    Circle()
-                        .fill(DesignSystem.Colors.error.opacity(0.1))
-                        .frame(width: 100, height: 100)
+            .accessibilityElement(children: .combine)
 
-                    // Record button core
-                    Circle()
-                        .fill(DesignSystem.Colors.error)
-                        .frame(width: 80, height: 80)
-                        .shadow(color: DesignSystem.Colors.error.opacity(0.4), radius: 10, x: 0, y: 5)
-                        .overlay(
-                            Circle()
-                                .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                        )
-                }
-            }
-            
-            Text("Tap to start recording")
-                .font(DesignSystem.Typography.subheadline)
-                .foregroundStyle(DesignSystem.Colors.textSecondary)
-            
-            Spacer()
+            Spacer(minLength: 0)
+
+            // Balances the close button.
+            Color.clear.frame(width: 36, height: 36)
         }
-        .padding(.horizontal, 24)
     }
-    
-    private var recordingInterfaceView: some View {
-        VStack(spacing: 32) {
-            // Recording indicator
-            HStack(spacing: 12) {
-                Circle()
-                    .fill(DesignSystem.Colors.error)
-                    .frame(width: 16, height: 16)
-                    .opacity(audioManager.isRecording ? 1 : 0.3)
-                    .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: audioManager.isRecording)
-                
-                Text("RECORDING")
-                    .font(DesignSystem.Typography.subheadline)
-                    .foregroundStyle(DesignSystem.Colors.error)
-                    .tracking(2)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
-            .background(
-                Capsule()
-                    .fill(DesignSystem.Colors.error.opacity(0.2))
-                    .overlay(Capsule().stroke(DesignSystem.Colors.error.opacity(0.4), lineWidth: 1))
-            )
-            
-            // Time display
-            Text(formatTime(elapsedTime))
-                .font(DesignSystem.Typography.giant)
-                .fontWeight(.medium)
-                .foregroundStyle(DesignSystem.Colors.textPrimary)
-                .monospacedDigit()
-                .padding(.horizontal, 24)
-                .padding(.vertical, 12)
-                .background(
-                    Capsule()
-                        .fill(DesignSystem.Colors.surfaceSecondary)
-                        .overlay(
-                            Capsule()
-                                .stroke(DesignSystem.Colors.border.opacity(0.6), lineWidth: 1)
-                        )
-                )
-            
-            // Waveform
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("Input Clip")
-                        .font(DesignSystem.Typography.caption)
+
+    // MARK: Ready
+
+    private var readyView: some View {
+        ScrollView {
+            VStack(spacing: DesignSystem.Spacing.xl) {
+                VStack(spacing: DesignSystem.Spacing.xs) {
+                    Text("0:00")
+                        .font(DesignSystem.Typography.mega)
+                        .monospacedDigit()
+                        .foregroundStyle(DesignSystem.Colors.textTertiary.opacity(0.6))
+                        .accessibilityHidden(true)
+                    Text(readySummary)
+                        .font(DesignSystem.Typography.italicSmall)
                         .foregroundStyle(DesignSystem.Colors.textSecondary)
-                    Spacer()
-                    Image(systemName: "waveform.path")
-                        .font(DesignSystem.Typography.caption2)
-                        .foregroundStyle(accentColor)
+                        .multilineTextAlignment(.center)
                 }
-                RealTimeWaveformView(levels: audioLevels, accentColor: accentColor)
-                    .frame(height: 140)
+                .padding(.top, DesignSystem.Spacing.xl)
+
+                if micDenied {
+                    micDeniedCard
+                }
+
+                optionsCard
             }
-            .padding(.horizontal, 24)
-            
-            // Bar and beat counter
-            VStack(spacing: 16) {
-                HStack(spacing: 50) {
-                    VStack(spacing: 8) {
-                        Text("BAR")
-                            .font(DesignSystem.Typography.caption)
-                            .foregroundStyle(DesignSystem.Colors.textSecondary)
-                        
-                        Text("\(currentBar + 1)")
-                            .font(DesignSystem.Typography.xl)
-                            .fontWeight(.bold)
-                            .foregroundStyle(DesignSystem.Colors.textPrimary)
-                            .monospacedDigit()
-                    }
-                    
-                    VStack(spacing: 8) {
-                        Text("BEAT")
-                            .font(DesignSystem.Typography.caption)
-                            .foregroundStyle(DesignSystem.Colors.textSecondary)
-                        
-                        HStack(spacing: 10) {
-                            ForEach(0..<tempoBeatsPerBar, id: \.self) { beat in
-                                Circle()
-                                    .fill(beat == currentBeat ? accentColor : DesignSystem.Colors.textMuted)
-                                    .frame(width: beat == currentBeat ? 18 : 14, height: beat == currentBeat ? 18 : 14)
-                                    .shadow(color: beat == currentBeat ? accentColor.opacity(0.6) : .clear, radius: 10)
-                                    .animation(.spring(response: 0.2), value: currentBeat)
+            .padding(.bottom, DesignSystem.Spacing.md)
+        }
+        .scrollIndicators(.hidden)
+        .transition(.opacity)
+    }
+
+    private var readySummary: String {
+        var parts = ["\(project.bpm) BPM", "\(project.timeTop)/\(project.timeBottom)"]
+        switch countInBars {
+        case 0: parts.append(String(localized: "no count-in"))
+        default: parts.append(String(localized: "\(countInBars)-bar count-in"))
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private var optionsCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            optionRow(title: "Type") {
+                ScrollView(.horizontal) {
+                    HStack(spacing: DesignSystem.Spacing.xs) {
+                        ForEach(RecordingType.allCases, id: \.self) { type in
+                            SelectableChip(
+                                title: type.recordDisplayName,
+                                icon: type.icon,
+                                isSelected: selectedRecordingType == type
+                            ) {
+                                HapticFeedback.selection.trigger()
+                                selectedRecordingType = type
+                                lastTypeRaw = type.rawValue
                             }
                         }
                     }
+                    .padding(.horizontal, DesignSystem.Spacing.md)
                 }
-                .padding(24)
-                .background(
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(DesignSystem.Colors.surfaceSecondary)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20)
-                                .stroke(accentColor.opacity(0.3), lineWidth: 1)
-                        )
-                )
+                .scrollIndicators(.hidden)
+                .padding(.horizontal, -DesignSystem.Spacing.md)
             }
-        }
-    }
-    
-    private var controlsView: some View {
-        VStack(spacing: 20) {
-            // BPM and Time signature info
-            HStack(spacing: 24) {
-                HStack(spacing: 8) {
-                    Image(systemName: DesignSystem.Icons.tempo)
-                        .font(DesignSystem.Typography.caption)
-                    Text("\(project.bpm) BPM")
-                        .font(DesignSystem.Typography.subheadline)
-                }
-                .foregroundStyle(DesignSystem.Colors.textSecondary)
-                
-                Circle()
-                    .fill(DesignSystem.Colors.textMuted)
-                    .frame(width: 4, height: 4)
-                
-                HStack(spacing: 8) {
-                    Image(systemName: DesignSystem.Icons.timeSignature)
-                        .font(DesignSystem.Typography.caption)
-                    Text("\(project.timeTop)/\(project.timeBottom)")
-                        .font(DesignSystem.Typography.subheadline)
-                }
-                .foregroundStyle(DesignSystem.Colors.textSecondary)
-            }
-            
-            // Stop button
-            AppButton(title: "Stop & Save", icon: "stop.fill", kind: .destructive) {
-                audioManager.stopRecording()
-                dismiss()
-            }
-            .padding(.horizontal, 24)
-            .disabled(!audioManager.isRecording)
-        }
-    }
 
-    private var recordingContextControls: some View {
-        VStack(spacing: 12) {
             if !uniqueSections.isEmpty {
-                Menu {
-                    Button {
-                        selectedLinkedSectionId = nil
-                    } label: {
-                        Label("No Section", systemImage: selectedLinkedSectionId == nil ? "checkmark" : "circle")
+                Hairline()
+                optionRow(title: "Section") {
+                    ScrollView(.horizontal) {
+                        HStack(spacing: DesignSystem.Spacing.xs) {
+                            SelectableChip(title: String(localized: "None"), isSelected: selectedLinkedSectionId == nil) {
+                                HapticFeedback.selection.trigger()
+                                selectedLinkedSectionId = nil
+                            }
+                            ForEach(uniqueSections) { section in
+                                SelectableChip(
+                                    title: section.name,
+                                    dot: section.color,
+                                    isSelected: selectedLinkedSectionId == section.id
+                                ) {
+                                    HapticFeedback.selection.trigger()
+                                    selectedLinkedSectionId = section.id
+                                }
+                            }
+                        }
+                        .padding(.horizontal, DesignSystem.Spacing.md)
                     }
+                    .scrollIndicators(.hidden)
+                    .padding(.horizontal, -DesignSystem.Spacing.md)
+                }
+            }
 
-                    ForEach(uniqueSections) { section in
-                        Button {
-                            selectedLinkedSectionId = section.id
-                        } label: {
-                            Label(section.name, systemImage: selectedLinkedSectionId == section.id ? "checkmark" : "music.note.list")
+            Hairline()
+            optionRow(title: "Count-in") {
+                HStack(spacing: DesignSystem.Spacing.xs) {
+                    ForEach([0, 1, 2], id: \.self) { bars in
+                        SelectableChip(
+                            title: bars == 0 ? String(localized: "Off") : String(localized: "\(bars) bars"),
+                            isSelected: countInBars == bars
+                        ) {
+                            HapticFeedback.selection.trigger()
+                            countInBars = bars
                         }
                     }
-                } label: {
-                    recordingSectionPickerLabel
                 }
             }
 
-            HStack(spacing: 12) {
-                recordingOptionToggle(
-                    title: "Count-in",
-                    icon: "timer",
-                    isOn: $countInEnabled
-                )
-
-                recordingOptionToggle(
-                    title: "Click",
-                    icon: "speaker.wave.2.fill",
-                    isOn: $clickEnabled
-                )
+            Hairline()
+            Toggle(isOn: $clickEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Click while recording")
+                        .font(DesignSystem.Typography.subheadline)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
+                    Text(clickEnabled ? "Use headphones so the click stays off the take." : "The count-in always clicks.")
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundStyle(DesignSystem.Colors.textTertiary)
+                }
             }
+            .tint(DesignSystem.Colors.primary)
+            .padding(DesignSystem.Spacing.md)
         }
-        .padding(12)
-        .frame(maxWidth: 380)
-        .background(
-            RoundedRectangle(cornerRadius: 18)
-                .fill(DesignSystem.Colors.surfaceSecondary)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18)
-                        .stroke(DesignSystem.Colors.border, lineWidth: 1)
-                )
-        )
+        .cardStyle()
     }
 
-    private var recordingSectionPickerLabel: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "link")
-                .font(DesignSystem.Typography.caption)
-                .foregroundStyle(accentColor)
-                .frame(width: 30, height: 30)
-                .background(
-                    RoundedRectangle(cornerRadius: 9)
-                        .fill(accentColor.opacity(0.14))
-                )
+    private func optionRow<Content: View>(title: LocalizedStringKey, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+            Text(title).eyebrow()
+            content()
+        }
+        .padding(DesignSystem.Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Section")
-                    .font(DesignSystem.Typography.caption2)
-                    .foregroundStyle(DesignSystem.Colors.textSecondary)
-
-                Text(selectedLinkedSection?.name ?? "No Section")
-                    .font(DesignSystem.Typography.subheadline)
-                    .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    .lineLimit(1)
+    private var micDeniedCard: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+            Label("Microphone access is off", systemImage: "mic.slash")
+                .font(DesignSystem.Typography.subheadline)
+                .foregroundStyle(DesignSystem.Colors.record)
+            Text("Suonote needs the microphone to record takes. Turn it on in Settings.")
+                .font(DesignSystem.Typography.callout)
+                .foregroundStyle(DesignSystem.Colors.textSecondary)
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
             }
+            .buttonStyle(OutlineButtonStyle(compact: true))
+            .padding(.top, DesignSystem.Spacing.xxs)
+        }
+        .padding(DesignSystem.Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardStyle(color: DesignSystem.Colors.record.opacity(0.4))
+    }
+
+    // MARK: Count-in
+
+    private var countInView: some View {
+        VStack(spacing: DesignSystem.Spacing.xl) {
+            Spacer(minLength: 0)
+            Text("Count-in").eyebrow()
+            Text("\(audioManager.countInBeatsRemaining)")
+                .font(DesignSystem.Typography.hero)
+                .monospacedDigit()
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
+                .contentTransition(.numericText(countsDown: true))
+                .animation(DesignSystem.Animations.quickSpring, value: audioManager.countInBeatsRemaining)
+                .accessibilityLabel("Count-in, \(audioManager.countInBeatsRemaining)")
+
+            let elapsedInBar = (countInBars * beatsPerBar - audioManager.countInBeatsRemaining) % beatsPerBar
+            beatDots(active: elapsedInBar, tint: DesignSystem.Colors.textPrimary)
+
+            Text("Recording starts on one.")
+                .font(DesignSystem.Typography.italicSmall)
+                .foregroundStyle(DesignSystem.Colors.textSecondary)
+            Spacer(minLength: 0)
+        }
+        .transition(.opacity)
+    }
+
+    // MARK: Recording
+
+    private var recordingView: some View {
+        VStack(spacing: DesignSystem.Spacing.lg) {
+            Spacer(minLength: 0)
+
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(DesignSystem.Colors.record)
+                    .frame(width: 8, height: 8)
+                    .opacity(recPulse ? 0.35 : 1)
+                Text("Recording")
+                    .eyebrow(color: DesignSystem.Colors.record)
+            }
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) { recPulse = true }
+            }
+
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                Text(RecordFormat.elapsedMain(audioManager.elapsedTime))
+                    .font(DesignSystem.Typography.mega)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+                Text(RecordFormat.elapsedTenths(audioManager.elapsedTime))
+                    .font(DesignSystem.Typography.title)
+                    .foregroundStyle(DesignSystem.Colors.textTertiary)
+            }
+            .monospacedDigit()
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Elapsed \(RecordFormat.spoken(audioManager.elapsedTime))")
+
+            VStack(spacing: DesignSystem.Spacing.xs) {
+                let bar = audioManager.recordedBeats / beatsPerBar + 1
+                let beat = audioManager.recordedBeats % beatsPerBar
+                Text("Bar \(bar) · Beat \(beat + 1)")
+                    .font(DesignSystem.Typography.calloutBold)
+                    .monospacedDigit()
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+                beatDots(active: beat, tint: DesignSystem.Colors.primary)
+            }
+            .accessibilityElement(children: .combine)
+
+            VStack(spacing: DesignSystem.Spacing.sm) {
+                RecordLiveWaveform(levels: liveLevels)
+                    .frame(height: 120)
+                    .padding(.horizontal, DesignSystem.Spacing.sm)
+                    .padding(.vertical, DesignSystem.Spacing.sm)
+                    .wellStyle(cornerRadius: DesignSystem.CornerRadius.card)
+
+                HStack(spacing: DesignSystem.Spacing.sm) {
+                    Text("Input").eyebrow()
+                    AudioLevelMeter(
+                        level: audioManager.currentMeterLevel,
+                        peakLevel: audioManager.currentPeakLevel,
+                        orientation: .horizontal,
+                        showClipping: false,
+                        thickness: 6
+                    )
+                    Text(audioManager.currentPeakLevel >= 0.95 ? "Clip" : "OK")
+                        .eyebrow(color: audioManager.currentPeakLevel >= 0.95 ? DesignSystem.Colors.record : DesignSystem.Colors.primaryDark)
+                        .frame(width: 32, alignment: .trailing)
+                }
+            }
+
+            if let section = selectedLinkedSection {
+                AppChip(text: section.name, icon: "link", tint: section.color)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .transition(.opacity)
+    }
+
+    private func beatDots(active: Int, tint: Color) -> some View {
+        HStack(spacing: 10) {
+            ForEach(0..<beatsPerBar, id: \.self) { beat in
+                Circle()
+                    .fill(beat <= active ? tint : DesignSystem.Colors.border)
+                    .frame(width: beat == 0 ? 12 : 9, height: beat == 0 ? 12 : 9)
+                    .scaleEffect(beat == active && !reduceMotion ? 1.25 : 1)
+                    .animation(DesignSystem.Animations.quickSpring, value: active)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    // MARK: Transport
+
+    private var transport: some View {
+        HStack {
+            // Leading: discard while rolling
+            Group {
+                if phase == .recording {
+                    Button {
+                        HapticFeedback.warning.trigger()
+                        showingDiscardConfirm = true
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
+                            .frame(width: 52, height: 52)
+                    }
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.circle)
+                    .accessibilityLabel("Discard take")
+                } else {
+                    Color.clear
+                }
+            }
+            .frame(width: 60, height: 60)
 
             Spacer()
 
-            Image(systemName: "chevron.down")
+            RecordBigButton(state: recordButtonState) {
+                switch phase {
+                case .ready: start()
+                case .countIn: cancelCountIn()
+                case .recording: stopAndSave()
+                }
+            }
+            .disabled(micDenied && phase == .ready)
+            .opacity(micDenied && phase == .ready ? 0.4 : 1)
+
+            Spacer()
+
+            // Balances the discard button.
+            Color.clear.frame(width: 60, height: 60)
+        }
+        .overlay(alignment: .bottom) {
+            Text(transportHint)
                 .font(DesignSystem.Typography.caption)
                 .foregroundStyle(DesignSystem.Colors.textTertiary)
+                .offset(y: 22)
+                .accessibilityHidden(true)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(DesignSystem.Colors.backgroundSecondary)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(DesignSystem.Colors.borderSubtle, lineWidth: 1)
-                )
-        )
+        .padding(.bottom, DesignSystem.Spacing.lg)
     }
 
-    private func recordingOptionToggle(title: String, icon: String, isOn: Binding<Bool>) -> some View {
-        Button {
-            withAnimation(DesignSystem.Animations.quickSpring) {
-                isOn.wrappedValue.toggle()
-            }
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(DesignSystem.Typography.caption)
-
-                Text(title)
-                    .font(DesignSystem.Typography.caption)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-
-                Spacer(minLength: 4)
-
-                Image(systemName: isOn.wrappedValue ? "checkmark.circle.fill" : "circle")
-                    .font(DesignSystem.Typography.caption)
-            }
-            .foregroundStyle(isOn.wrappedValue ? accentColor : DesignSystem.Colors.textSecondary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 11)
-            .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(isOn.wrappedValue ? accentColor.opacity(0.12) : DesignSystem.Colors.backgroundSecondary)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(isOn.wrappedValue ? accentColor.opacity(0.55) : DesignSystem.Colors.borderSubtle, lineWidth: 1)
-                    )
-            )
-        }
-        .buttonStyle(.plain)
-    }
-    
-    private func startCountIn() {
-        let interval = project.tempoBeatInterval()
-        let totalCountInBeats = tempoBeatsPerBar * 1 // 1 bar count-in
-        
-        // Visual pulse for count-in
-        countInBeats = 0
-        isInCountIn = true
-        
-        // Timer for each count-in beat
-        countInTimer?.invalidate()
-        countInTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { timer in
-            self.countInBeats += 1
-            
-            if self.countInBeats >= totalCountInBeats {
-                timer.invalidate()
-                withAnimation {
-                    self.isInCountIn = false
-                }
-                // Start recording immediately
-                DispatchQueue.main.async {
-                    self.startRecording()
-                }
-            }
+    private var recordButtonState: RecordBigButton.ButtonState {
+        switch phase {
+        case .ready: return .idle
+        case .countIn: return .armed
+        case .recording: return .recording
         }
     }
-    
-    private func startRecording() {
-        isInCountIn = false
+
+    private var transportHint: String {
+        switch phase {
+        case .ready: return String(localized: "Tap to record")
+        case .countIn: return String(localized: "Tap to cancel")
+        case .recording: return String(localized: "Tap to stop and save")
+        }
+    }
+
+    // MARK: Actions
+
+    private func start() {
+        guard !audioManager.isBusy else { return }
+        HapticFeedback.medium.trigger()
+        liveLevels = Array(repeating: 0, count: liveLevels.count)
+        recPulse = false
+        audioManager.setup(project: project)
         audioManager.startRecording(
-            countIn: countInEnabled ? 1 : 0,
+            countIn: countInBars,
             clickEnabled: clickEnabled,
             recordingType: selectedRecordingType,
             linkedSectionId: selectedLinkedSectionId
         )
-        startTimers()
-    }
-    
-    private func startTimers() {
-        // Beat timer
-        let beatInterval = project.tempoBeatInterval()
-        beatTimer = Timer.scheduledTimer(withTimeInterval: beatInterval, repeats: true) { _ in
-            withAnimation(.spring(response: 0.2)) {
-                self.currentBeat = (self.currentBeat + 1) % self.tempoBeatsPerBar
-                if self.currentBeat == 0 {
-                    self.currentBar += 1
-                }
-            }
-            
-            // Visual pulse
-            self.pulseScale = 1.08
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                self.pulseScale = 1.0
-            }
-        }
-        
-        // Time timer
-        timeTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
-            self.elapsedTime += 0.1
-            // Use real audio levels from the recorder
-            if self.audioLevels.count > 0 {
-                self.audioLevels.removeFirst()
-                self.audioLevels.append(self.audioManager.currentMeterLevel)
-            }
-        }
-    }
-    
-    private func cleanup() {
-        countInTimer?.invalidate()
-        countInTimer = nil
-        beatTimer?.invalidate()
-        beatTimer = nil
-        timeTimer?.invalidate()
-        timeTimer = nil
-        
-        if audioManager.isRecording {
-            audioManager.stopRecording()
-        }
-    }
-    
-    private func formatTime(_ time: TimeInterval) -> String {
-        let minutes = Int(time) / 60
-        let seconds = Int(time) % 60
-        let centiseconds = Int((time.truncatingRemainder(dividingBy: 1)) * 100)
-        return String(format: "%02d:%02d.%02d", minutes, seconds, centiseconds)
     }
 
-    private var tempoBeatsPerBar: Int {
-        project.tempoBeatsPerBar
+    private func cancelCountIn() {
+        HapticFeedback.light.trigger()
+        audioManager.cancelRecording()
+    }
+
+    private func stopAndSave() {
+        audioManager.stopRecording()
+        HapticFeedback.success.trigger()
+        dismiss()
+    }
+
+    private func discard() {
+        audioManager.cancelRecording()
+        HapticFeedback.warning.trigger()
+        dismiss()
+    }
+
+    private func close() {
+        switch phase {
+        case .recording:
+            showingCloseOptions = true
+        case .countIn:
+            audioManager.cancelRecording()
+            dismiss()
+        case .ready:
+            dismiss()
+        }
+    }
+
+    private func checkMicrophone() async {
+        switch AVAudioApplication.shared.recordPermission {
+        case .granted:
+            micDenied = false
+        case .denied:
+            micDenied = true
+        default:
+            let granted = await AVAudioApplication.requestRecordPermission()
+            micDenied = !granted
+        }
     }
 }
 
-// MARK: - Recording Type Picker Sheet
+// MARK: - Big record button
 
-struct RecordingTypePickerSheet: View {
-    @Binding var selectedType: RecordingType
-    @Environment(\.dismiss) private var dismiss
-    
+/// The unmistakable record control: a red disc that morphs into a stop
+/// square while rolling.
+struct RecordBigButton: View {
+    enum ButtonState { case idle, armed, recording }
+
+    let state: ButtonState
+    var size: CGFloat = 84
+    let action: () -> Void
+
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 16) {
-                Text("What are you recording?")
-                    .font(DesignSystem.Typography.subheadline)
-                    .foregroundStyle(DesignSystem.Colors.textSecondary)
-                    .padding(.top, 8)
-                
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 12) {
-                    ForEach(RecordingType.allCases, id: \.self) { type in
-                        Button {
-                            selectedType = type
-                            dismiss()
-                        } label: {
-                            VStack(spacing: 12) {
-                                Image(systemName: type.icon)
-                                    .font(DesignSystem.Typography.title)
-                                    .foregroundStyle(type.color)
-                                
-                                Text(type.rawValue)
-                                    .font(DesignSystem.Typography.subheadline)
-                                    .foregroundStyle(DesignSystem.Colors.textPrimary)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 100)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(selectedType == type ? type.color.opacity(0.2) : DesignSystem.Colors.surfaceSecondary)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 16)
-                                            .stroke(selectedType == type ? type.color : DesignSystem.Colors.border, lineWidth: selectedType == type ? 2 : 1)
-                                    )
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, 24)
-                
-                Spacer()
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .stroke(DesignSystem.Colors.textPrimary.opacity(0.85), lineWidth: 3.5)
+                    .frame(width: size, height: size)
+
+                RoundedRectangle(cornerRadius: state == .idle ? size * 0.36 : size * 0.1, style: .continuous)
+                    .fill(DesignSystem.Colors.record)
+                    .frame(
+                        width: state == .idle ? size * 0.72 : size * 0.36,
+                        height: state == .idle ? size * 0.72 : size * 0.36
+                    )
+                    .opacity(state == .armed ? 0.55 : 1)
             }
-            .padding(.vertical, 24)
-            .background(
-                DesignSystem.Colors.background
-            )
-            .navigationTitle("Recording Type")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                }
-            }
+            .frame(width: size + 8, height: size + 8)
+            .contentShape(Circle())
+            .animation(DesignSystem.Animations.bouncy, value: state)
         }
-                .presentationDetents([.height(600)])
+        .buttonStyle(AnimatedPressButtonStyle(scale: 0.92))
+        .accessibilityLabel(accessibilityLabel)
     }
-}
 
-struct RealTimeWaveformView: View {
-    let levels: [Float]
-    let accentColor: Color
-    
-    var body: some View {
-        GeometryReader { geometry in
-            let barWidth = (geometry.size.width / CGFloat(levels.count)) - 1
-            let midLine = geometry.size.height / 2
-            
-            HStack(spacing: 1) {
-                ForEach(Array(levels.enumerated()), id: \.offset) { index, level in
-                    let barHeight = max(6, CGFloat(level) * geometry.size.height * 0.9)
-                    let isRecent = index > levels.count - 10
-                    
-                    RoundedRectangle(cornerRadius: barWidth / 2)
-                        .fill(isRecent ? accentColor : accentColor.opacity(0.6))
-                        .frame(width: barWidth, height: barHeight)
-                        .offset(y: midLine - (barHeight / 2))
-                }
-            }
-            .overlay(
-                Rectangle()
-                    .fill(DesignSystem.Colors.border.opacity(0.6))
-                    .frame(height: 1)
-                    .offset(y: midLine),
-                alignment: .topLeading
-            )
+    private var accessibilityLabel: String {
+        switch state {
+        case .idle: return String(localized: "Record")
+        case .armed: return String(localized: "Cancel count-in")
+        case .recording: return String(localized: "Stop and save take")
         }
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(DesignSystem.Colors.surfaceSecondary.opacity(0.6))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(accentColor.opacity(0.3), lineWidth: 1)
-                )
-        )
     }
 }

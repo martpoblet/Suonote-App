@@ -67,8 +67,9 @@ struct TempoPreviewButton: View {
     let bpm: Int
     let timeTop: Int
     let timeBottom: Int
+    /// Fill used while the click is running (teal = "alive").
     let tint: Color
-    var label: String = "Preview Tempo"
+    var label: LocalizedStringKey = "Preview tempo"
 
     private var timeSignature: TimeSignaturePreset {
         TimeSignaturePreset.from(top: timeTop, bottom: timeBottom)
@@ -76,26 +77,30 @@ struct TempoPreviewButton: View {
 
     var body: some View {
         Button {
+            HapticFeedback.light.trigger()
             previewer.toggle(bpm: bpm, timeSignature: timeSignature)
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: previewer.isPlaying ? "stop.fill" : "play.fill")
+                Image(systemName: previewer.isPlaying ? "stop.fill" : "metronome")
+                    .font(.system(size: 12, weight: .semibold))
+                    .symbolEffect(.pulse, options: .repeating, isActive: previewer.isPlaying)
                 Text(previewer.isPlaying ? "Stop" : label)
+                    .font(DesignSystem.Typography.buttonSmall)
             }
-            .font(DesignSystem.Typography.caption)
-            .foregroundStyle(DesignSystem.Colors.textPrimary)
+            .foregroundStyle(previewer.isPlaying ? DesignSystem.Colors.onPrimary : DesignSystem.Colors.textPrimary)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(
-                Capsule()
-                    .fill(tint.opacity(previewer.isPlaying ? 0.9 : 0.35))
+                Capsule().fill(previewer.isPlaying ? tint : DesignSystem.Colors.surface)
             )
             .overlay(
-                Capsule()
-                    .stroke(tint, lineWidth: 1)
+                Capsule().stroke(previewer.isPlaying ? Color.clear : DesignSystem.Colors.borderActive, lineWidth: 1)
             )
+            .contentShape(Capsule())
+            .animation(DesignSystem.Animations.quickSpring, value: previewer.isPlaying)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(previewer.isPlaying ? "Stop metronome preview" : "Play metronome preview")
         .onChange(of: bpm) { _, _ in
             previewer.refreshIfPlaying(bpm: bpm, timeSignature: timeSignature)
         }

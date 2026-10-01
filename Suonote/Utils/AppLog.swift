@@ -9,4 +9,5 @@ enum AppLog {
     static let studio = Logger(subsystem: subsystem, category: "studio")
     static let sync = Logger(subsystem: subsystem, category: "sync")
     static let general = Logger(subsystem: subsystem, category: "general")
+    static let ui = Logger(subsystem: subsystem, category: "ui")
 }

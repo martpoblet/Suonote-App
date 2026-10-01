@@ -3,52 +3,22 @@ import SwiftData
 import WidgetKit
 
 // MARK: - Project Detail View
-/// Vista principal del proyecto que contiene las 3 tabs principales:
-/// - Tab 0: Compose (Composición de acordes y estructura)
-/// - Tab 1: Lyrics (Edición de letras)
-/// - Tab 2: Record (Grabaciones de audio)
+/// The song shell: Compose, Studio, Lyrics and Record tabs, one shared
+/// transport (tab bar accessory) and the song's title + status in the
+/// navigation bar.
 struct ProjectDetailView: View {
     // MARK: - Properties
     @Bindable var project: Project
-    @State private var selectedTab: ProjectTab = .compose
+    @State private var selectedTab: ProjectDetailTab
     @State private var showingEditSheet = false
     @State private var showingStatusPicker = false
     @StateObject private var playback = StudioPlaybackEngine()
 
-    fileprivate enum ProjectTab: Int, CaseIterable {
-        case compose
-        case studio
-        case lyrics
-        case record
-        
-        var title: String {
-            switch self {
-            case .compose: return "Compose"
-            case .studio: return "Studio"
-            case .lyrics: return "Lyrics"
-            case .record: return "Record"
-            }
-        }
-        
-        var icon: String {
-            switch self {
-            case .compose: return "music.note.list"
-            case .studio: return "square.grid.2x2"
-            case .lyrics: return "text.quote"
-            case .record: return "waveform.circle.fill"
-            }
-        }
-
-        var tintColor: Color {
-            switch self {
-            case .compose: return SectionColor.purple.color
-            case .studio: return SectionColor.cyan.color
-            case .lyrics: return SectionColor.pink.color
-            case .record: return SectionColor.red.color
-            }
-        }
+    init(project: Project, initialTab: ProjectDetailTab = .compose) {
+        self.project = project
+        _selectedTab = State(initialValue: initialTab)
     }
-    
+
     // MARK: - Body
     var body: some View {
         projectTabView
@@ -59,83 +29,100 @@ struct ProjectDetailView: View {
                 MiniTransportView(project: project)
             }
             .environmentObject(playback)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            // MARK: Toolbar - Title
-            ToolbarItem(placement: .principal) {
-                VStack(spacing: 4) {
-                    // Título del proyecto
-                    HStack(spacing: 10) {
-                        Text(project.title)
-                            .font(DesignSystem.Typography.headline)
-                            .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        SyncStatusIndicator(style: .minimal)
-                    }
-                    
-                    // Badge de estado (Idea, In Progress, etc.)
-                    Button {
-                        showingStatusPicker = true
-                    } label: {
-                        AppChip(
-                            text: project.status.rawValue,
-                            icon: project.status.icon,
-                            tint: project.status.swiftUIColor,
-                            font: DesignSystem.Typography.caption2
-                        )
-                    }
+            .navigationTitle(project.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    titleView
                 }
-            }
-            
-            // MARK: Toolbar - Edit Button
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showingEditSheet = true
-                } label: {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(DesignSystem.Typography.headline)
-                        .foregroundStyle(DesignSystem.Colors.primaryDark)
-                }
-            }
-        }
-        // MARK: Sheets
-        .sheet(isPresented: $showingEditSheet) {
-            EditProjectSheet(project: project)
-                .studioModalStyle()
-        }
-        .sheet(isPresented: $showingStatusPicker) {
-            StatusPickerSheet(project: project)
-                .studioModalStyle()
-        }
-        .onAppear {
-            updateWidgetData()
-        }
-        .onChange(of: project.updatedAt) { _, _ in
-            updateWidgetData()
-        }
 
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingEditSheet = true
+                    } label: {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
+                    }
+                    .accessibilityLabel("Song details")
+                }
+            }
+            .sheet(isPresented: $showingEditSheet) {
+                EditProjectSheet(project: project)
+                    .studioModalStyle()
+            }
+            .sheet(isPresented: $showingStatusPicker) {
+                StatusPickerSheet(project: project)
+                    .studioModalStyle()
+            }
+            .onAppear {
+                updateWidgetData()
+            }
+            .onChange(of: project.updatedAt) { _, _ in
+                updateWidgetData()
+            }
+            .onChange(of: selectedTab) { _, _ in
+                HapticFeedback.selection.trigger()
+            }
+    }
+
+    /// Erode title over a quiet, tappable status line.
+    private var titleView: some View {
+        VStack(spacing: 1) {
+            Text(project.title)
+                .font(DesignSystem.Typography.headline)
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
+                .lineLimit(1)
+                .frame(maxWidth: 220)
+
+            HStack(spacing: 6) {
+                Button {
+                    showingStatusPicker = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(project.status.swiftUIColor)
+                            .frame(width: 6, height: 6)
+                        Text(project.status.libraryDisplayName)
+                            .font(DesignSystem.Typography.caption2)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 7, weight: .bold))
+                            .foregroundStyle(DesignSystem.Colors.textTertiary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Status: \(project.status.libraryDisplayName)")
+                .accessibilityHint("Changes the song's status")
+
+                SyncStatusIndicator(style: .minimal)
+            }
+        }
     }
 
     private var projectTabView: some View {
         TabView(selection: $selectedTab) {
-            Tab(ProjectTab.compose.title, systemImage: ProjectTab.compose.icon, value: .compose) {
+            Tab(ProjectDetailTab.compose.title, systemImage: ProjectDetailTab.compose.icon, value: .compose) {
                 ProjectTabContainer { ComposeTabView(project: project) }
             }
-            Tab(ProjectTab.studio.title, systemImage: ProjectTab.studio.icon, value: .studio) {
+            Tab(ProjectDetailTab.studio.title, systemImage: ProjectDetailTab.studio.icon, value: .studio) {
                 ProjectTabContainer { StudioTabView(project: project) }
             }
-            Tab(ProjectTab.lyrics.title, systemImage: ProjectTab.lyrics.icon, value: .lyrics) {
+            Tab(ProjectDetailTab.lyrics.title, systemImage: ProjectDetailTab.lyrics.icon, value: .lyrics) {
                 ProjectTabContainer { LyricsTabView(project: project) }
             }
-            Tab(ProjectTab.record.title, systemImage: ProjectTab.record.icon, value: .record) {
+            Tab(ProjectDetailTab.record.title, systemImage: ProjectDetailTab.record.icon, value: .record) {
                 ProjectTabContainer { RecordingsTabView(project: project) }
             }
         }
-        .tint(selectedTab.tintColor)
+        // One brand accent across every tab.
+        .tint(DesignSystem.Colors.primaryDark)
         .tabBarMinimizeBehavior(.onScrollDown)
     }
 
     // MARK: - Helper Methods
-    
+
     private func updateWidgetData() {
         guard let defaults = UserDefaults(suiteName: "group.MartinCode.Suonote.shared") else { return }
         defaults.set(project.id.uuidString, forKey: "widget_projectId")
@@ -148,7 +135,6 @@ struct ProjectDetailView: View {
         defaults.set(project.updatedAt, forKey: "widget_lastEdited")
         WidgetCenter.shared.reloadAllTimelines()
     }
-
 }
 
 struct ProjectBackgroundView: View {
@@ -175,449 +161,8 @@ struct ProjectTabContainer<Content: View>: View {
     }
 }
 
-// MARK: - Edit Project Sheet
-
-struct EditProjectSheet: View {
-    @Bindable var project: Project
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
-    
-    @State private var tempTitle: String = ""
-    @State private var tempBPM: Int = 120
-    @State private var tempTimeTop: Int = 4
-    @State private var tempTimeBottom: Int = 4
-    @State private var tempKeyRoot: String = "C"
-    @State private var tempKeyMode: KeyMode = .major
-    @State private var tempTags: [String] = []
-    @State private var newTag: String = ""
-    @State private var tempStatus: ProjectStatus = .idea
-    @State private var showingProjectChangeWarning = false
-    
-    private let roots = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-    private let timeSignatures = TimeSignaturePreset.allCases
-    
-    private var timeSignatureChanged: Bool {
-        tempTimeTop != project.timeTop || tempTimeBottom != project.timeBottom
-    }
-
-    private var bpmChanged: Bool {
-        tempBPM != project.bpm
-    }
-
-    private var keyChanged: Bool {
-        tempKeyRoot != project.keyRoot || tempKeyMode != project.keyMode
-    }
-
-    private var shouldWarnAboutStructure: Bool {
-        (timeSignatureChanged || bpmChanged || keyChanged) && !project.arrangementItems.isEmpty
-    }
-    
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 28) {
-                    // Title
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Project Title")
-                            .font(DesignSystem.Typography.subheadline)
-                            .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        
-                        TextField("Project name", text: $tempTitle)
-                            .textFieldStyle(.plain)
-                            .font(DesignSystem.Typography.title3)
-                            .padding(16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(DesignSystem.Colors.surfaceSecondary)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(DesignSystem.Colors.border, lineWidth: 1)
-                                    )
-                            )
-                            .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    }
-                    
-                    // Status
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Status")
-                            .font(DesignSystem.Typography.subheadline)
-                            .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 12) {
-                            ForEach(ProjectStatus.allCases, id: \.self) { status in
-                                Button {
-                                    tempStatus = status
-                                } label: {
-                                    HStack(spacing: 8) {
-                                        Image(systemName: status.icon)
-                                            .font(DesignSystem.Typography.caption)
-                                        Text(status.rawValue)
-                                            .font(DesignSystem.Typography.subheadline)
-                                    }
-                                    .foregroundStyle(tempStatus == status ? DesignSystem.Colors.textSecondary : DesignSystem.Colors.textSecondary)
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 44)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .fill(tempStatus == status ? status.swiftUIColor.opacity(0.3) : DesignSystem.Colors.surfaceSecondary)
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 12)
-                                                    .stroke(tempStatus == status ? status.swiftUIColor : DesignSystem.Colors.border, lineWidth: tempStatus == status ? 2 : 1)
-                                            )
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    
-                    // BPM
-                    BPMSelector(bpm: $tempBPM, timeTop: tempTimeTop, timeBottom: tempTimeBottom)
-                    
-                    // Time Signature
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Time Signature")
-                            .font(DesignSystem.Typography.subheadline)
-                            .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 12) {
-                            ForEach(timeSignatures) { signature in
-                                Button {
-                                    tempTimeTop = signature.top
-                                    tempTimeBottom = signature.bottom
-                                } label: {
-                                    Text(signature.rawValue)
-                                        .font(DesignSystem.Typography.headline)
-                                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                                        .frame(maxWidth: .infinity)
-                                        .frame(height: 44)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .fill(isSelected(signature) ? DesignSystem.Colors.warning.opacity(0.3) : DesignSystem.Colors.surfaceSecondary)
-                                                .overlay(
-                                                    RoundedRectangle(cornerRadius: 12)
-                                                        .stroke(isSelected(signature) ? DesignSystem.Colors.warning : DesignSystem.Colors.border, lineWidth: isSelected(signature) ? 2 : 1)
-                                                )
-                                        )
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                    
-                    // Key
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Key")
-                            .font(DesignSystem.Typography.subheadline)
-                            .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        
-                        // Root note
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 8) {
-                            ForEach(roots, id: \.self) { root in
-                                Button {
-                                    tempKeyRoot = root
-                                } label: {
-                                    Text(root)
-                                        .font(DesignSystem.Typography.headline)
-                                        .foregroundStyle(tempKeyRoot == root ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
-                                        .frame(height: 44)
-                                        .frame(maxWidth: .infinity)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .fill(tempKeyRoot == root ? DesignSystem.Colors.primary : DesignSystem.Colors.surfaceSecondary)
-                                        )
-                                }
-                            }
-                        }
-                        
-                        // Mode
-                        HStack(spacing: 12) {
-                            Button {
-                                tempKeyMode = .major
-                            } label: {
-                                Text("Major")
-                                    .font(DesignSystem.Typography.subheadline)
-                                    .foregroundStyle(tempKeyMode == .major ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 44)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .fill(tempKeyMode == .major ? DesignSystem.Colors.primary : DesignSystem.Colors.surfaceSecondary)
-                                    )
-                            }
-                            
-                            Button {
-                                tempKeyMode = .minor
-                            } label: {
-                                Text("Minor")
-                                    .font(DesignSystem.Typography.subheadline)
-                                    .foregroundStyle(tempKeyMode == .minor ? DesignSystem.Colors.backgroundSecondary : DesignSystem.Colors.textSecondary)
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 44)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .fill(tempKeyMode == .minor ? DesignSystem.Colors.primary : DesignSystem.Colors.surfaceSecondary)
-                                    )
-                            }
-                        }
-                    }
-                    
-                    // Tags
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Tags")
-                            .font(DesignSystem.Typography.subheadline)
-                            .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        
-                        // Current tags
-                        if !tempTags.isEmpty {
-                            FlowLayout(spacing: 8) {
-                                ForEach(tempTags, id: \.self) { tag in
-                                    HStack(spacing: 6) {
-                                        Text(tag)
-                                            .font(DesignSystem.Typography.subheadline)
-                                        
-                                        Button {
-                                            tempTags.removeAll { $0 == tag }
-                                        } label: {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .font(DesignSystem.Typography.caption)
-                                        }
-                                    }
-                                    .foregroundStyle(DesignSystem.Colors.textPrimary)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(
-                                        Capsule()
-                                            .fill(DesignSystem.Colors.primary.opacity(0.25))
-                                    )
-                                }
-                            }
-                        }
-                        
-                        // Add tag
-                        HStack {
-                            TextField("Add tag", text: $newTag)
-                                .textFieldStyle(.plain)
-                                .padding(12)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(DesignSystem.Colors.surfaceSecondary)
-                                )
-                                .foregroundStyle(DesignSystem.Colors.textPrimary)
-                                .onSubmit {
-                                    addTag()
-                                }
-                            
-                            Button {
-                                addTag()
-                            } label: {
-                                Image(systemName: "plus.circle.fill")
-                                    .font(DesignSystem.Typography.title2)
-                                    .foregroundStyle(DesignSystem.Colors.primary)
-                            }
-                            .disabled(newTag.isEmpty)
-                        }
-                    }
-                }
-                .padding(24)
-            }
-            .background(DesignSystem.Colors.background)
-            .navigationTitle("Edit Project")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                    .foregroundStyle(DesignSystem.Colors.textSecondary)
-                }
-                
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        if shouldWarnAboutStructure {
-                            showingProjectChangeWarning = true
-                        } else {
-                            saveChanges()
-                        }
-                    }
-                    .fontWeight(.semibold)
-                    .foregroundStyle(DesignSystem.Colors.primaryDark)
-                }
-            }
-        }
-        
-        .alert("Update Project Settings?", isPresented: $showingProjectChangeWarning) {
-            Button("Cancel", role: .cancel) {}
-            Button("Apply Changes", role: .destructive) {
-                saveChanges()
-            }
-        } message: {
-            Text("Changing tempo, key, or time signature will update your sections and regenerate Studio notes. This can affect existing arrangements.")
-        }
-        .onAppear {
-            loadCurrentValues()
-        }
-    }
-    
-    private func loadCurrentValues() {
-        tempTitle = project.title
-        tempBPM = project.bpm
-        let signature = TimeSignaturePreset.from(top: project.timeTop, bottom: project.timeBottom)
-        tempTimeTop = signature.top
-        tempTimeBottom = signature.bottom
-        tempKeyRoot = project.keyRoot
-        tempKeyMode = project.keyMode
-        tempTags = project.tags
-        tempStatus = project.status
-    }
-    
-    private func addTag() {
-        let trimmed = newTag.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmed.isEmpty && !tempTags.contains(trimmed) {
-            tempTags.append(trimmed)
-            newTag = ""
-        }
-    }
-
-    private func isSelected(_ signature: TimeSignaturePreset) -> Bool {
-        tempTimeTop == signature.top && tempTimeBottom == signature.bottom
-    }
-    
-    private func saveChanges() {
-        let oldTimeTop = project.timeTop
-        let oldTimeBottom = project.timeBottom
-        let oldKeyRoot = project.keyRoot
-        let shouldReflow = tempTimeTop != oldTimeTop || tempTimeBottom != oldTimeBottom
-
-        project.title = tempTitle
-        project.bpm = tempBPM
-        project.timeTop = tempTimeTop
-        project.timeBottom = tempTimeBottom
-        project.keyRoot = tempKeyRoot
-        project.keyMode = tempKeyMode
-        project.tags = tempTags
-        project.status = tempStatus
-        if oldKeyRoot != tempKeyRoot {
-            project.applyKeyChange(oldRoot: oldKeyRoot, newRoot: tempKeyRoot)
-        }
-        if shouldReflow {
-            project.applyTimeSignatureChange(
-                oldTimeTop: oldTimeTop,
-                oldTimeBottom: oldTimeBottom,
-                newTimeTop: tempTimeTop,
-                newTimeBottom: tempTimeBottom
-            )
-        }
-        project.updatedAt = Date()
-        
-        try? modelContext.save()
-        dismiss()
-    }
-    
-
-}
-
-// MARK: - Flow Layout for Tags
-
-struct StatusPickerSheet: View {
-    @Bindable var project: Project
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
-    
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-                    Text("Update project status to track your progress")
-                        .font(DesignSystem.Typography.subheadline)
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.top, 8)
-                
-                VStack(spacing: 12) {
-                    ForEach(ProjectStatus.allCases, id: \.self) { status in
-                        Button {
-                            updateStatus(to: status)
-                        } label: {
-                            HStack(spacing: 16) {
-                                Image(systemName: status.icon)
-                                    .font(DesignSystem.Typography.title3)
-                                    .foregroundStyle(status.swiftUIColor)
-                                    .frame(width: 32)
-                                
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(status.rawValue)
-                                        .font(DesignSystem.Typography.headline)
-                                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                                    
-                                    Text(statusDescription(for: status))
-                                        .font(DesignSystem.Typography.caption)
-                                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                                }
-                                
-                                Spacer()
-                                
-                                if project.status == status {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(status.swiftUIColor)
-                                }
-                            }
-                            .padding(16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(project.status == status ? status.swiftUIColor.opacity(0.15) : DesignSystem.Colors.surfaceSecondary)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 16)
-                                            .stroke(project.status == status ? status.swiftUIColor : DesignSystem.Colors.border, 
-                                                   lineWidth: project.status == status ? 2 : 1)
-                                    )
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                
-                Spacer()
-            }
-            .padding(24)
-            }
-            .background(DesignSystem.Colors.background)
-            .navigationTitle("Project Status")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
-                        .foregroundStyle(DesignSystem.Colors.primaryDark)
-                }
-            }
-        }
-        .presentationDetents([.medium])
-    }
-    
-    private func updateStatus(to status: ProjectStatus) {
-        withAnimation {
-            project.status = status
-            project.updatedAt = Date()
-            try? modelContext.save()
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                dismiss()
-            }
-        }
-    }
-    
-
-    
-    private func statusDescription(for status: ProjectStatus) -> String {
-        switch status {
-        case .idea: return "Just an idea, needs work"
-        case .inProgress: return "Actively working on it"
-        case .polished: return "Almost there, refining details"
-        case .finished: return "Complete and ready"
-        case .archived: return "Put on hold or completed"
-        }
-    }
-}
-
+// MARK: - Flow Layout
+/// Wrapping layout for chips and tags (used across the app).
 struct FlowLayout: Layout {
     var spacing: CGFloat = 8
     
@@ -666,178 +211,6 @@ struct FlowLayout: Layout {
             
             self.size = CGSize(width: maxWidth, height: currentY + lineHeight)
         }
-    }
-}
-
-// MARK: - BPM Selector Component
-struct BPMSelector: View {
-    @Binding var bpm: Int
-    let timeTop: Int
-    let timeBottom: Int
-    @StateObject private var tempoPreviewer = TempoPreviewer()
-    @State private var tapTempo = TapTempo()
-
-    private let presets = [60, 90, 120, 140, 180]
-    private let bpmRange = 40...240
-    private let bpmStep = 1
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Tempo")
-                .font(DesignSystem.Typography.subheadline)
-                .foregroundStyle(DesignSystem.Colors.textPrimary)
-
-            VStack(spacing: 16) {
-                bpmDisplay
-                bpmSlider
-                tapTempoRow
-                TempoPreviewButton(
-                    previewer: tempoPreviewer,
-                    bpm: bpm,
-                    timeTop: timeTop,
-                    timeBottom: timeBottom,
-                    tint: DesignSystem.Colors.info
-                )
-                bpmPresets
-            }
-            .padding(20)
-            .background(bpmBackground)
-        }
-    }
-
-    private var tapTempoRow: some View {
-        HStack(spacing: 16) {
-            Button {
-                tapTempo.tap()
-                if tapTempo.tapCount >= 2 {
-                    withAnimation(.spring(response: 0.2)) {
-                        bpm = tapTempo.currentBPM
-                    }
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                }
-            } label: {
-                Text("TAP")
-                    .font(DesignSystem.Typography.headline)
-                    .fontWeight(.bold)
-                    .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    .frame(width: 72, height: 44)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(DesignSystem.Colors.primary.opacity(0.2))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14)
-                                    .stroke(DesignSystem.Colors.primary, lineWidth: 1.5)
-                            )
-                    )
-            }
-            .buttonStyle(.plain)
-
-            HStack(spacing: 6) {
-                ForEach(0..<4, id: \.self) { i in
-                    Circle()
-                        .fill(i < min(tapTempo.tapCount, 4)
-                              ? DesignSystem.Colors.primary
-                              : DesignSystem.Colors.border)
-                        .frame(width: 8, height: 8)
-                        .animation(.spring(response: 0.2), value: tapTempo.tapCount)
-                }
-            }
-        }
-    }
-    
-    private var bpmDisplay: some View {
-        HStack(alignment: .bottom, spacing: 16) {
-            bpmAdjustButton(systemImage: "minus", isEnabled: bpm > bpmRange.lowerBound) {
-                adjustBpm(by: -bpmStep)
-            }
-            
-            Text("\(bpm)")
-                .font(DesignSystem.Typography.mega)
-                .fontWeight(.bold)
-                .foregroundStyle(DesignSystem.Colors.primaryDark)
-                .monospacedDigit()
-
-            bpmAdjustButton(systemImage: "plus", isEnabled: bpm < bpmRange.upperBound) {
-                adjustBpm(by: bpmStep)
-            }
-
-            Text("BPM")
-                .font(DesignSystem.Typography.title3)
-                .foregroundStyle(DesignSystem.Colors.textSecondary)
-                .padding(.top, 40)
-        }
-    }
-    
-    private var bpmSlider: some View {
-        Slider(value: Binding(
-            get: { Double(bpm) },
-            set: { bpm = Int($0) }
-        ), in: Double(bpmRange.lowerBound)...Double(bpmRange.upperBound), step: Double(bpmStep))
-        .tint(DesignSystem.Colors.primary)
-    }
-    
-    private var bpmPresets: some View {
-        HStack {
-            ForEach(presets, id: \.self) { preset in
-                presetButton(preset)
-            }
-        }
-    }
-    
-    private func presetButton(_ preset: Int) -> some View {
-        Button {
-            withAnimation(.spring(response: 0.3)) {
-                bpm = preset
-                tapTempo.reset()
-            }
-        } label: {
-            Text("\(preset)")
-                .font(DesignSystem.Typography.caption)
-                .foregroundStyle(bpm == preset ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textSecondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background(
-                    Capsule()
-                        .fill(bpm == preset ? DesignSystem.Colors.info.opacity(0.2) : DesignSystem.Colors.surfaceSecondary)
-                        .overlay(
-                            Capsule()
-                                .stroke(bpm == preset ? DesignSystem.Colors.info : Color.clear, lineWidth: 1)
-                        )
-                )
-        }
-    }
-    
-    private var bpmBackground: some View {
-        RoundedRectangle(cornerRadius: 12)
-            .fill(DesignSystem.Colors.surfaceSecondary)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(DesignSystem.Colors.info.opacity(0.3), lineWidth: 1)
-            )
-    }
-
-    private func adjustBpm(by delta: Int) {
-        bpm = min(max(bpm + delta, bpmRange.lowerBound), bpmRange.upperBound)
-    }
-
-    private func bpmAdjustButton(systemImage: String, isEnabled: Bool, action: @escaping () -> Void) -> some View {
-        Button {
-            action()
-        } label: {
-            Image(systemName: systemImage)
-                .font(DesignSystem.Typography.headline)
-                .foregroundStyle(isEnabled ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textTertiary)
-                .frame(width: 36, height: 36)
-                .background(
-                    Circle()
-                        .fill(DesignSystem.Colors.surfaceSecondary)
-                        .overlay(
-                            Circle()
-                                .stroke(DesignSystem.Colors.border, lineWidth: 1)
-                        )
-                )
-        }
-        .disabled(!isEnabled)
     }
 }
 

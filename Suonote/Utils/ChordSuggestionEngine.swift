@@ -78,18 +78,21 @@ struct ChordSuggestion: Identifiable {
     let reason: String
     let confidence: Double
     let romanNumeral: String?
+    /// Marks tritone substitutions for confidence scoring (independent of the localized reason text).
+    let isTritoneSubstitution: Bool
     
     var display: String {
         root + quality.symbol + extensions.joined()
     }
     
-    init(root: String, quality: ChordQuality, extensions: [String] = [], reason: String, confidence: Double, romanNumeral: String? = nil) {
+    init(root: String, quality: ChordQuality, extensions: [String] = [], reason: String, confidence: Double, romanNumeral: String? = nil, isTritoneSubstitution: Bool = false) {
         self.root = root
         self.quality = quality
         self.extensions = extensions
         self.reason = reason
         self.confidence = confidence
         self.romanNumeral = romanNumeral
+        self.isTritoneSubstitution = isTritoneSubstitution
     }
 }
 
@@ -133,51 +136,51 @@ class ChordSuggestionEngine {
         case .major:
             qualitiesForMode = [.major, .minor, .minor, .major, .major, .minor, .diminished]
             romanForMode = ["I", "ii", "iii", "IV", "V", "vi", "vii°"]
-            functionsForMode = ["Tonic", "Supertonic", "Mediant", "Subdominant", "Dominant", "Submediant", "Leading Tone"]
+            functionsForMode = [String(localized: "Tonic"), String(localized: "Supertonic"), String(localized: "Mediant"), String(localized: "Subdominant"), String(localized: "Dominant"), String(localized: "Submediant"), String(localized: "Leading Tone")]
         case .minor, .aeolian:
             qualitiesForMode = [.minor, .diminished, .major, .minor, .minor, .major, .major]
             romanForMode = ["i", "ii°", "III", "iv", "v", "VI", "VII"]
-            functionsForMode = ["Tonic", "Supertonic", "Relative Major", "Subdominant", "Dominant", "Submediant", "Subtonic"]
+            functionsForMode = [String(localized: "Tonic"), String(localized: "Supertonic"), String(localized: "Relative Major"), String(localized: "Subdominant"), String(localized: "Dominant"), String(localized: "Submediant"), String(localized: "Subtonic")]
         case .dorian:
             qualitiesForMode = [.minor, .minor, .major, .major, .minor, .diminished, .major]
             romanForMode = ["i", "ii", "III", "IV", "v", "vi°", "VII"]
-            functionsForMode = ["Tonic", "Supertonic", "Mediant", "Subdominant", "Dominant", "Submediant", "Subtonic"]
+            functionsForMode = [String(localized: "Tonic"), String(localized: "Supertonic"), String(localized: "Mediant"), String(localized: "Subdominant"), String(localized: "Dominant"), String(localized: "Submediant"), String(localized: "Subtonic")]
         case .phrygian:
             qualitiesForMode = [.minor, .major, .major, .minor, .diminished, .major, .minor]
             romanForMode = ["i", "II", "III", "iv", "v°", "VI", "vii"]
-            functionsForMode = ["Tonic", "Neapolitan", "Mediant", "Subdominant", "Dominant", "Submediant", "Subtonic"]
+            functionsForMode = [String(localized: "Tonic"), String(localized: "Neapolitan"), String(localized: "Mediant"), String(localized: "Subdominant"), String(localized: "Dominant"), String(localized: "Submediant"), String(localized: "Subtonic")]
         case .lydian:
             qualitiesForMode = [.major, .major, .minor, .diminished, .major, .minor, .minor]
             romanForMode = ["I", "II", "iii", "iv°", "V", "vi", "vii"]
-            functionsForMode = ["Tonic", "Supertonic", "Mediant", "Subdominant", "Dominant", "Submediant", "Subtonic"]
+            functionsForMode = [String(localized: "Tonic"), String(localized: "Supertonic"), String(localized: "Mediant"), String(localized: "Subdominant"), String(localized: "Dominant"), String(localized: "Submediant"), String(localized: "Subtonic")]
         case .mixolydian:
             qualitiesForMode = [.major, .minor, .diminished, .major, .minor, .minor, .major]
             romanForMode = ["I", "ii", "iii°", "IV", "v", "vi", "VII"]
-            functionsForMode = ["Tonic", "Supertonic", "Mediant", "Subdominant", "Dominant", "Submediant", "Subtonic"]
+            functionsForMode = [String(localized: "Tonic"), String(localized: "Supertonic"), String(localized: "Mediant"), String(localized: "Subdominant"), String(localized: "Dominant"), String(localized: "Submediant"), String(localized: "Subtonic")]
         case .locrian:
             qualitiesForMode = [.diminished, .major, .minor, .minor, .major, .major, .minor]
             romanForMode = ["i°", "II", "iii", "iv", "V", "VI", "vii"]
-            functionsForMode = ["Tonic", "Supertonic", "Mediant", "Subdominant", "Dominant", "Submediant", "Subtonic"]
+            functionsForMode = [String(localized: "Tonic"), String(localized: "Supertonic"), String(localized: "Mediant"), String(localized: "Subdominant"), String(localized: "Dominant"), String(localized: "Submediant"), String(localized: "Subtonic")]
         case .harmonicMinor:
             qualitiesForMode = [.minor, .diminished, .augmented, .minor, .major, .major, .diminished]
             romanForMode = ["i", "ii°", "III+", "iv", "V", "VI", "vii°"]
-            functionsForMode = ["Tonic", "Supertonic", "Mediant", "Subdominant", "Dominant", "Submediant", "Leading Tone"]
+            functionsForMode = [String(localized: "Tonic"), String(localized: "Supertonic"), String(localized: "Mediant"), String(localized: "Subdominant"), String(localized: "Dominant"), String(localized: "Submediant"), String(localized: "Leading Tone")]
         case .melodicMinor:
             qualitiesForMode = [.minor, .minor, .augmented, .major, .major, .diminished, .diminished]
             romanForMode = ["i", "ii", "III+", "IV", "V", "vi°", "vii°"]
-            functionsForMode = ["Tonic", "Supertonic", "Mediant", "Subdominant", "Dominant", "Submediant", "Leading Tone"]
+            functionsForMode = [String(localized: "Tonic"), String(localized: "Supertonic"), String(localized: "Mediant"), String(localized: "Subdominant"), String(localized: "Dominant"), String(localized: "Submediant"), String(localized: "Leading Tone")]
         case .pentatonicMajor:
             qualitiesForMode = [.major, .minor, .minor, .major, .minor]
             romanForMode = ["I", "ii", "iii", "V", "vi"]
-            functionsForMode = ["Tonic", "Supertonic", "Mediant", "Dominant", "Submediant"]
+            functionsForMode = [String(localized: "Tonic"), String(localized: "Supertonic"), String(localized: "Mediant"), String(localized: "Dominant"), String(localized: "Submediant")]
         case .pentatonicMinor:
             qualitiesForMode = [.minor, .major, .minor, .minor, .major]
             romanForMode = ["i", "III", "iv", "v", "VII"]
-            functionsForMode = ["Tonic", "Mediant", "Subdominant", "Dominant", "Subtonic"]
+            functionsForMode = [String(localized: "Tonic"), String(localized: "Mediant"), String(localized: "Subdominant"), String(localized: "Dominant"), String(localized: "Subtonic")]
         case .blues:
             qualitiesForMode = [.minor, .major, .minor, .minor, .minor, .major]
             romanForMode = ["i", "III", "iv", "♯iv/♭v", "v", "VII"]
-            functionsForMode = ["Tonic", "Mediant", "Subdominant", "Blue Note", "Dominant", "Subtonic"]
+            functionsForMode = [String(localized: "Tonic"), String(localized: "Mediant"), String(localized: "Subdominant"), String(localized: "Blue Note"), String(localized: "Dominant"), String(localized: "Subtonic")]
         }
         
         for (index, degree) in scaleDegrees.enumerated() {
@@ -222,23 +225,23 @@ class ChordSuggestionEngine {
                 // All other major positions (I, II, III, IV, VI) get maj7.
                 if index == 4 || index == 6 {
                     seventh = .dominant7
-                    reason = "Dominant 7th"
+                    reason = String(localized: "Dominant 7th")
                 } else {
                     seventh = .major7
-                    reason = "Major 7th chord"
+                    reason = String(localized: "Major 7th chord")
                 }
             case .minor:
                 seventh = .minor7
-                reason = "Minor 7th chord"
+                reason = String(localized: "Minor 7th chord")
             case .diminished:
                 seventh = .halfDiminished7
-                reason = "Half-diminished 7th"
+                reason = String(localized: "Half-diminished 7th")
             case .augmented:
                 seventh = .augmented7
-                reason = "Augmented 7th"
+                reason = String(localized: "Augmented 7th")
             default:
                 seventh = .dominant7
-                reason = "7th chord"
+                reason = String(localized: "7th chord")
             }
             
             if index < 6 {  // Skip vii° for 7th extensions
@@ -261,7 +264,7 @@ class ChordSuggestionEngine {
                 root: chord.root,
                 quality: .sus4,
                 extensions: [],
-                reason: "Sus4 - creates tension",
+                reason: String(localized: "Sus4 - creates tension"),
                 confidence: 0.65
             ))
             
@@ -269,7 +272,7 @@ class ChordSuggestionEngine {
                 root: chord.root,
                 quality: .sus2,
                 extensions: [],
-                reason: "Sus2 - open sound",
+                reason: String(localized: "Sus2 - open sound"),
                 confidence: 0.6
             ))
         }
@@ -282,7 +285,7 @@ class ChordSuggestionEngine {
                 root: chord.root,
                 quality: chord.quality,
                 extensions: ["9"],
-                reason: "Add9 - richer harmony",
+                reason: String(localized: "Add9 - richer harmony"),
                 confidence: 0.7
             ))
         }
@@ -317,45 +320,45 @@ class ChordSuggestionEngine {
             switch lastIndex {
             case 0: // I/i (Tonic) - can go anywhere, common: IV, V, vi/VI, iii
                 suggestions = [
-                    ChordSuggestion(root: diatonic[3].root, quality: diatonic[3].quality, reason: "IV - Subdominant movement", confidence: 0.95),
-                    ChordSuggestion(root: diatonic[4].root, quality: diatonic[4].quality, reason: "V - Dominant movement", confidence: 0.95),
-                    ChordSuggestion(root: diatonic[5].root, quality: diatonic[5].quality, reason: "vi/VI - Relative minor color", confidence: 0.85),
-                    ChordSuggestion(root: diatonic[1].root, quality: diatonic[1].quality, reason: "ii - Pre-dominant", confidence: 0.75),
-                    ChordSuggestion(root: diatonic[2].root, quality: diatonic[2].quality, reason: "iii/III - Mediant color", confidence: 0.65)
+                    ChordSuggestion(root: diatonic[3].root, quality: diatonic[3].quality, reason: String(localized: "IV - Subdominant movement"), confidence: 0.95),
+                    ChordSuggestion(root: diatonic[4].root, quality: diatonic[4].quality, reason: String(localized: "V - Dominant movement"), confidence: 0.95),
+                    ChordSuggestion(root: diatonic[5].root, quality: diatonic[5].quality, reason: String(localized: "vi/VI - Relative minor color"), confidence: 0.85),
+                    ChordSuggestion(root: diatonic[1].root, quality: diatonic[1].quality, reason: String(localized: "ii - Pre-dominant"), confidence: 0.75),
+                    ChordSuggestion(root: diatonic[2].root, quality: diatonic[2].quality, reason: String(localized: "iii/III - Mediant color"), confidence: 0.65)
                 ]
                 
             case 1: // ii/ii° (Supertonic) - commonly to V or back to I
                 suggestions = [
-                    ChordSuggestion(root: diatonic[4].root, quality: diatonic[4].quality, reason: "V - Strong cadence", confidence: 1.0),
-                    ChordSuggestion(root: diatonic[0].root, quality: diatonic[0].quality, reason: "I - Direct resolution", confidence: 0.7),
-                    ChordSuggestion(root: diatonic[3].root, quality: diatonic[3].quality, reason: "IV - Plagal motion", confidence: 0.65)
+                    ChordSuggestion(root: diatonic[4].root, quality: diatonic[4].quality, reason: String(localized: "V - Strong cadence"), confidence: 1.0),
+                    ChordSuggestion(root: diatonic[0].root, quality: diatonic[0].quality, reason: String(localized: "I - Direct resolution"), confidence: 0.7),
+                    ChordSuggestion(root: diatonic[3].root, quality: diatonic[3].quality, reason: String(localized: "IV - Plagal motion"), confidence: 0.65)
                 ]
                 
             case 2: // iii/III (Mediant) - to vi, IV, or bridge
                 suggestions = [
-                    ChordSuggestion(root: diatonic[5].root, quality: diatonic[5].quality, reason: "vi/VI - Parallel minor", confidence: 0.9),
-                    ChordSuggestion(root: diatonic[3].root, quality: diatonic[3].quality, reason: "IV - Descending", confidence: 0.85),
-                    ChordSuggestion(root: diatonic[0].root, quality: diatonic[0].quality, reason: "I - Resolution", confidence: 0.75)
+                    ChordSuggestion(root: diatonic[5].root, quality: diatonic[5].quality, reason: String(localized: "vi/VI - Parallel minor"), confidence: 0.9),
+                    ChordSuggestion(root: diatonic[3].root, quality: diatonic[3].quality, reason: String(localized: "IV - Descending"), confidence: 0.85),
+                    ChordSuggestion(root: diatonic[0].root, quality: diatonic[0].quality, reason: String(localized: "I - Resolution"), confidence: 0.75)
                 ]
                 
             case 3: // IV/iv (Subdominant) - to I, V, or ii
                 suggestions = [
-                    ChordSuggestion(root: diatonic[0].root, quality: diatonic[0].quality, reason: "I - Plagal cadence", confidence: 0.95),
-                    ChordSuggestion(root: diatonic[4].root, quality: diatonic[4].quality, reason: "V - Authentic cadence prep", confidence: 0.95),
-                    ChordSuggestion(root: diatonic[1].root, quality: diatonic[1].quality, reason: "ii - Pre-dominant chain", confidence: 0.75),
-                    ChordSuggestion(root: diatonic[5].root, quality: diatonic[5].quality, reason: "vi - Deceptive", confidence: 0.7)
+                    ChordSuggestion(root: diatonic[0].root, quality: diatonic[0].quality, reason: String(localized: "I - Plagal cadence"), confidence: 0.95),
+                    ChordSuggestion(root: diatonic[4].root, quality: diatonic[4].quality, reason: String(localized: "V - Authentic cadence prep"), confidence: 0.95),
+                    ChordSuggestion(root: diatonic[1].root, quality: diatonic[1].quality, reason: String(localized: "ii - Pre-dominant chain"), confidence: 0.75),
+                    ChordSuggestion(root: diatonic[5].root, quality: diatonic[5].quality, reason: String(localized: "vi - Deceptive"), confidence: 0.7)
                 ]
                 
             case 4: // V/v (Dominant) - strong pull to I
                 var v4: [ChordSuggestion] = [
-                    ChordSuggestion(root: diatonic[0].root, quality: diatonic[0].quality, reason: "I - Perfect cadence", confidence: 1.0),
-                    ChordSuggestion(root: diatonic[5].root, quality: diatonic[5].quality, reason: "vi/VI - Deceptive cadence", confidence: 0.85),
-                    ChordSuggestion(root: diatonic[3].root, quality: diatonic[3].quality, reason: "IV - Extended resolution", confidence: 0.65)
+                    ChordSuggestion(root: diatonic[0].root, quality: diatonic[0].quality, reason: String(localized: "I - Perfect cadence"), confidence: 1.0),
+                    ChordSuggestion(root: diatonic[5].root, quality: diatonic[5].quality, reason: String(localized: "vi/VI - Deceptive cadence"), confidence: 0.85),
+                    ChordSuggestion(root: diatonic[3].root, quality: diatonic[3].quality, reason: String(localized: "IV - Extended resolution"), confidence: 0.65)
                 ]
                 // In minor, v is minor by default; surface V major (harmonic minor) for strong resolution
                 if mode != .major, diatonic[4].quality == .minor {
                     v4.insert(
-                        ChordSuggestion(root: diatonic[4].root, quality: .major, reason: "V major – harmonic minor cadence", confidence: 0.92, romanNumeral: "V"),
+                        ChordSuggestion(root: diatonic[4].root, quality: .major, reason: String(localized: "V major – harmonic minor cadence"), confidence: 0.92, romanNumeral: "V"),
                         at: 1
                     )
                 }
@@ -363,16 +366,16 @@ class ChordSuggestionEngine {
                 
             case 5: // vi/VI (Submediant) - to IV, ii, or V
                 suggestions = [
-                    ChordSuggestion(root: diatonic[3].root, quality: diatonic[3].quality, reason: "IV - Descending bass", confidence: 0.9),
-                    ChordSuggestion(root: diatonic[1].root, quality: diatonic[1].quality, reason: "ii - Circle progression", confidence: 0.85),
-                    ChordSuggestion(root: diatonic[4].root, quality: diatonic[4].quality, reason: "V - Direct to dominant", confidence: 0.8),
-                    ChordSuggestion(root: diatonic[0].root, quality: diatonic[0].quality, reason: "I - Back to tonic", confidence: 0.75)
+                    ChordSuggestion(root: diatonic[3].root, quality: diatonic[3].quality, reason: String(localized: "IV - Descending bass"), confidence: 0.9),
+                    ChordSuggestion(root: diatonic[1].root, quality: diatonic[1].quality, reason: String(localized: "ii - Circle progression"), confidence: 0.85),
+                    ChordSuggestion(root: diatonic[4].root, quality: diatonic[4].quality, reason: String(localized: "V - Direct to dominant"), confidence: 0.8),
+                    ChordSuggestion(root: diatonic[0].root, quality: diatonic[0].quality, reason: String(localized: "I - Back to tonic"), confidence: 0.75)
                 ]
                 
             case 6: // vii°/VII (Leading Tone / Subtonic) - to I
                 suggestions = [
-                    ChordSuggestion(root: diatonic[0].root, quality: diatonic[0].quality, reason: "I - Leading tone resolution", confidence: 1.0),
-                    ChordSuggestion(root: diatonic[5].root, quality: diatonic[5].quality, reason: "vi/VI - Alternative", confidence: 0.6)
+                    ChordSuggestion(root: diatonic[0].root, quality: diatonic[0].quality, reason: String(localized: "I - Leading tone resolution"), confidence: 1.0),
+                    ChordSuggestion(root: diatonic[5].root, quality: diatonic[5].quality, reason: String(localized: "vi/VI - Alternative"), confidence: 0.6)
                 ]
                 
             default:
@@ -381,8 +384,8 @@ class ChordSuggestionEngine {
         } else {
             // Last chord not in key - suggest tonic and dominant
             suggestions = [
-                ChordSuggestion(root: diatonic[0].root, quality: diatonic[0].quality, reason: "I - Return to key", confidence: 0.95),
-                ChordSuggestion(root: diatonic[4].root, quality: diatonic[4].quality, reason: "V - Establish tonality", confidence: 0.85)
+                ChordSuggestion(root: diatonic[0].root, quality: diatonic[0].quality, reason: String(localized: "I - Return to key"), confidence: 0.95),
+                ChordSuggestion(root: diatonic[4].root, quality: diatonic[4].quality, reason: String(localized: "V - Establish tonality"), confidence: 0.85)
             ]
         }
         
@@ -425,7 +428,7 @@ class ChordSuggestionEngine {
                         ChordSuggestion(
                             root: diatonic[0].root,
                             quality: diatonic[0].quality,
-                            reason: "ii–V resolution",
+                            reason: String(localized: "ii–V resolution"),
                             confidence: 0.95,
                             romanNumeral: diatonic[0].romanNumeral
                         )
@@ -435,7 +438,7 @@ class ChordSuggestionEngine {
                         ChordSuggestion(
                             root: diatonic[0].root,
                             quality: diatonic[0].quality,
-                            reason: "IV–V to tonic",
+                            reason: String(localized: "IV–V to tonic"),
                             confidence: 0.9,
                             romanNumeral: diatonic[0].romanNumeral
                         )
@@ -451,7 +454,7 @@ class ChordSuggestionEngine {
                 ChordSuggestion(
                     root: secondaryDominant,
                     quality: .dominant7,
-                    reason: "V/\(targetRoot) leading into the next chord",
+                    reason: String(localized: "V/\(targetRoot) leading into the next chord"),
                     confidence: 0.85
                 )
             )
@@ -460,7 +463,7 @@ class ChordSuggestionEngine {
                 ChordSuggestion(
                     root: secondarySupertonic,
                     quality: .minor7,
-                    reason: "ii of \(targetRoot) – sets up V–I into next chord",
+                    reason: String(localized: "ii of \(targetRoot) – sets up V–I into next chord"),
                     confidence: 0.75
                 )
             )
@@ -469,8 +472,9 @@ class ChordSuggestionEngine {
                 ChordSuggestion(
                     root: tritoneSub,
                     quality: .dominant7,
-                    reason: "Tritone sub into \(targetRoot)",
-                    confidence: 0.6
+                    reason: String(localized: "Tritone sub into \(targetRoot)"),
+                    confidence: 0.6,
+                    isTritoneSubstitution: true
                 )
             )
         }
@@ -481,7 +485,7 @@ class ChordSuggestionEngine {
                 ChordSuggestion(
                     root: flatSeven,
                     quality: .major,
-                    reason: "♭VII borrowed from Mixolydian",
+                    reason: String(localized: "♭VII borrowed from Mixolydian"),
                     confidence: 0.6
                 )
             )
@@ -490,7 +494,7 @@ class ChordSuggestionEngine {
                 ChordSuggestion(
                     root: flatSix,
                     quality: .major,
-                    reason: "♭VI borrowed from Aeolian",
+                    reason: String(localized: "♭VI borrowed from Aeolian"),
                     confidence: 0.55
                 )
             )
@@ -499,7 +503,7 @@ class ChordSuggestionEngine {
                     ChordSuggestion(
                         root: diatonic[3].root,
                         quality: .minor,
-                        reason: "iv minor for emotional color",
+                        reason: String(localized: "iv minor for emotional color"),
                         confidence: 0.6
                     )
                 )
@@ -510,7 +514,7 @@ class ChordSuggestionEngine {
                     ChordSuggestion(
                         root: diatonic[4].root,
                         quality: .major,
-                        reason: "V major from harmonic minor",
+                        reason: String(localized: "V major from harmonic minor"),
                         confidence: 0.8
                     )
                 )
@@ -518,7 +522,7 @@ class ChordSuggestionEngine {
                     ChordSuggestion(
                         root: diatonic[4].root,
                         quality: .dominant7,
-                        reason: "V7 for strong resolution",
+                        reason: String(localized: "V7 for strong resolution"),
                         confidence: 0.85
                     )
                 )
@@ -528,7 +532,7 @@ class ChordSuggestionEngine {
                 ChordSuggestion(
                     root: flatTwo,
                     quality: .major,
-                    reason: "♭II (Neapolitan)",
+                    reason: String(localized: "♭II (Neapolitan)"),
                     confidence: 0.55
                 )
             )
@@ -536,7 +540,7 @@ class ChordSuggestionEngine {
                 ChordSuggestion(
                     root: keyRoot,
                     quality: .major,
-                    reason: "Picardy third (major tonic)",
+                    reason: String(localized: "Picardy third (major tonic)"),
                     confidence: 0.5
                 )
             )
@@ -548,7 +552,7 @@ class ChordSuggestionEngine {
                 ChordSuggestion(
                     root: upMediant,
                     quality: lastChord.quality == .minor ? .major : .minor,
-                    reason: "Chromatic mediant color",
+                    reason: String(localized: "Chromatic mediant color"),
                     confidence: 0.5
                 )
             )
@@ -557,7 +561,7 @@ class ChordSuggestionEngine {
                 ChordSuggestion(
                     root: downMediant,
                     quality: lastChord.quality == .minor ? .major : .minor,
-                    reason: "Chromatic mediant contrast",
+                    reason: String(localized: "Chromatic mediant contrast"),
                     confidence: 0.5
                 )
             )
@@ -568,7 +572,7 @@ class ChordSuggestionEngine {
                 ChordSuggestion(
                     root: circleRoot,
                     quality: diatonicMatch?.quality ?? .major,
-                    reason: "Circle of fifths motion",
+                    reason: String(localized: "Circle of fifths motion"),
                     confidence: 0.65,
                     romanNumeral: diatonicMatch?.romanNumeral
                 )
@@ -669,7 +673,7 @@ private extension ChordSuggestionEngine {
             case 1, 11:
                 adjusted += 0.03 // semitone chromatic color
             case 6:
-                if !suggestion.reason.lowercased().contains("tritone") {
+                if !suggestion.isTritoneSubstitution {
                     adjusted -= 0.05
                 }
             default:
@@ -700,7 +704,8 @@ private extension ChordSuggestionEngine {
             extensions: suggestion.extensions,
             reason: suggestion.reason,
             confidence: clamped,
-            romanNumeral: suggestion.romanNumeral
+            romanNumeral: suggestion.romanNumeral,
+            isTritoneSubstitution: suggestion.isTritoneSubstitution
         )
     }
 

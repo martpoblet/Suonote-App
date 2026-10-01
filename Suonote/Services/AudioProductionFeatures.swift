@@ -110,9 +110,9 @@ class AudioBounceEngine {
         
         var errorDescription: String? {
             switch self {
-            case .invalidFormat: return "Invalid audio format"
-            case .cannotCreateFile: return "Cannot create output file"
-            case .renderError: return "Audio rendering failed"
+            case .invalidFormat: return String(localized: "Invalid audio format")
+            case .cannotCreateFile: return String(localized: "Cannot create output file")
+            case .renderError: return String(localized: "Audio rendering failed")
             }
         }
     }

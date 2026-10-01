@@ -2,860 +2,612 @@ import SwiftUI
 import SwiftData
 import AVFoundation
 
+/// The Record tab: one tap to capture an idea, then a calm list of takes
+/// you can play, scrub, filter, rename, link, favorite, share and delete.
 struct RecordingsTabView: View {
     @Bindable var project: Project
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var studioPlayback: StudioPlaybackEngine
     @StateObject private var audioManager = AudioRecordingManager()
-    @StateObject private var effectsProcessor = AudioEffectsProcessor()
+    @StateObject private var player = RecordTakePlayer()
+
+    @AppStorage(RecordPreferenceKey.countInBars) private var countInBars = 1
+    @AppStorage(RecordPreferenceKey.clickEnabled) private var clickEnabled = false
+    @AppStorage(RecordPreferenceKey.lastType) private var lastTypeRaw = RecordingType.voice.rawValue
+
     @State private var showingRecordingScreen = false
-    @State private var showingTypePicker = false
-    @State private var selectedRecordingType: RecordingType = .voice
+    @State private var autoStartRecording = true
     @State private var filterType: RecordingType?
-    @State private var showLinkedOnly = false
+    @State private var filterSectionId: UUID?
+    @State private var favoritesOnly = false
     @State private var sortOrder: RecordingSortOrder = .dateDescending
-    @State private var selectedRecording: Recording?
     @State private var selectedRecordingForLink: Recording?
-    @State private var showingEffects = false
     @State private var selectedRecordingForDetail: Recording?
     @State private var recordingToDelete: Recording?
-    @State private var showDeleteConfirmation = false
-    @State private var playingRecordingId: UUID?
-    
+    @State private var recordingToRename: Recording?
+    @State private var renameText = ""
+
     enum RecordingSortOrder: String, CaseIterable {
-        case dateDescending = "Newest First"
-        case dateAscending = "Oldest First"
-        case nameAscending = "Name A-Z"
-        case durationDescending = "Longest First"
+        case dateDescending = "Newest first"
+        case dateAscending = "Oldest first"
+        case nameAscending = "Name A–Z"
+        case durationDescending = "Longest first"
+
+        var title: String {
+            switch self {
+            case .dateDescending: return String(localized: "Newest first")
+            case .dateAscending: return String(localized: "Oldest first")
+            case .nameAscending: return String(localized: "Name A–Z")
+            case .durationDescending: return String(localized: "Longest first")
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .dateDescending: return "arrow.down"
+            case .dateAscending: return "arrow.up"
+            case .nameAscending: return "textformat"
+            case .durationDescending: return "clock"
+            }
+        }
     }
-    
+
+    private var recordingType: RecordingType {
+        RecordingType(rawValue: lastTypeRaw) ?? .voice
+    }
+
+    private var uniqueSections: [SectionTemplate] { project.recordUniqueSections }
+
+    private var sectionsById: [UUID: SectionTemplate] {
+        Dictionary(uniqueSections.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    private var hasActiveFilters: Bool {
+        filterType != nil || filterSectionId != nil || favoritesOnly
+    }
+
     private var filteredAndSortedRecordings: [Recording] {
         var recordings = project.recordings
-        
-        // Filter by type
         if let type = filterType {
             recordings = recordings.filter { $0.recordingType == type }
         }
-        
-        // Filter by linked status
-        if showLinkedOnly {
-            recordings = recordings.filter { $0.linkedSectionId != nil }
+        if let sectionId = filterSectionId {
+            recordings = recordings.filter { $0.linkedSectionId == sectionId }
         }
-        
-        // Sort
+        if favoritesOnly {
+            recordings = recordings.filter(\.isFavorite)
+        }
         switch sortOrder {
-        case .dateDescending:
-            recordings.sort { $0.createdAt > $1.createdAt }
-        case .dateAscending:
-            recordings.sort { $0.createdAt < $1.createdAt }
-        case .nameAscending:
-            recordings.sort { $0.name < $1.name }
-        case .durationDescending:
-            recordings.sort { $0.duration > $1.duration }
+        case .dateDescending: recordings.sort { $0.createdAt > $1.createdAt }
+        case .dateAscending: recordings.sort { $0.createdAt < $1.createdAt }
+        case .nameAscending: recordings.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        case .durationDescending: recordings.sort { $0.duration > $1.duration }
         }
-        
         return recordings
     }
-    
-    private var uniqueSections: [SectionTemplate] {
-        // Get unique sections from arrangement items
-        var seen = Set<UUID>()
-        var sections: [SectionTemplate] = []
-        
-        for item in project.arrangementItems {
-            if let section = item.sectionTemplate,
-               !seen.contains(section.id) {
-                seen.insert(section.id)
-                sections.append(section)
+
+    /// Types that actually appear in this project (keeps the filter row short).
+    private var presentTypes: [RecordingType] {
+        let present = Set(project.recordings.map(\.recordingType))
+        return RecordingType.allCases.filter { present.contains($0) }
+    }
+
+    /// Sections that have at least one linked take.
+    private var linkedSections: [SectionTemplate] {
+        let linked = Set(project.recordings.compactMap(\.linkedSectionId))
+        return uniqueSections.filter { linked.contains($0.id) }
+    }
+
+    private var totalDuration: TimeInterval {
+        project.recordings.reduce(0) { $0 + $1.duration }
+    }
+
+    // MARK: Body
+
+    var body: some View {
+        let recordings = filteredAndSortedRecordings
+        let sectionMap = sectionsById
+
+        List {
+            Group {
+                header
+                    .padding(.top, DesignSystem.Spacing.md)
+                    .rowStyle(top: 0, bottom: DesignSystem.Spacing.md)
+
+                RecordHeroCard(
+                    takeNumber: project.recordings.count + 1,
+                    type: recordingType,
+                    countInBars: $countInBars,
+                    clickEnabled: $clickEnabled,
+                    onSelectType: { lastTypeRaw = $0.rawValue },
+                    onRecord: { openRecorder(autoStart: true) },
+                    onMoreOptions: { openRecorder(autoStart: false) }
+                )
+                .rowStyle(top: 0, bottom: DesignSystem.Spacing.lg)
+
+                if !project.recordings.isEmpty {
+                    takesHeader(count: recordings.count)
+                        .rowStyle(top: 0, bottom: DesignSystem.Spacing.xs)
+
+                    filterChips
+                        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: DesignSystem.Spacing.sm, trailing: 0))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                }
+
+                if recordings.isEmpty {
+                    emptyState
+                        .rowStyle(top: DesignSystem.Spacing.md, bottom: DesignSystem.Spacing.xxl)
+                } else {
+                    ForEach(recordings) { recording in
+                        takeRow(recording, linkedSection: recording.linkedSectionId.flatMap { sectionMap[$0] })
+                            .rowStyle(top: DesignSystem.Spacing.xxs, bottom: DesignSystem.Spacing.xxs)
+                    }
+                }
             }
         }
-        
-        return sections
-    }
-    
-    private var sectionsById: [UUID: SectionTemplate] {
-        var map: [UUID: SectionTemplate] = [:]
-        for section in uniqueSections {
-            map[section.id] = section
-        }
-        return map
-    }
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            // Header con botón de grabar
-            recordingHeader
-            
-            Divider()
-                .overlay(DesignSystem.Colors.border)
-            
-            // Lista de takes
-            takesListView
-        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .contentMargins(.bottom, DesignSystem.Spacing.xxxl, for: .scrollContent)
+        .animation(DesignSystem.Animations.smoothSpring, value: recordings.map(\.id))
         .fullScreenCover(isPresented: $showingRecordingScreen) {
             ActiveRecordingView(
                 project: project,
                 audioManager: audioManager,
-                recordingType: selectedRecordingType
+                recordingType: recordingType,
+                initialLinkedSectionId: filterSectionId,
+                autoStart: autoStartRecording
             )
-        }
-        .sheet(isPresented: $showingTypePicker) {
-            RecordingTypePickerSheet(selectedType: $selectedRecordingType)
-                .studioModalStyle()
         }
         .sheet(item: $selectedRecordingForLink) { recording in
             SectionLinkSheet(
                 recording: recording,
                 sections: uniqueSections,
-                onLink: { sectionId in
-                    recording.linkedSectionId = sectionId
-                    project.updatedAt = Date()
-                    try? modelContext.save()
-                }
+                onLink: { link(recording, to: $0) }
             )
-            .studioModalStyle()
-        }
-        .sheet(isPresented: $showingEffects) {
-            AudioEffectsSheet(
-                settings: $effectsProcessor.settings,
-                onApply: {
-                    effectsProcessor.applyEffects()
-                }
-            )
-            .studioModalStyle()
         }
         .sheet(item: $selectedRecordingForDetail) { recording in
             RecordingDetailView(
                 recording: recording,
                 sections: uniqueSections,
+                player: player,
                 onUpdate: {
-                    // Recording updated
+                    project.updatedAt = Date()
+                    try? modelContext.save()
+                },
+                onDelete: {
+                    selectedRecordingForDetail = nil
+                    // Let the sheet finish dismissing before asking.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                        recordingToDelete = recording
+                    }
                 }
             )
-            .presentationDetents([.large])
-            .studioModalStyle()
         }
         .onAppear {
             audioManager.setup(project: project)
         }
-        .onReceive(audioManager.$currentlyPlayingRecording) { current in
-            if let current {
-                playingRecordingId = current.id
-            } else if !effectsProcessor.isPlaying {
-                playingRecordingId = nil
-            }
+        .onDisappear {
+            player.stop()
         }
-        .alert("Delete Recording?", isPresented: $showDeleteConfirmation, presenting: recordingToDelete) { recording in
+        // One thing plays at a time: a take pauses the song and vice versa.
+        .onChange(of: player.isPlaying) { _, isPlaying in
+            if isPlaying { pauseStudioIfNeeded() }
+        }
+        .onChange(of: studioPlayback.isPlaying) { _, isPlaying in
+            if isPlaying { player.pause() }
+        }
+        .confirmationDialog(
+            "Delete \(recordingToDelete?.name ?? String(localized: "take"))?",
+            isPresented: Binding(get: { recordingToDelete != nil }, set: { if !$0 { recordingToDelete = nil } }),
+            titleVisibility: .visible,
+            presenting: recordingToDelete
+        ) { recording in
+            Button("Delete take", role: .destructive) { deleteRecording(recording) }
             Button("Cancel", role: .cancel) {}
-            Button("Delete", role: .destructive) {
-                deleteRecording(recording)
-            }
-        } message: { recording in
-            Text("Are you sure you want to delete '\(recording.name)'? This action cannot be undone.")
+        } message: { _ in
+            Text("The audio file will be removed. This can't be undone.")
+        }
+        .alert(
+            "Rename take",
+            isPresented: Binding(get: { recordingToRename != nil }, set: { if !$0 { recordingToRename = nil } }),
+            presenting: recordingToRename
+        ) { recording in
+            TextField("Take name", text: $renameText)
+            Button("Save") { rename(recording) }
+            Button("Cancel", role: .cancel) {}
         }
     }
-    
-    private var recordingHeader: some View {
-        VStack(spacing: DesignSystem.Spacing.md) {
-            // Record button
-            Button {
-                showingRecordingScreen = true
-            } label: {
-                HStack(spacing: DesignSystem.Spacing.sm) {
-                    ZStack {
-                        Circle()
-                            .fill(DesignSystem.Colors.error.opacity(0.2))
-                            .frame(width: 48, height: 48)
-                        
-                        Circle()
-                            .fill(DesignSystem.Colors.error)
-                            .frame(width: 20, height: 20)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxxs) {
-                        Text("Start Recording")
-                            .font(DesignSystem.Typography.body)
-                            .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        
-                        Text("Take \(project.recordings.count + 1) • \(selectedRecordingType.rawValue)")
-                            .font(DesignSystem.Typography.caption)
-                            .foregroundStyle(DesignSystem.Colors.textSecondary)
-                    }
-                    
-                    Spacer()
-                    
-                    Image(systemName: "chevron.right")
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+
+    // MARK: Header
+
+    private var header: some View {
+        ScreenHeader(eyebrow: String(localized: "Record"), title: String(localized: "Takes"), subtitle: headerSubtitle) {
+            if !project.recordings.isEmpty {
+                sortMenu
+            }
+        }
+    }
+
+    private var headerSubtitle: String {
+        let count = project.recordings.count
+        switch count {
+        case 0: return String(localized: "Catch it before it's gone.")
+        default: return String(localized: "\(count) takes · \(RecordFormat.duration(totalDuration)) in all")
+        }
+    }
+
+    private var sortMenu: some View {
+        Menu {
+            Picker("Sort by", selection: $sortOrder) {
+                ForEach(RecordingSortOrder.allCases, id: \.self) { order in
+                    Label(order.title, systemImage: order.icon).tag(order)
                 }
-                .padding(DesignSystem.Spacing.md)
-                .glassEffect(
-                    .regular.tint(DesignSystem.Colors.error.opacity(0.15)).interactive(),
-                    in: .rect(cornerRadius: DesignSystem.CornerRadius.lg)
-                )
             }
-            .buttonStyle(.plain)
+        } label: {
+            Image(systemName: "arrow.up.arrow.down")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
+                .frame(width: 36, height: 36)
         }
-        .padding(.horizontal, DesignSystem.Spacing.xl)
-        .padding(.top, DesignSystem.Spacing.xl)
-        .padding(.bottom, DesignSystem.Spacing.md)
+        .buttonStyle(.glass)
+        .buttonBorderShape(.circle)
+        .accessibilityLabel("Sort takes")
+        .accessibilityValue(sortOrder.title)
     }
-    
-    private var takesListView: some View {
-        let recordings = filteredAndSortedRecordings
-        let sectionMap = sectionsById
-        
-        return VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
-            HStack {
-                Text("Takes")
+
+    private func takesHeader(count: Int) -> some View {
+        SectionHeader(
+            title: String(localized: "Takes"),
+            detail: hasActiveFilters ? String(localized: "\(count) of \(project.recordings.count)") : "\(count)",
+            actionTitle: hasActiveFilters ? String(localized: "Clear filters") : nil,
+            action: hasActiveFilters ? { clearFilters() } : nil
+        )
+    }
+
+    private var filterChips: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: DesignSystem.Spacing.xs) {
+                SelectableChip(title: String(localized: "All"), isSelected: !hasActiveFilters) {
+                    HapticFeedback.selection.trigger()
+                    clearFilters()
+                }
+                SelectableChip(title: String(localized: "Favorites"), icon: "star.fill", isSelected: favoritesOnly) {
+                    HapticFeedback.selection.trigger()
+                    favoritesOnly.toggle()
+                }
+                if presentTypes.count > 1 {
+                    ForEach(presentTypes, id: \.self) { type in
+                        SelectableChip(title: type.recordDisplayName, icon: type.icon, isSelected: filterType == type) {
+                            HapticFeedback.selection.trigger()
+                            filterType = filterType == type ? nil : type
+                        }
+                    }
+                }
+                ForEach(linkedSections) { section in
+                    SelectableChip(title: section.name, dot: section.color, isSelected: filterSectionId == section.id) {
+                        HapticFeedback.selection.trigger()
+                        filterSectionId = filterSectionId == section.id ? nil : section.id
+                    }
+                }
+            }
+            .padding(.horizontal, DesignSystem.Spacing.gutter)
+            .padding(.vertical, 1)
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        if project.recordings.isEmpty {
+            VStack(spacing: DesignSystem.Spacing.sm) {
+                BrandWavesMark(size: 34, animated: true)
+                Text("No takes yet")
+                    .font(DesignSystem.Typography.title2)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+                Text("Hum it, strum it, keep it. Every take lands here.")
+                    .font(DesignSystem.Typography.italicSmall)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, DesignSystem.Spacing.xl)
+        } else {
+            VStack(spacing: DesignSystem.Spacing.sm) {
+                Text("Nothing matches")
                     .font(DesignSystem.Typography.title3)
                     .foregroundStyle(DesignSystem.Colors.textPrimary)
-                
-                Badge("\(recordings.count)", color: DesignSystem.Colors.surface)
-                
-                Spacer()
-                
-                HStack(spacing: DesignSystem.Spacing.md) {
-                    // Filter menu
-                    Menu {
-                    // Type Filter
-                    Menu("Filter by Type") {
-                        Button {
-                            filterType = nil
-                        } label: {
-                            HStack {
-                                Text("All Types")
-                                if filterType == nil {
-                                    Image(systemName: "checkmark")
-                                }
-                            }
-                        }
-                        
-                        ForEach(RecordingType.allCases, id: \.self) { type in
-                            Button {
-                                filterType = type
-                            } label: {
-                                HStack {
-                                    Image(systemName: type.icon)
-                                    Text(type.rawValue)
-                                    if filterType == type {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
-                            }
-                        }
+                Text("No takes fit these filters.")
+                    .font(DesignSystem.Typography.italicSmall)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+                Button("Clear filters") { clearFilters() }
+                    .buttonStyle(OutlineButtonStyle(compact: true))
+                    .padding(.top, DesignSystem.Spacing.xxs)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, DesignSystem.Spacing.xl)
+        }
+    }
+
+    // MARK: Rows
+
+    private func takeRow(_ recording: Recording, linkedSection: SectionTemplate?) -> some View {
+        RecordTakeRow(
+            recording: recording,
+            linkedSection: linkedSection,
+            player: player,
+            onOpen: { selectedRecordingForDetail = recording },
+            onToggleFavorite: { toggleFavorite(recording) },
+            onLinkSection: { selectedRecordingForLink = recording }
+        )
+        .contextMenu {
+            Button {
+                player.toggle(recording)
+            } label: {
+                Label(player.isPlaying(recording) ? "Pause" : "Play",
+                      systemImage: player.isPlaying(recording) ? "pause" : "play")
+            }
+            Button {
+                renameText = recording.name
+                recordingToRename = recording
+            } label: {
+                Label("Rename", systemImage: "pencil")
+            }
+            Button {
+                toggleFavorite(recording)
+            } label: {
+                Label(recording.isFavorite ? "Unfavorite" : "Favorite",
+                      systemImage: recording.isFavorite ? "star.slash" : "star")
+            }
+            Menu {
+                Picker("Type", selection: Binding(
+                    get: { recording.recordingType },
+                    set: { recording.recordingType = $0; touch() }
+                )) {
+                    ForEach(RecordingType.allCases, id: \.self) { type in
+                        Label(type.recordDisplayName, systemImage: type.icon).tag(type)
                     }
-                    
-                    // Linked Filter
+                }
+            } label: {
+                Label("Type", systemImage: recording.recordingType.icon)
+            }
+            if !uniqueSections.isEmpty {
+                Menu {
                     Button {
-                        showLinkedOnly.toggle()
+                        link(recording, to: nil)
                     } label: {
-                        HStack {
-                            Image(systemName: showLinkedOnly ? "checkmark.square" : "square")
-                            Text("Linked Only")
-                        }
+                        Label("No section", systemImage: recording.linkedSectionId == nil ? "checkmark" : "circle.dashed")
                     }
-                    
-                    Divider()
-                    
-                    // Sort Options
-                    Menu("Sort By") {
-                        ForEach(RecordingSortOrder.allCases, id: \.self) { order in
-                            Button {
-                                sortOrder = order
-                            } label: {
-                                HStack {
-                                    Text(order.rawValue)
-                                    if sortOrder == order {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
+                    ForEach(uniqueSections) { section in
+                        Button {
+                            link(recording, to: section.id)
+                        } label: {
+                            if recording.linkedSectionId == section.id {
+                                Label(section.name, systemImage: "checkmark")
+                            } else {
+                                Text(section.name)
                             }
                         }
                     }
                 } label: {
-                    VStack(spacing: DesignSystem.Spacing.xxs) {
-                        Image(systemName: "line.3.horizontal.decrease.circle.fill")
-                            .font(DesignSystem.Typography.title3)
-                        Text("Filter")
-                            .font(DesignSystem.Typography.caption)
-                    }
-                    .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    .frame(width: 70, height: 60)
-                    .background(
-                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
-                            .fill(DesignSystem.Colors.surface)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
-                                    .stroke(DesignSystem.Colors.border, lineWidth: 1.5)
-                            )
-                    )
-                }
-                .animatedPress()
+                    Label("Link to section", systemImage: "link")
                 }
             }
-            .padding(.horizontal, DesignSystem.Spacing.xl)
-            .padding(.top, DesignSystem.Spacing.xxs)
-            
-            // Active Filters Display
-            if filterType != nil || showLinkedOnly {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: DesignSystem.Spacing.xxs) {
-                        if let type = filterType {
-                            FilterChipView(
-                                icon: type.icon,
-                                text: type.rawValue,
-                                color: type.color,
-                                onRemove: { filterType = nil }
-                            )
-                        }
-                        
-                        if showLinkedOnly {
-                            FilterChipView(
-                                icon: "link",
-                                text: "Linked",
-                                color: DesignSystem.Colors.primary,
-                                onRemove: { showLinkedOnly = false }
-                            )
-                        }
-                    }
-                    .padding(.horizontal, DesignSystem.Spacing.xl)
+            if let url = recording.recordFileURL {
+                ShareLink(item: url, preview: SharePreview(recording.name)) {
+                    Label("Share audio", systemImage: "square.and.arrow.up")
                 }
             }
-            
-            if recordings.isEmpty {
-                VStack(spacing: 0) {
-                    Spacer()
-                    
-                    EmptyStateView(
-                        icon: "waveform.circle",
-                        title: project.recordings.isEmpty ? "No recordings yet" : "No recordings match filters",
-                        message: project.recordings.isEmpty ? "Tap 'Start Recording' to begin" : "Try adjusting your filters",
-                        actionTitle: project.recordings.isEmpty ? nil : "Clear Filters"
-                    ) {
-                        if !project.recordings.isEmpty {
-                            filterType = nil
-                            showLinkedOnly = false
-                        }
-                    }
-                    .padding(.horizontal, DesignSystem.Spacing.xxl)
-                    .frame(maxWidth: .infinity)
-                    Spacer()
-                }
-            } else {
-                List {
-                    ForEach(recordings) { recording in
-                        Button(action: {
-                            selectedRecordingForDetail = recording
-                        }) {
-                            ModernTakeCard(
-                                recording: recording,
-                                linkedSection: recording.linkedSectionId.flatMap { sectionMap[$0] },
-                                isPlaying: playingRecordingId == recording.id,
-                                onPlay: {
-                                    togglePlayback(for: recording)
-                                },
-                                onTap: {
-                                    selectedRecordingForDetail = recording
-                                },
-                                onLinkSection: {
-                                    selectedRecordingForLink = recording
-                                },
-                                onDelete: {
-                                    deleteRecording(recording)
-                                }
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .listRowInsets(EdgeInsets(
-                            top: DesignSystem.Spacing.xxs,
-                            leading: DesignSystem.Spacing.xl,
-                            bottom: DesignSystem.Spacing.xxs,
-                            trailing: DesignSystem.Spacing.xl
-                        ))
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button(role: .destructive) {
-                                recordingToDelete = recording
-                                showDeleteConfirmation = true
-                            } label: {
-                                Image(systemName: "trash.fill")
-                            }
-                            
-                            if recording.linkedSectionId != nil {
-                                Button {
-                                    recording.linkedSectionId = nil
-                                    project.updatedAt = Date()
-                                    try? modelContext.save()
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                }
-                                .tint(DesignSystem.Colors.warning)
-                            }
-                            
-                            Button {
-                                selectedRecordingForLink = recording
-                            } label: {
-                                Image(systemName: recording.linkedSectionId == nil ? "link.circle.fill" : "link.circle")
-                            }
-                            .tint(DesignSystem.Colors.primary)
-                        }
-                    }
-                }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
+            Divider()
+            Button(role: .destructive) {
+                recordingToDelete = recording
+            } label: {
+                Label("Delete", systemImage: "trash")
             }
         }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) {
+                recordingToDelete = recording
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+            Button {
+                renameText = recording.name
+                recordingToRename = recording
+            } label: {
+                Label("Rename", systemImage: "pencil")
+            }
+            .tint(DesignSystem.Colors.textSecondary)
+            Button {
+                selectedRecordingForLink = recording
+            } label: {
+                Label("Link", systemImage: "link")
+            }
+            .tint(DesignSystem.Colors.primaryDark)
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            Button {
+                toggleFavorite(recording)
+            } label: {
+                Label(recording.isFavorite ? "Unfavorite" : "Favorite",
+                      systemImage: recording.isFavorite ? "star.slash.fill" : "star.fill")
+            }
+            .tint(DesignSystem.Colors.accent)
+        }
     }
-    
+
+    // MARK: Actions
+
+    private func openRecorder(autoStart: Bool) {
+        player.stop()
+        pauseStudioIfNeeded()
+        autoStartRecording = autoStart
+        showingRecordingScreen = true
+    }
+
+    private func pauseStudioIfNeeded() {
+        if studioPlayback.isPlaying {
+            studioPlayback.pause()
+        }
+    }
+
+    private func clearFilters() {
+        withAnimation(DesignSystem.Animations.quickSpring) {
+            filterType = nil
+            filterSectionId = nil
+            favoritesOnly = false
+        }
+    }
+
+    private func touch() {
+        project.updatedAt = Date()
+        try? modelContext.save()
+    }
+
+    private func toggleFavorite(_ recording: Recording) {
+        recording.isFavorite.toggle()
+        HapticFeedback.selection.trigger()
+        touch()
+    }
+
+    private func link(_ recording: Recording, to sectionId: UUID?) {
+        recording.linkedSectionId = sectionId
+        touch()
+    }
+
+    private func rename(_ recording: Recording) {
+        let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        recording.name = trimmed
+        touch()
+    }
+
     private func deleteRecording(_ recording: Recording) {
-        // Delete the audio file
+        if player.isLoaded(recording) {
+            player.stop()
+        }
         let url = FileManagerUtils.recordingURL(for: recording.fileName)
         try? FileManager.default.removeItem(at: url)
-        
+
         if let index = project.recordings.firstIndex(where: { $0.id == recording.id }) {
             let removed = project.recordings.remove(at: index)
             modelContext.delete(removed)
         }
-        project.updatedAt = Date()
-        try? modelContext.save()
-    }
-    
-    private func togglePlayback(for recording: Recording) {
-        if playingRecordingId == recording.id {
-            stopPlayback()
-        } else {
-            playRecordingWithEffects(recording)
-        }
-    }
-    
-    private func stopPlayback() {
-        audioManager.stopPlayback()
-        effectsProcessor.stop()
-        playingRecordingId = nil
-    }
-    
-    private func playRecordingWithEffects(_ recording: Recording) {
-        stopPlayback()
-        guard let url = FileManagerUtils.existingRecordingURL(for: recording.fileName) else {
-            print("Recording file not found for: \(recording.fileName)")
-            return
-        }
-        
-        // Check if recording has individual effects
-        let hasEffects = recording.reverbEnabled || recording.delayEnabled || 
-                        recording.eqEnabled || recording.compressionEnabled
-        
-        if hasEffects {
-            // Apply recording's individual effects
-            effectsProcessor.settings.reverbEnabled = recording.reverbEnabled
-            effectsProcessor.settings.reverbMix = recording.reverbMix
-            effectsProcessor.settings.reverbSize = recording.reverbSize
-            
-            effectsProcessor.settings.delayEnabled = recording.delayEnabled
-            effectsProcessor.settings.delayTime = recording.delayTime
-            effectsProcessor.settings.delayFeedback = recording.delayFeedback
-            effectsProcessor.settings.delayMix = recording.delayMix
-            
-            effectsProcessor.settings.eqEnabled = recording.eqEnabled
-            effectsProcessor.settings.lowGain = recording.lowGain
-            effectsProcessor.settings.midGain = recording.midGain
-            effectsProcessor.settings.highGain = recording.highGain
-            
-            effectsProcessor.settings.compressionEnabled = recording.compressionEnabled
-            effectsProcessor.settings.compressionThreshold = recording.compressionThreshold
-            effectsProcessor.settings.compressionRatio = recording.compressionRatio
-            
-            effectsProcessor.applyEffects()
-            
-            playingRecordingId = recording.id
-            do {
-                try effectsProcessor.playAudio(url: url) {
-                    playingRecordingId = nil
-                }
-            } catch {
-                print("Failed to play recording with effects: \(error)")
-                playingRecordingId = nil
-            }
-        } else {
-            audioManager.playRecording(recording)
-            playingRecordingId = recording.id
-        }
+        HapticFeedback.warning.trigger()
+        touch()
     }
 }
 
-struct WaveformView: View {
-    let levels: [Float]
-    
-    var body: some View {
-        GeometryReader { geometry in
-            let barWidth = (geometry.size.width / CGFloat(levels.count)) - 2
-            
-            HStack(spacing: 2) {
-                ForEach(Array(levels.enumerated()), id: \.offset) { _, level in
-                    let barHeight = max(4, CGFloat(level) * geometry.size.height)
-                    
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(DesignSystem.Colors.error.opacity(0.7))
-                        .frame(width: barWidth, height: barHeight)
-                        .frame(height: geometry.size.height, alignment: .center)
-                }
-            }
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(DesignSystem.Colors.surfaceSecondary)
-        )
-    }
-}
+// MARK: - Hero
 
-struct ModernTakeCard: View {
-    let recording: Recording
-    let linkedSection: SectionTemplate?
-    let isPlaying: Bool
-    let onPlay: () -> Void
-    let onTap: () -> Void
-    let onLinkSection: () -> Void
-    let onDelete: () -> Void
-    
+/// The capture card: one big red button that starts recording immediately
+/// with the remembered setup, plus quick toggles for that setup.
+private struct RecordHeroCard: View {
+    let takeNumber: Int
+    let type: RecordingType
+    @Binding var countInBars: Int
+    @Binding var clickEnabled: Bool
+    let onSelectType: (RecordingType) -> Void
+    let onRecord: () -> Void
+    let onMoreOptions: () -> Void
+
     var body: some View {
-        HStack(spacing: 16) {
-            // Play button with type indicator
-            Button {
-                onPlay()
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(isPlaying ? DesignSystem.Colors.success : recording.recordingType.color.opacity(0.4))
-                        .frame(width: 56, height: 56)
-                    
-                    if isPlaying {
-                        Image(systemName: "pause.fill")
-                            .font(DesignSystem.Typography.title3)
-                            .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    } else {
-                        Image(systemName: "play.fill")
-                            .font(DesignSystem.Typography.title3)
-                            .foregroundStyle(DesignSystem.Colors.textPrimary)
-                            .offset(x: 2)
-                    }
-                }
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(isPlaying ? "Pause" : "Play")
-            .accessibilityHint("Double tap to \(isPlaying ? "pause" : "play") this recording")
-        
-            // Info section
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    Text(recording.name)
-                        .font(DesignSystem.Typography.headline)
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+            HStack(alignment: .center, spacing: DesignSystem.Spacing.md) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Take \(takeNumber)").eyebrow()
+                    Text("Capture an idea")
+                        .font(DesignSystem.Typography.title2)
                         .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    
-                    Image(systemName: recording.recordingType.icon)
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(recording.recordingType.color)
-                }
-                
-                HStack(spacing: 6) {
-                    if let section = linkedSection {
-                        HStack(spacing: 4) {
-                            Image(systemName: "link")
-                                .font(DesignSystem.Typography.caption2)
-                            Text(section.name)
-                                .font(DesignSystem.Typography.caption)
-                        }
-                        .foregroundStyle(DesignSystem.Colors.primary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            Capsule()
-                                .fill(DesignSystem.Colors.primary.opacity(0.2))
-                                .overlay(Capsule().stroke(DesignSystem.Colors.primary.opacity(0.5), lineWidth: 1))
-                        )
-                    } else {
-                        Button(action: onLinkSection) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "link.circle.fill")
-                                    .font(DesignSystem.Typography.caption2)
-                                Text("Link Section")
-                                    .font(DesignSystem.Typography.caption)
-                            }
-                            .foregroundStyle(DesignSystem.Colors.textSecondary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(
-                                Capsule()
-                                    .fill(DesignSystem.Colors.surfaceSecondary)
-                                    .overlay(Capsule().stroke(DesignSystem.Colors.border.opacity(0.5), lineWidth: 1))
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                
-                if !activeEffects.isEmpty {
-                    HStack(spacing: 6) {
-                        ForEach(activeEffects) { effect in
-                            Image(systemName: effect.icon)
-                                .font(DesignSystem.Typography.caption2)
-                                .foregroundStyle(effect.color)
-                                .padding(6)
-                                .background(
-                                    Circle()
-                                        .fill(effect.color.opacity(0.15))
-                                )
-                        }
-                    }
-                }
-                
-                HStack(spacing: 8) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "clock")
-                            .font(DesignSystem.Typography.caption2)
-                        Text(formatDuration(recording.duration))
-                            .font(DesignSystem.Typography.caption)
-                    }
-                    
-                    Text("•")
-                        .font(DesignSystem.Typography.caption2)
-                    
-                    Text(recording.createdAt.formatted(date: .abbreviated, time: .shortened))
-                        .font(DesignSystem.Typography.caption)
-                }
-                .foregroundStyle(DesignSystem.Colors.textSecondary)
-            }
-            
-            Spacer()
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(
-                    linkedSection != nil ?
-                        recording.recordingType.color.opacity(0.05) :
-                        (isPlaying ? DesignSystem.Colors.success.opacity(0.08) : DesignSystem.Colors.surfaceSecondary)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(borderColor, lineWidth: borderWidth)
-                )
-        )
-    }
-    
-    private var borderColor: Color {
-        if linkedSection != nil {
-            return recording.recordingType.color.opacity(0.6)
-        } else if isPlaying {
-            return DesignSystem.Colors.success.opacity(0.6)
-        } else {
-            return DesignSystem.Colors.border
-        }
-    }
-    
-    private var borderWidth: CGFloat {
-        isPlaying || linkedSection != nil ? 1.5 : 1
-    }
-    
-    private struct EffectBadge: Identifiable {
-        let id: String
-        let icon: String
-        let color: Color
-    }
-    
-    private var activeEffects: [EffectBadge] {
-        var effects: [EffectBadge] = []
-        
-        if recording.reverbEnabled {
-            effects.append(EffectBadge(id: "reverb", icon: "waveform.path.ecg", color: DesignSystem.Colors.primary))
-        }
-        if recording.delayEnabled {
-            effects.append(EffectBadge(id: "delay", icon: "arrow.triangle.2.circlepath", color: DesignSystem.Colors.info))
-        }
-        if recording.eqEnabled {
-            effects.append(EffectBadge(id: "eq", icon: "slider.horizontal.3", color: DesignSystem.Colors.success))
-        }
-        
-        return effects
-    }
-    
-    private func formatDuration(_ duration: TimeInterval) -> String {
-        let minutes = Int(duration) / 60
-        let seconds = Int(duration) % 60
-        return String(format: "%d:%02d", minutes, seconds)
-    }
-}
-
-struct MiniWaveformView: View {
-    var body: some View {
-        HStack(spacing: 1) {
-            ForEach(0..<20, id: \.self) { _ in
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(DesignSystem.Colors.textMuted)
-                    .frame(width: 2, height: CGFloat.random(in: 4...20))
-            }
-        }
-    }
-}
-
-// MARK: - Section Link Sheet
-
-struct SectionLinkSheet: View {
-    @Bindable var recording: Recording
-    let sections: [SectionTemplate]
-    let onLink: (UUID?) -> Void
-    @Environment(\.dismiss) private var dismiss
-    
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 16) {
-                // Recording info
-                VStack(spacing: 8) {
-                    Text(recording.name)
-                        .font(DesignSystem.Typography.headline)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    
-                    HStack(spacing: 6) {
-                        Image(systemName: recording.recordingType.icon)
-                            .font(DesignSystem.Typography.caption)
-                        Text(recording.recordingType.rawValue)
-                            .font(DesignSystem.Typography.caption)
-                    }
-                    .foregroundStyle(recording.recordingType.color)
-                }
-                .padding(.top, 8)
-                
-                if sections.isEmpty {
-                    // Empty state
-                    VStack(spacing: 20) {
-                        Image(systemName: "music.note.list")
-                            .font(DesignSystem.Typography.jumbo)
-                            .foregroundStyle(DesignSystem.Colors.textSecondary)
-                        
-                        VStack(spacing: 8) {
-                            Text("No sections available")
-                                .font(DesignSystem.Typography.headline)
-                                .foregroundStyle(DesignSystem.Colors.textPrimary)
-                            
-                            Text("Create sections in Compose first")
-                                .font(DesignSystem.Typography.subheadline)
-                                .foregroundStyle(DesignSystem.Colors.textSecondary)
-                                .multilineTextAlignment(.center)
-                        }
-                    }
-                    .frame(maxHeight: .infinity)
-                } else {
-                    // Sections grid
-                    ScrollView {
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 12) {
-                            ForEach(sections) { section in
-                                Button {
-                                    onLink(section.id)
-                                    dismiss()
-                                } label: {
-                                    VStack(spacing: 8) {
-                                        Text(section.name)
-                                            .font(DesignSystem.Typography.subheadline)
-                                            .foregroundStyle(DesignSystem.Colors.textPrimary)
-                                        
-                                        Text("\(section.bars) bars")
-                                            .font(DesignSystem.Typography.caption)
-                                            .foregroundStyle(DesignSystem.Colors.textSecondary)
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                            .frame(height: 80)
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 16)
-                                                    .fill(recording.linkedSectionId == section.id ? DesignSystem.Colors.primary.opacity(0.2) : DesignSystem.Colors.surfaceSecondary)
-                                                    .overlay(
-                                                        RoundedRectangle(cornerRadius: 16)
-                                                            .stroke(recording.linkedSectionId == section.id ? DesignSystem.Colors.primary : DesignSystem.Colors.border, lineWidth: recording.linkedSectionId == section.id ? 2 : 1)
-                                                    )
-                                            )
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(.horizontal, 24)
-                        
-                        // Unlink button
-                        if recording.linkedSectionId != nil {
-                            Button {
-                                onLink(nil)
-                                dismiss()
-                            } label: {
-                                HStack(spacing: 12) {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(DesignSystem.Typography.title3)
-                                        .foregroundStyle(DesignSystem.Colors.error)
-                                    
-                                    Text("Remove Link")
-                                        .font(DesignSystem.Typography.subheadline)
-                                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 50)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .fill(DesignSystem.Colors.error.opacity(0.2))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 16)
-                                                .stroke(DesignSystem.Colors.error.opacity(0.5), lineWidth: 1)
-                                        )
-                                )
-                            }
-                            .buttonStyle(.plain)
-                            .padding(.horizontal, 24)
-                            .padding(.top, 8)
-                        }
-                    }
-                }
-                
-                Spacer()
-            }
-            .padding(.vertical, 24)
-            .background(
-                DesignSystem.Colors.background
-            )
-            .navigationTitle("Link to Section")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Text(countInBars == 0 ? "Starts the moment you tap." : "Counts you in, then rolls.")
+                        .font(DesignSystem.Typography.italicSmall)
                         .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
+                Spacer(minLength: 0)
+                RecordBigButton(state: .idle, size: 72, action: onRecord)
+            }
+
+            Hairline()
+
+            HStack(spacing: DesignSystem.Spacing.xs) {
+                Menu {
+                    Picker("Type", selection: Binding(get: { type }, set: onSelectType)) {
+                        ForEach(RecordingType.allCases, id: \.self) { type in
+                            Label(type.recordDisplayName, systemImage: type.icon).tag(type)
+                        }
+                    }
+                } label: {
+                    optionLabel(icon: type.icon, text: type.recordDisplayName, isOn: true)
+                }
+                .accessibilityLabel("Recording type, \(type.recordDisplayName)")
+
+                Menu {
+                    Picker("Count-in", selection: $countInBars) {
+                        Text("No count-in").tag(0)
+                        Text("1 bar").tag(1)
+                        Text("2 bars").tag(2)
+                    }
+                } label: {
+                    optionLabel(icon: "timer", text: countInBars == 0 ? String(localized: "No count-in") : String(localized: "\(countInBars) bars"), isOn: countInBars > 0)
+                }
+                .accessibilityLabel("Count-in, \(countInBars == 0 ? String(localized: "off") : String(localized: "\(countInBars) bars"))")
+
+                Button {
+                    HapticFeedback.selection.trigger()
+                    clickEnabled.toggle()
+                } label: {
+                    optionLabel(icon: "metronome", text: String(localized: "Click"), isOn: clickEnabled)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Click while recording")
+                .accessibilityValue(clickEnabled ? "On" : "Off")
+
+                Spacer(minLength: 0)
+
+                Button(action: onMoreOptions) {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("More recording options")
             }
         }
-                .presentationDetents([.height(600)])
+        .padding(DesignSystem.Spacing.md)
+        .cardStyle()
+    }
+
+    private func optionLabel(icon: String, text: String, isOn: Bool) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .semibold))
+            Text(text)
+                .font(DesignSystem.Typography.buttonSmall)
+                .lineLimit(1)
+        }
+        .foregroundStyle(isOn ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textTertiary)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(Capsule().fill(isOn ? DesignSystem.Colors.surfaceSecondary : Color.clear))
+        .overlay(Capsule().stroke(DesignSystem.Colors.border, lineWidth: 1))
     }
 }
 
-// MARK: - Filter Chip View
+// MARK: - Row styling
 
-struct FilterChipView: View {
-    let icon: String
-    let text: String
-    let color: Color
-    let onRemove: () -> Void
-    
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(DesignSystem.Typography.caption2)
-            Text(text)
-                .font(DesignSystem.Typography.caption)
-            Button(action: onRemove) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(DesignSystem.Typography.caption)
-            }
-        }
-        .foregroundStyle(DesignSystem.Colors.textPrimary)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(
-            Capsule()
-                .fill(color.opacity(0.2))
-                .overlay(Capsule().stroke(color.opacity(0.5), lineWidth: 1))
-        )
+private extension View {
+    func rowStyle(top: CGFloat, bottom: CGFloat) -> some View {
+        self
+            .listRowInsets(EdgeInsets(
+                top: top,
+                leading: DesignSystem.Spacing.gutter,
+                bottom: bottom,
+                trailing: DesignSystem.Spacing.gutter
+            ))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
     }
 }
 
@@ -866,7 +618,8 @@ struct FilterChipView: View {
     let container = try! ModelContainer(for: Project.self, configurations: config)
     let project = Project(title: "Test", bpm: 120)
     container.mainContext.insert(project)
-    
+
     return RecordingsTabView(project: project)
         .modelContainer(container)
-        }
+        .environmentObject(StudioPlaybackEngine())
+}

@@ -1,489 +1,237 @@
 import SwiftUI
+import os
 import SwiftData
 
+/// "New song" sheet: name it, pick a shape and a tempo, go.
+/// Everything except the title is optional; key, status and tags live
+/// under "More details" so the fast path is two taps.
 struct CreateProjectView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-    
+    @Query(sort: \Project.updatedAt, order: .reverse) private var existingProjects: [Project]
+
+    /// Called with the freshly inserted song so the caller can open it.
+    var onCreated: ((Project) -> Void)? = nil
+
     @State private var title = ""
+    @State private var starter: LibraryStarter = .all[1]
+    @State private var bpm = 100
+    @State private var timeTop = 4
+    @State private var timeBottom = 4
+    @State private var keyRoot = "C"
+    @State private var keyMode: KeyMode = .major
     @State private var status: ProjectStatus = .idea
     @State private var tags: [String] = []
-    @State private var tagInput = ""
-    @State private var bpm = 120
-    @State private var showingBPMPicker = false
-    @State private var selectedTimeSignature: TimeSignaturePreset = .fourFour
-    @State private var tapTempo = TapTempo()
-    @StateObject private var tempoPreviewer = TempoPreviewer()
-    @FocusState private var isTitleFocused: Bool
-    private let bpmRange = 40...240
-    private let bpmStep = 1
-    
+    @State private var showsMore = false
+    @FocusState private var titleFocused: Bool
+
+    private var trimmedTitle: String {
+        title.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var tagSuggestions: [String] {
+        var counts: [String: Int] = [:]
+        for project in existingProjects { for tag in project.tags { counts[tag, default: 0] += 1 } }
+        return counts.sorted { $0.value > $1.value }.map(\.key)
+    }
+
     var body: some View {
-        ZStack {
-            // Background
-            DesignSystem.Colors.background
-            .ignoresSafeArea()
-            
-            VStack(spacing: 0) {
-                // Header
+        SheetScaffold(
+            title: String(localized: "New song"),
+            subtitle: String(localized: "Name it now, or let it find its name."),
+            primaryTitle: String(localized: "Create song"),
+            primaryIcon: "arrow.right",
+            primaryAction: createProject
+        ) {
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xl) {
+                titleField
+                structurePicker
+                LibraryFormGroup(title: String(localized: "Tempo")) {
+                    BPMSelector(bpm: $bpm, timeTop: timeTop, timeBottom: timeBottom)
+                }
+                LibraryFormGroup(title: String(localized: "Meter")) {
+                    LibraryMeterPicker(top: $timeTop, bottom: $timeBottom)
+                }
+                moreDetails
+            }
+        }
+        .presentationDetents([.large])
+        .studioModalStyle()
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { titleFocused = true }
+        }
+    }
+
+    // MARK: Title
+
+    private var titleField: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+            TextField(
+                "",
+                text: $title,
+                prompt: Text("Untitled sketch").foregroundStyle(DesignSystem.Colors.textMuted),
+                axis: .vertical
+            )
+            .font(DesignSystem.Typography.largeTitle)
+            .foregroundStyle(DesignSystem.Colors.textPrimary)
+            .lineLimit(1...3)
+            .focused($titleFocused)
+            .submitLabel(.done)
+            .onChange(of: title) { _, newValue in
+                // Vertical-axis fields insert newlines on return; treat it as "done".
+                if newValue.contains("\n") {
+                    title = newValue.replacingOccurrences(of: "\n", with: "")
+                    titleFocused = false
+                }
+            }
+            .accessibilityLabel("Song title")
+
+            Hairline(color: titleFocused ? DesignSystem.Colors.primary : DesignSystem.Colors.borderActive)
+                .animation(DesignSystem.Animations.quickEase, value: titleFocused)
+        }
+        .padding(.top, DesignSystem.Spacing.xs)
+    }
+
+    // MARK: Structure
+
+    private var structurePicker: some View {
+        LibraryFormGroup(title: String(localized: "Start from"), detail: starter.parts.isEmpty ? nil : String(localized: "\(starter.uniqueSectionCount) sections · \(starter.totalBars) bars")) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(LibraryStarter.all) { option in
+                        starterCard(option)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+            .scrollClipDisabled()
+        }
+    }
+
+    private func starterCard(_ option: LibraryStarter) -> some View {
+        let selected = option == starter
+        return Button {
+            HapticFeedback.selection.trigger()
+            withAnimation(DesignSystem.Animations.quickSpring) { starter = option }
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(option.name)
+                    .font(DesignSystem.Typography.headline)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+                    .lineLimit(1)
+                Text(option.detail)
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                LibraryArrangementStrip(starter: option, height: 4)
+            }
+            .padding(DesignSystem.Spacing.sm)
+            .frame(width: 168, height: 104, alignment: .topLeading)
+            .cardStyle(
+                cornerRadius: DesignSystem.CornerRadius.md,
+                color: selected ? DesignSystem.Colors.textPrimary : nil,
+                fill: selected ? DesignSystem.Colors.surface : DesignSystem.Colors.backgroundSecondary
+            )
+            .overlay(alignment: .topTrailing) {
+                if selected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(DesignSystem.Colors.primaryDark)
+                        .padding(8)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(option.name), \(option.detail)")
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    // MARK: More
+
+    private var moreDetails: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.lg) {
+            Button {
+                withAnimation(DesignSystem.Animations.smoothSpring) { showsMore.toggle() }
+            } label: {
                 HStack {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(DesignSystem.Typography.title2)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("More details")
+                            .font(DesignSystem.Typography.headline)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
+                        Text(moreDetailsSummary)
+                            .font(DesignSystem.Typography.caption)
                             .foregroundStyle(DesignSystem.Colors.textSecondary)
                     }
-                    
                     Spacer()
-                    
-                    Text("New Idea")
-                        .font(DesignSystem.Typography.title3)
-                        .fontWeight(.bold)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    
-                    Spacer()
-                    
-                    Button {
-                        createProject()
-                    } label: {
-                        Text("Create")
-                            .font(DesignSystem.Typography.headline)
-                            .foregroundStyle(DesignSystem.Colors.primaryDark)
-                    }
-                    .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
-                    .opacity(title.trimmingCharacters(in: .whitespaces).isEmpty ? 0.5 : 1.0)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(DesignSystem.Colors.textTertiary)
+                        .rotationEffect(.degrees(showsMore ? 180 : 0))
                 }
-                .padding(.horizontal, 24)
-                .padding(.vertical, 16)
-                
-                ScrollView {
-                    VStack(spacing: 32) {
-                        // Title Section
-                        VStack(alignment: .leading, spacing: 12) {
-                            Label("Title", systemImage: "music.note")
-                                .font(DesignSystem.Typography.caption)
-                                .foregroundStyle(DesignSystem.Colors.textSecondary)
-                                .textCase(.uppercase)
-                            
-                            TextField("My awesome idea...", text: $title)
-                                .font(DesignSystem.Typography.title2)
-                                .fontWeight(.bold)
-                                .foregroundStyle(DesignSystem.Colors.textPrimary)
-                                .focused($isTitleFocused)
-                                .padding(20)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 20)
-                                        .fill(DesignSystem.Colors.surfaceSecondary)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 20)
-                                                .stroke(
-                                                    isTitleFocused ? 
-                                                    DesignSystem.Colors.primary :
-                                                    DesignSystem.Colors.border,
-                                                    lineWidth: 2
-                                                )
-                                        )
-                                )
-                        }
-                        
-                        // Status Section
-                        VStack(alignment: .leading, spacing: 12) {
-                            Label("Status", systemImage: "flag.fill")
-                                .font(DesignSystem.Typography.caption)
-                                .foregroundStyle(DesignSystem.Colors.textSecondary)
-                                .textCase(.uppercase)
-                            
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 6) {
-                                    ForEach(ProjectStatus.allCases.filter { $0 != .archived }, id: \.self) { statusOption in
-                                        StatusSelectionCard(
-                                            status: statusOption,
-                                            isSelected: status == statusOption
-                                        ) {
-                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                                status = statusOption
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // BPM Section
-                        VStack(alignment: .leading, spacing: 12) {
-                            Label("Tempo", systemImage: "metronome")
-                                .font(DesignSystem.Typography.caption)
-                                .foregroundStyle(DesignSystem.Colors.textSecondary)
-                                .textCase(.uppercase)
-                            
-                            VStack(spacing: 16) {
-                                HStack(alignment: .center, spacing: 16) {
-                                    bpmAdjustButton(systemImage: "minus", isEnabled: bpm > bpmRange.lowerBound) {
-                                        adjustBpm(by: -bpmStep)
-                                    }
-                                    
-                                    Text("\(bpm)")
-                                        .font(DesignSystem.Typography.mega)
-                                        .fontWeight(.bold)
-                                        .foregroundStyle(DesignSystem.Colors.primaryDark)
-                                        .monospacedDigit()
-                                    
-                                    bpmAdjustButton(systemImage: "plus", isEnabled: bpm < bpmRange.upperBound) {
-                                        adjustBpm(by: bpmStep)
-                                    }
-                                    
-                                    Text("BPM")
-                                        .font(DesignSystem.Typography.title3)
-                                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                                }
-                                
-                                Slider(value: Binding(
-                                    get: { Double(bpm) },
-                                    set: { bpm = Int($0) }
-                                ), in: Double(bpmRange.lowerBound)...Double(bpmRange.upperBound), step: Double(bpmStep))
-                                .tint(DesignSystem.Colors.primary)
-                                
-                                // Tap Tempo button + dot feedback
-                                HStack(spacing: 16) {
-                                    Button {
-                                        tapTempo.tap()
-                                        if tapTempo.tapCount >= 2 {
-                                            withAnimation(.spring(response: 0.2)) {
-                                                bpm = tapTempo.currentBPM
-                                            }
-                                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                                        }
-                                    } label: {
-                                        Text("TAP")
-                                            .font(DesignSystem.Typography.headline)
-                                            .fontWeight(.bold)
-                                            .foregroundStyle(DesignSystem.Colors.textPrimary)
-                                            .frame(width: 72, height: 44)
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 14)
-                                                    .fill(DesignSystem.Colors.primary.opacity(0.2))
-                                                    .overlay(
-                                                        RoundedRectangle(cornerRadius: 14)
-                                                            .stroke(DesignSystem.Colors.primary, lineWidth: 1.5)
-                                                    )
-                                            )
-                                    }
-                                    .buttonStyle(.plain)
+                .padding(DesignSystem.Spacing.md)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .cardStyle()
+            .accessibilityHint(showsMore ? "Hides key, status and tags" : "Shows key, status and tags")
 
-                                    // Tap accumulation dots (●●●○)
-                                    HStack(spacing: 6) {
-                                        ForEach(0..<4, id: \.self) { i in
-                                            Circle()
-                                                .fill(i < min(tapTempo.tapCount, 4)
-                                                      ? DesignSystem.Colors.primary
-                                                      : DesignSystem.Colors.border)
-                                                .frame(width: 8, height: 8)
-                                                .animation(.spring(response: 0.2), value: tapTempo.tapCount)
-                                        }
-                                    }
-                                }
-
-                                HStack {
-                                    ForEach([60, 90, 120, 140, 180], id: \.self) { preset in
-                                        Button {
-                                            withAnimation(.spring(response: 0.3)) {
-                                                bpm = preset
-                                                tapTempo.reset()
-                                            }
-                                        } label: {
-                                            Text("\(preset)")
-                                                .font(DesignSystem.Typography.caption)
-                                                .foregroundStyle(bpm == preset ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textTertiary)
-                                                .padding(.horizontal, 12)
-                                                .padding(.vertical, 8)
-                                                .background(
-                                                    Capsule()
-                                                        .fill(bpm == preset ? DesignSystem.Colors.primary.opacity(0.2) : Color.clear)
-                                                )
-                                        }
-                                    }
-                                }
-
-                                TempoPreviewButton(
-                                    previewer: tempoPreviewer,
-                                    bpm: bpm,
-                                    timeTop: selectedTimeSignature.top,
-                                    timeBottom: selectedTimeSignature.bottom,
-                                    tint: DesignSystem.Colors.info
-                                )
-                            }
-                            .padding(24)
-                            .background(
-                                RoundedRectangle(cornerRadius: 24)
-                                    .fill(DesignSystem.Colors.surfaceSecondary.opacity(0.5))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 24)
-                                            .stroke(DesignSystem.Colors.border, lineWidth: 1)
-                                    )
-                            )
-                        }
-                        
-                        // Time Signature Section
-                        VStack(alignment: .leading, spacing: 12) {
-                            Label("Time Signature", systemImage: "music.note.list")
-                                .font(DesignSystem.Typography.caption)
-                                .foregroundStyle(DesignSystem.Colors.textSecondary)
-                                .textCase(.uppercase)
-
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 8) {
-                                    ForEach(TimeSignaturePreset.allCases) { preset in
-                                        Button {
-                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                                selectedTimeSignature = preset
-                                            }
-                                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                        } label: {
-                                            Text(preset.rawValue)
-                                                .font(DesignSystem.Typography.headline)
-                                                .fontWeight(selectedTimeSignature == preset ? .bold : .regular)
-                                                .foregroundStyle(
-                                                    selectedTimeSignature == preset
-                                                    ? DesignSystem.Colors.textPrimary
-                                                    : DesignSystem.Colors.textSecondary
-                                                )
-                                                .padding(.horizontal, 18)
-                                                .padding(.vertical, 10)
-                                                .background(
-                                                    RoundedRectangle(cornerRadius: 14)
-                                                        .fill(selectedTimeSignature == preset
-                                                              ? DesignSystem.Colors.primary.opacity(0.2)
-                                                              : DesignSystem.Colors.surfaceSecondary.opacity(0.5))
-                                                        .overlay(
-                                                            RoundedRectangle(cornerRadius: 14)
-                                                                .stroke(
-                                                                    selectedTimeSignature == preset
-                                                                    ? DesignSystem.Colors.primary
-                                                                    : DesignSystem.Colors.border,
-                                                                    lineWidth: selectedTimeSignature == preset ? 1.5 : 1
-                                                                )
-                                                        )
-                                                )
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                }
-                                .padding(.horizontal, 1)
-                            }
-                        }
-
-                        // Tags Section
-                        VStack(alignment: .leading, spacing: 12) {
-                            Label("Tags", systemImage: "tag.fill")
-                                .font(DesignSystem.Typography.caption)
-                                .foregroundStyle(DesignSystem.Colors.textSecondary)
-                                .textCase(.uppercase)
-                            
-                            VStack(spacing: 12) {
-                                HStack(spacing: 12) {
-                                    TextField("Add tag", text: $tagInput)
-                                        .textFieldStyle(.plain)
-                                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                                        .onSubmit {
-                                            addTag()
-                                        }
-                                    
-                                    if !tagInput.isEmpty {
-                                        Button {
-                                            addTag()
-                                        } label: {
-                                            Image(systemName: "plus.circle.fill")
-                                                .font(DesignSystem.Typography.title3)
-                                                .foregroundStyle(DesignSystem.Colors.primary)
-                                        }
-                                    }
-                                }
-                                .padding(16)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .fill(DesignSystem.Colors.surfaceSecondary)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 16)
-                                                .stroke(DesignSystem.Colors.border, lineWidth: 1)
-                                        )
-                                )
-                                
-                                if !tags.isEmpty {
-                                    FlowLayout(spacing: 8) {
-                                        ForEach(tags, id: \.self) { tag in
-                                            TagChip(tag: tag) {
-                                                withAnimation(.spring(response: 0.3)) {
-                                                    tags.removeAll { $0 == tag }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
+            if showsMore {
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xl) {
+                    LibraryFormGroup(title: String(localized: "Key")) {
+                        LibraryKeyPicker(root: $keyRoot, mode: $keyMode)
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 8)
-                    .padding(.bottom, 40)
+                    LibraryFormGroup(title: String(localized: "Status")) {
+                        LibraryStatusChips(status: $status, includeArchived: false)
+                    }
+                    LibraryFormGroup(title: String(localized: "Tags")) {
+                        LibraryTagEditor(tags: $tags, suggestions: tagSuggestions)
+                    }
                 }
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
-        }
-        .onAppear {
-            isTitleFocused = true
-        }
-        .presentationBackground(DesignSystem.Colors.backgroundSecondary)
-            }
-    
-    private func addTag() {
-        let trimmed = tagInput.trimmingCharacters(in: .whitespaces)
-        if !trimmed.isEmpty && !tags.contains(trimmed) {
-            withAnimation(.spring(response: 0.3)) {
-                tags.append(trimmed)
-            }
-            tagInput = ""
         }
     }
 
-    private func adjustBpm(by delta: Int) {
-        bpm = min(max(bpm + delta, bpmRange.lowerBound), bpmRange.upperBound)
+    private var moreDetailsSummary: String {
+        let base = "\(keyRoot) \(keyMode.libraryDisplayName.lowercased()) · \(status.libraryDisplayName)"
+        return tags.isEmpty ? base : "\(base) · \(String(localized: "\(tags.count) tags"))"
     }
 
-    private func bpmAdjustButton(systemImage: String, isEnabled: Bool, action: @escaping () -> Void) -> some View {
-        Button {
-            action()
-        } label: {
-            Image(systemName: systemImage)
-                .font(DesignSystem.Typography.headline)
-                .foregroundStyle(isEnabled ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textTertiary)
-                .frame(width: 36, height: 36)
-                .background(
-                    Circle()
-                        .fill(DesignSystem.Colors.surfaceSecondary)
-                        .overlay(
-                            Circle()
-                                .stroke(DesignSystem.Colors.border, lineWidth: 1)
-                        )
-                )
-        }
-        .disabled(!isEnabled)
-    }
-    
+    // MARK: Create
+
     private func createProject() {
-        let finalTitle = title.trimmingCharacters(in: .whitespaces).isEmpty ? "New Idea" : title
         let project = Project(
-            title: finalTitle,
+            title: trimmedTitle.isEmpty ? String(localized: "Untitled sketch") : trimmedTitle,
             status: status,
             tags: tags,
-            bpm: bpm
+            keyRoot: keyRoot,
+            keyMode: keyMode,
+            bpm: bpm,
+            timeTop: timeTop,
+            timeBottom: timeBottom
         )
-        project.timeTop = selectedTimeSignature.top
-        project.timeBottom = selectedTimeSignature.bottom
-        
-        // Update timestamp to ensure it appears at top
-        project.updatedAt = Date()
-        
-        // Insert into context
         modelContext.insert(project)
-        
-        // Force save
+        starter.apply(to: project)
+        project.updatedAt = Date()
+
         do {
             try modelContext.save()
-            print("✅ Project saved: \(project.title)")
-            
-            // Give SwiftData time to propagate changes before dismissing
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                dismiss()
-            }
+            AppLog.general.info("Created song: \(project.title, privacy: .private)")
         } catch {
-            print("❌ Error saving project: \(error)")
-            dismiss()
+            AppLog.general.error("Failed to save new song: \(error.localizedDescription)")
         }
-    }
-}
-
-// MARK: - Supporting Views
-
-struct StatusSelectionCard: View {
-    let status: ProjectStatus
-    let isSelected: Bool
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(DesignSystem.Typography.title2)
-                    .foregroundStyle(isSelected ? color : DesignSystem.Colors.textSecondary)
-                
-                Text(status.rawValue)
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundStyle(isSelected ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textSecondary)
-            }
-            .frame(width: 100, height: 100)
-            .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(isSelected ? color.opacity(0.15) : DesignSystem.Colors.surfaceSecondary.opacity(0.5))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .strokeBorder(isSelected ? color : DesignSystem.Colors.border, lineWidth: isSelected ? 2 : 1)
-                    )
-            )
+        HapticFeedback.success.trigger()
+        dismiss()
+        if let onCreated {
+            // Let the sheet start dismissing before pushing the song.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { onCreated(project) }
         }
-        .scaleEffect(isSelected ? 1.0 : 0.9)
-    }
-    
-    private var icon: String {
-        switch status {
-        case .idea: return "lightbulb.fill"
-        case .inProgress: return "hammer.fill"
-        case .polished: return "sparkles"
-        case .finished: return "checkmark.seal.fill"
-        case .archived: return "archivebox.fill"
-        }
-    }
-    
-    private var color: Color {
-        switch status {
-        case .idea: return DesignSystem.Colors.info
-        case .inProgress: return DesignSystem.Colors.warning
-        case .polished: return DesignSystem.Colors.primary
-        case .finished: return DesignSystem.Colors.success
-        case .archived: return DesignSystem.Colors.secondary
-        }
-    }
-}
-
-struct TagChip: View {
-    let tag: String
-    let onDelete: () -> Void
-    
-    var body: some View {
-        HStack(spacing: 6) {
-            Text(tag)
-                .font(DesignSystem.Typography.subheadline)
-            
-            Button(action: onDelete) {
-                Image(systemName: "xmark")
-                    .font(DesignSystem.Typography.micro)
-                    .fontWeight(.bold)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .foregroundStyle(DesignSystem.Colors.textPrimary)
-        .background(
-            Capsule()
-                .fill(DesignSystem.Colors.info.opacity(0.2))
-                .overlay(
-                    Capsule()
-                        .stroke(DesignSystem.Colors.info.opacity(0.4), lineWidth: 1)
-                )
-        )
     }
 }
 
 #Preview {
     CreateProjectView()
-        .modelContainer(for: [Project.self])
+        .modelContainer(for: [Project.self], inMemory: true)
 }

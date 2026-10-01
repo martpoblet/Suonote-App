@@ -11,10 +11,10 @@ enum ReverbPreset: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .small: return "Small Room"
-        case .medium: return "Medium Hall"
-        case .large: return "Large Hall"
-        case .plate: return "Plate"
+        case .small: return String(localized: "Small Room")
+        case .medium: return String(localized: "Medium Hall")
+        case .large: return String(localized: "Large Hall")
+        case .plate: return String(localized: "Plate")
         }
     }
     var avPreset: Int {
@@ -27,10 +27,10 @@ enum ReverbPreset: String, Codable, CaseIterable, Identifiable {
     }
     var shortTitle: String {
         switch self {
-        case .small: return "Small"
-        case .medium: return "Medium"
-        case .large: return "Large"
-        case .plate: return "Plate"
+        case .small: return String(localized: "Small")
+        case .medium: return String(localized: "Medium")
+        case .large: return String(localized: "Large")
+        case .plate: return String(localized: "Plate")
         }
     }
 }
@@ -44,10 +44,10 @@ enum DelaySyncMode: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .free: return "Free"
-        case .quarter: return "1/4 Note"
-        case .eighth: return "1/8 Note"
-        case .dottedEighth: return "Dotted 1/8"
+        case .free: return String(localized: "Free")
+        case .quarter: return String(localized: "1/4 Note")
+        case .eighth: return String(localized: "1/8 Note")
+        case .dottedEighth: return String(localized: "Dotted 1/8")
         }
     }
     func delayTime(bpm: Double) -> Double {
@@ -61,10 +61,10 @@ enum DelaySyncMode: String, Codable, CaseIterable, Identifiable {
     }
     var shortTitle: String {
         switch self {
-        case .free: return "Free"
+        case .free: return String(localized: "Free")
         case .quarter: return "1/4"
         case .eighth: return "1/8"
-        case .dottedEighth: return "D 1/8"
+        case .dottedEighth: return String(localized: "D 1/8")
         }
     }
 }
@@ -83,27 +83,27 @@ enum StudioStyle: String, Codable, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .pop: return "Pop"
-        case .rock: return "Rock"
-        case .lofi: return "Lo-Fi"
-        case .edm: return "EDM"
-        case .jazz: return "Jazz"
-        case .hiphop: return "Hip-Hop"
-        case .funk: return "Funk"
-        case .ambient: return "Ambient"
+        case .pop: return String(localized: "Pop")
+        case .rock: return String(localized: "Rock")
+        case .lofi: return String(localized: "Lo-Fi")
+        case .edm: return String(localized: "EDM")
+        case .jazz: return String(localized: "Jazz")
+        case .hiphop: return String(localized: "Hip-Hop")
+        case .funk: return String(localized: "Funk")
+        case .ambient: return String(localized: "Ambient")
         }
     }
 
     var description: String {
         switch self {
-        case .pop: return "Clean, tight groove with bright chords."
-        case .rock: return "Punchy drums with driving guitars."
-        case .lofi: return "Soft drums, warm keys, mellow bass."
-        case .edm: return "Four‑on‑the‑floor with big synths."
-        case .jazz: return "Swung rhythms with complex harmonies."
-        case .hiphop: return "Hard-hitting drums with deep bass."
-        case .funk: return "Groovy bass with syncopated rhythms."
-        case .ambient: return "Atmospheric pads with sparse drums."
+        case .pop: return String(localized: "Clean, tight groove with bright chords.")
+        case .rock: return String(localized: "Punchy drums with driving guitars.")
+        case .lofi: return String(localized: "Soft drums, warm keys, mellow bass.")
+        case .edm: return String(localized: "Four‑on‑the‑floor with big synths.")
+        case .jazz: return String(localized: "Swung rhythms with complex harmonies.")
+        case .hiphop: return String(localized: "Hard-hitting drums with deep bass.")
+        case .funk: return String(localized: "Groovy bass with syncopated rhythms.")
+        case .ambient: return String(localized: "Atmospheric pads with sparse drums.")
         }
     }
 
@@ -151,17 +151,17 @@ enum StudioInstrument: String, Codable, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .piano: return "Piano"
-        case .synth: return "Synth"
-        case .guitar: return "Guitar"
-        case .bass: return "Bass"
-        case .strings: return "Strings"
-        case .brass: return "Brass"
-        case .woodwinds: return "Woodwinds"
-        case .organ: return "Organ"
-        case .mallets: return "Mallets"
-        case .drums: return "Drums"
-        case .audio: return "Audio"
+        case .piano: return String(localized: "Piano")
+        case .synth: return String(localized: "Synth")
+        case .guitar: return String(localized: "Guitar")
+        case .bass: return String(localized: "Bass")
+        case .strings: return String(localized: "Strings")
+        case .brass: return String(localized: "Brass")
+        case .woodwinds: return String(localized: "Woodwinds")
+        case .organ: return String(localized: "Organ")
+        case .mallets: return String(localized: "Mallets")
+        case .drums: return String(localized: "Drums")
+        case .audio: return String(localized: "Audio")
         }
     }
 
@@ -225,7 +225,10 @@ enum InstrumentVariant: String, Codable, CaseIterable {
     case harpsichord = "Harpsichord"
     case clavinet = "Clavinet"
     case harp = "Harp"
-    
+    case mellowGrandPiano = "Mellow Grand Piano"
+    case vintageElectricPiano = "Vintage EP"
+    case electricGrandPiano = "Electric Grand"
+
     // Synth variants
     case leadSquare = "Lead (Square)"
     case leadSaw = "Lead (Saw)"
@@ -243,6 +246,15 @@ enum InstrumentVariant: String, Codable, CaseIterable {
     case padMetallic = "Pad (Metallic)"
     case padHalo = "Pad (Halo)"
     case padSweep = "Pad (Sweep)"
+    case padOrchestral = "Pad (Orchestral)"
+    case padSoundtrack = "Pad (Soundtrack)"
+    case padAtmosphere = "Pad (Atmosphere)"
+    case synthStrings3 = "Synth Strings 3"
+    // Suonote synth engine (not SoundFont)
+    case synthAnalogPad = "Analog Pad"
+    case synthGlassPad = "Glass Pad"
+    case synthSupersaw = "Supersaw"
+    case synthPluck = "Soft Pluck"
     
     // Guitar variants
     case acousticNylonGuitar = "Acoustic Guitar (Nylon)"
@@ -254,6 +266,9 @@ enum InstrumentVariant: String, Codable, CaseIterable {
     case overdriveGuitar = "Overdrive Guitar"
     case distortionGuitar = "Distortion Guitar"
     case harmonicsGuitar = "Guitar Harmonics"
+    case funkGuitar = "Funk Guitar"
+    case twelveStringGuitar = "12-String Guitar"
+    case ukulele = "Ukulele"
     
     // Bass variants
     case acousticBass = "Acoustic Bass"
@@ -264,6 +279,9 @@ enum InstrumentVariant: String, Codable, CaseIterable {
     case slapBass2 = "Slap Bass 2"
     case synthBass = "Synth Bass"
     case synthBass2 = "Synth Bass 2"
+    case analogBass = "Analog Bass"
+    case synthAnalogBass = "Analog Synth Bass"
+    case synthSubBass = "Sub Bass"
 
     // Strings variants
     case tremoloStrings = "Tremolo Strings"
@@ -343,6 +361,9 @@ enum InstrumentVariant: String, Codable, CaseIterable {
         case .harpsichord: return 6
         case .clavinet: return 7
         case .harp: return 46
+        case .mellowGrandPiano: return 0
+        case .vintageElectricPiano: return 4
+        case .electricGrandPiano: return 2
         
         // Synth
         case .leadSquare: return 80
@@ -361,6 +382,14 @@ enum InstrumentVariant: String, Codable, CaseIterable {
         case .padMetallic: return 93
         case .padHalo: return 94
         case .padSweep: return 95
+        case .padOrchestral: return 48
+        case .padSoundtrack: return 97
+        case .padAtmosphere: return 99
+        case .synthStrings3: return 50
+        case .synthAnalogPad: return 89
+        case .synthGlassPad: return 92
+        case .synthSupersaw: return 81
+        case .synthPluck: return 84
         
         // Guitar
         case .acousticNylonGuitar: return 24
@@ -372,6 +401,9 @@ enum InstrumentVariant: String, Codable, CaseIterable {
         case .overdriveGuitar: return 29
         case .distortionGuitar: return 30
         case .harmonicsGuitar: return 31
+        case .funkGuitar: return 28
+        case .twelveStringGuitar: return 25
+        case .ukulele: return 24
         
         // Bass
         case .acousticBass: return 32
@@ -382,6 +414,9 @@ enum InstrumentVariant: String, Codable, CaseIterable {
         case .slapBass2: return 37
         case .synthBass: return 38
         case .synthBass2: return 39
+        case .analogBass: return 39
+        case .synthAnalogBass: return 38
+        case .synthSubBass: return 38
 
         // Strings
         case .tremoloStrings: return 44
@@ -452,10 +487,23 @@ enum InstrumentVariant: String, Codable, CaseIterable {
         }
     }
 
+    /// SoundFont bank variation (bank LSB under the melodic MSB). MuseScore
+    /// General HQ keeps its alternate tones (mellow grand, vintage EP, funk
+    /// guitar…) in bank 8.
+    var bankVariation: UInt8 {
+        switch self {
+        case .mellowGrandPiano, .vintageElectricPiano, .padOrchestral, .synthStrings3,
+             .funkGuitar, .twelveStringGuitar, .ukulele, .analogBass:
+            return 8
+        default:
+            return 0
+        }
+    }
+
     var displayName: String {
         switch self {
         case .roomDrumKit:
-            return "World Percussion"
+            return "Room Kit"
         case .harp:
             return "Concert Harp"
         case .kalimba:
@@ -524,6 +572,9 @@ final class StudioTrack {
     var eqLowGain: Float = 0.0
     var eqMidGain: Float = 0.0
     var eqHighGain: Float = 0.0
+    /// When true, the generator arranges this part by section (enters,
+    /// drops out, thins or builds with the song's structure).
+    var followsArrangement: Bool = true
     var compressorEnabled: Bool = false
     var compressorThreshold: Float = -20.0
     var compressorRatio: Float = 4.0
@@ -574,13 +625,14 @@ final class StudioTrack {
         isMuted: Bool = false,
         isSolo: Bool = false,
         audioRecordingId: UUID? = nil,
-        audioStartBeat: Double = 0
+        audioStartBeat: Double = 0,
+        style: StudioStyle? = nil
     ) {
         self.name = name
         self.orderIndex = orderIndex
         self._instrument = instrument.rawValue
         self._drumPreset = ""
-        self._variant = SoundFontManager.defaultVariant(for: instrument)?.rawValue
+        self._variant = SoundFontManager.defaultVariant(for: instrument, style: style)?.rawValue
         self.octaveShift = 2
         self.isMuted = isMuted
         self.isSolo = isSolo
@@ -640,17 +692,29 @@ enum BassPattern: String, CaseIterable, Identifiable {
     case octaves        // root/octave bounce
     case walking        // 4-to-the-bar walking line
     case syncopated     // funky offbeats
+    case pedal          // repeated tonic pedal
+    case offbeat        // upbeat bounce
+    case anticipated    // pushes into the next chord
+    case sparse         // roomy roots
+    case drive          // modern pop/rock eighth-note drive
+    case pocket         // pop pocket: locked to the kick, approach into changes
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .auto: return "Auto"
-        case .roots: return "Roots"
-        case .rootFifth: return "Root + Fifth"
-        case .octaves: return "Octaves"
-        case .walking: return "Walking"
-        case .syncopated: return "Syncopated"
+        case .auto: return String(localized: "Auto")
+        case .roots: return String(localized: "Roots")
+        case .rootFifth: return String(localized: "Root + Fifth")
+        case .octaves: return String(localized: "Octaves")
+        case .walking: return String(localized: "Walking")
+        case .syncopated: return String(localized: "Syncopated")
+        case .pedal: return String(localized: "Pedal Tone")
+        case .offbeat: return String(localized: "Offbeat Bounce")
+        case .anticipated: return String(localized: "Anticipated")
+        case .sparse: return String(localized: "Sparse")
+        case .drive: return String(localized: "Eighth-Note Drive")
+        case .pocket: return String(localized: "Pocket Groove")
         }
     }
 
@@ -662,6 +726,12 @@ enum BassPattern: String, CaseIterable, Identifiable {
         case .octaves: return "arrow.up.arrow.down"
         case .walking: return "figure.walk"
         case .syncopated: return "bolt.fill"
+        case .pedal: return "repeat"
+        case .offbeat: return "forward.frame.fill"
+        case .anticipated: return "arrowshape.turn.up.right.fill"
+        case .sparse: return "circle.dotted"
+        case .drive: return "waveform.path"
+        case .pocket: return "music.note.house"
         }
     }
 }
@@ -676,18 +746,32 @@ enum CompingPattern: String, CaseIterable, Identifiable {
     case arpeggioDown
     case arpeggioUpDown
     case alberti
+    case offbeat
+    case pulse
+    case stabs
+    case anticipation
+    case waltz
+    case ostinato
+    case tremolo
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .auto: return "Auto"
-        case .block: return "Block / Comp"
-        case .sustained: return "Sustained Pad"
-        case .arpeggioUp: return "Arpeggio ↑"
-        case .arpeggioDown: return "Arpeggio ↓"
-        case .arpeggioUpDown: return "Arpeggio ↑↓"
-        case .alberti: return "Alberti / Broken"
+        case .auto: return String(localized: "Auto")
+        case .block: return String(localized: "Block / Comp")
+        case .sustained: return String(localized: "Sustained Pad")
+        case .arpeggioUp: return String(localized: "Arpeggio ↑")
+        case .arpeggioDown: return String(localized: "Arpeggio ↓")
+        case .arpeggioUpDown: return String(localized: "Arpeggio ↑↓")
+        case .alberti: return String(localized: "Alberti / Broken")
+        case .offbeat: return String(localized: "Offbeat Chops")
+        case .pulse: return String(localized: "Pulse")
+        case .stabs: return String(localized: "Short Stabs")
+        case .anticipation: return String(localized: "Pushes")
+        case .waltz: return String(localized: "Waltz Comp")
+        case .ostinato: return String(localized: "Ostinato")
+        case .tremolo: return String(localized: "Tremolo Pad")
         }
     }
 
@@ -700,14 +784,21 @@ enum CompingPattern: String, CaseIterable, Identifiable {
         case .arpeggioDown: return "arrow.down.right"
         case .arpeggioUpDown: return "arrow.up.arrow.down"
         case .alberti: return "water.waves"
+        case .offbeat: return "forward.frame.fill"
+        case .pulse: return "metronome"
+        case .stabs: return "bolt.fill"
+        case .anticipation: return "arrowshape.turn.up.right.fill"
+        case .waltz: return "music.note.list"
+        case .ostinato: return "repeat"
+        case .tremolo: return "waveform.path.ecg"
         }
     }
 
     /// Whether choosing this pattern exposes the arpeggio rate control.
     var usesRate: Bool {
         switch self {
-        case .arpeggioUp, .arpeggioDown, .arpeggioUpDown, .alberti: return true
-        case .auto, .block, .sustained: return false
+        case .arpeggioUp, .arpeggioDown, .arpeggioUpDown, .alberti, .ostinato: return true
+        case .auto, .block, .sustained, .offbeat, .pulse, .stabs, .anticipation, .waltz, .tremolo: return false
         }
     }
 }

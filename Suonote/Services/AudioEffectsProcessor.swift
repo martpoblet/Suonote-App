@@ -42,6 +42,16 @@ class AudioEffectsProcessor: ObservableObject {
     private var compressorNode: AVAudioUnitEffect
     
     @Published var settings = EffectSettings()
+
+    private var loadedReverbPreset: AVAudioUnitReverbPreset?
+    private var chainFormat: AVAudioFormat?
+    private var currentFile: AVAudioFile?
+    /// Frame the current segment started at (for position + seeking).
+    private var segmentStartFrame: AVAudioFramePosition = 0
+    /// Bumped on every stop/seek so stale completion handlers are ignored
+    /// (AVAudioPlayerNode fires the completion when it is stopped, too).
+    private var playbackGeneration = 0
+    private var completionHandler: (() -> Void)?
     
     init() {
         audioEngine = AVAudioEngine()
@@ -74,19 +84,11 @@ class AudioEffectsProcessor: ObservableObject {
         audioEngine.attach(eqNode)
         audioEngine.attach(compressorNode)
         
-        // Connect nodes
-        let mainMixer = audioEngine.mainMixerNode
-        let format = audioEngine.outputNode.inputFormat(forBus: 0)
-        
-        // Player -> EQ -> Compressor -> Delay -> Reverb -> Output
-        audioEngine.connect(playerNode, to: eqNode, format: format)
-        audioEngine.connect(eqNode, to: compressorNode, format: format)
-        audioEngine.connect(compressorNode, to: delayNode, format: format)
-        audioEngine.connect(delayNode, to: reverbNode, format: format)
-        audioEngine.connect(reverbNode, to: mainMixer, format: format)
+        connectChain(format: audioEngine.outputNode.inputFormat(forBus: 0))
         
         // Initial configuration
         reverbNode.loadFactoryPreset(.mediumHall)
+        loadedReverbPreset = .mediumHall
         reverbNode.wetDryMix = 0
         
         delayNode.delayTime = 0.3
@@ -94,6 +96,19 @@ class AudioEffectsProcessor: ObservableObject {
         delayNode.wetDryMix = 0
     }
     
+    /// Player -> EQ -> Compressor -> Delay -> Reverb -> Mixer, all in one
+    /// format. Matching the file's sample rate avoids a resample inside the
+    /// player; the main mixer converts to the hardware format.
+    private func connectChain(format: AVAudioFormat?) {
+        let mainMixer = audioEngine.mainMixerNode
+        audioEngine.connect(playerNode, to: eqNode, format: format)
+        audioEngine.connect(eqNode, to: compressorNode, format: format)
+        audioEngine.connect(compressorNode, to: delayNode, format: format)
+        audioEngine.connect(delayNode, to: reverbNode, format: format)
+        audioEngine.connect(reverbNode, to: mainMixer, format: format)
+        chainFormat = format
+    }
+
     private func configureEQ() {
         // Low band (80 Hz)
         eqNode.bands[0].frequency = 80
@@ -117,17 +132,22 @@ class AudioEffectsProcessor: ObservableObject {
     // MARK: - Apply Effects
     
     func applyEffects() {
-        // Reverb
+        // Reverb — load the preset first: loading a factory preset resets
+        // wetDryMix, so the mix must be applied afterwards.
         if settings.reverbEnabled {
-            reverbNode.wetDryMix = settings.reverbMix * 100 // 0-100
-            // Adjust reverb size by changing preset or parameters
+            let preset: AVAudioUnitReverbPreset
             if settings.reverbSize < 0.3 {
-                reverbNode.loadFactoryPreset(.smallRoom)
+                preset = .smallRoom
             } else if settings.reverbSize < 0.7 {
-                reverbNode.loadFactoryPreset(.mediumHall)
+                preset = .mediumHall
             } else {
-                reverbNode.loadFactoryPreset(.cathedral)
+                preset = .cathedral
             }
+            if preset != loadedReverbPreset {
+                reverbNode.loadFactoryPreset(preset)
+                loadedReverbPreset = preset
+            }
+            reverbNode.wetDryMix = settings.reverbMix * 100 // 0-100
         } else {
             reverbNode.wetDryMix = 0
         }
@@ -163,22 +183,38 @@ class AudioEffectsProcessor: ObservableObject {
     }
     
     private func configureCompression() {
-        // Note: Direct AudioUnit parameter manipulation requires more complex setup
-        // For now, we'll use the bypass to enable/disable compression
-        // Full implementation would require accessing the underlying AudioUnit directly
         compressorNode.bypass = !settings.compressionEnabled
+        let unit = compressorNode.audioUnit
+        // Dynamics Processor threshold range is -40...20 dB.
+        let threshold = min(20, max(-40, settings.compressionThreshold))
+        // No direct "ratio" parameter: approximate it with headroom
+        // (smaller headroom above threshold = harder compression).
+        let ratio = max(1, settings.compressionRatio)
+        let headRoom = min(40, max(0.1, 20 / ratio))
+        AudioUnitSetParameter(unit, kDynamicsProcessorParam_Threshold, kAudioUnitScope_Global, 0, threshold, 0)
+        AudioUnitSetParameter(unit, kDynamicsProcessorParam_HeadRoom, kAudioUnitScope_Global, 0, headRoom, 0)
     }
     
     // MARK: - Playback
     
     func playAudio(url: URL, completion: @escaping () -> Void) throws {
+        try playAudio(url: url, from: 0, completion: completion)
+    }
+
+    /// Plays `url` through the effects chain starting at `startTime` seconds.
+    func playAudio(url: URL, from startTime: TimeInterval, completion: @escaping () -> Void) throws {
         configureAudioSessionForPlayback()
         let audioFile = try AVAudioFile(forReading: url)
         
-        // Stop if already playing
-        if audioEngine.isRunning {
-            playerNode.stop()
-            audioEngine.stop()
+        // Stop if already playing (and invalidate its completion)
+        stop()
+
+        // Run the chain at the file's sample rate (stereo, so reverb/delay
+        // keep their width); the player node maps the mono take onto it.
+        let fileRate = audioFile.processingFormat.sampleRate
+        if chainFormat?.sampleRate != fileRate,
+           let stereo = AVAudioFormat(standardFormatWithSampleRate: fileRate, channels: 2) {
+            connectChain(format: stereo)
         }
         
         // Apply current effects
@@ -187,24 +223,72 @@ class AudioEffectsProcessor: ObservableObject {
         // Prepare engine
         audioEngine.prepare()
         try audioEngine.start()
-        
-        // Schedule file
-        playerNode.scheduleFile(audioFile, at: nil) {
+
+        currentFile = audioFile
+        completionHandler = completion
+        scheduleSegment(from: startTime)
+    }
+
+    /// Jumps to `time` (seconds) in the file that is currently loaded.
+    func seek(to time: TimeInterval) {
+        guard currentFile != nil else { return }
+        let wasPlaying = playerNode.isPlaying
+        playbackGeneration += 1
+        playerNode.stop()
+        if !audioEngine.isRunning {
+            try? audioEngine.start()
+        }
+        scheduleSegment(from: time, play: wasPlaying || audioEngine.isRunning)
+    }
+
+    private func scheduleSegment(from time: TimeInterval, play: Bool = true) {
+        guard let file = currentFile else { return }
+        let sampleRate = file.processingFormat.sampleRate
+        let startFrame = min(max(0, AVAudioFramePosition(time * sampleRate)), max(0, file.length - 1))
+        let frames = AVAudioFrameCount(max(0, file.length - startFrame))
+        segmentStartFrame = startFrame
+        playbackGeneration += 1
+        let generation = playbackGeneration
+        guard frames > 0 else { return }
+
+        playerNode.scheduleSegment(file, startingFrame: startFrame, frameCount: frames, at: nil) { [weak self] in
             DispatchQueue.main.async {
-                completion()
+                guard let self, self.playbackGeneration == generation else { return }
+                self.completionHandler?()
             }
         }
-        
-        playerNode.play()
+        if play {
+            playerNode.play()
+        }
     }
     
     func stop() {
+        playbackGeneration += 1
         playerNode.stop()
         audioEngine.stop()
     }
     
     var isPlaying: Bool {
         return audioEngine.isRunning && playerNode.isPlaying
+    }
+
+    /// Length of the loaded file in seconds.
+    var duration: TimeInterval {
+        guard let file = currentFile else { return 0 }
+        return Double(file.length) / file.processingFormat.sampleRate
+    }
+
+    /// Current playback position in seconds.
+    var currentTime: TimeInterval {
+        guard let file = currentFile else { return 0 }
+        let sampleRate = file.processingFormat.sampleRate
+        var frame = segmentStartFrame
+        if playerNode.isPlaying,
+           let nodeTime = playerNode.lastRenderTime,
+           let playerTime = playerNode.playerTime(forNodeTime: nodeTime) {
+            frame += max(0, playerTime.sampleTime)
+        }
+        return min(Double(frame) / sampleRate, duration)
     }
 
     private func configureAudioSessionForPlayback() {

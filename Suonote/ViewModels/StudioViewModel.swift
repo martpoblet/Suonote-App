@@ -20,7 +20,7 @@ class StudioViewModel {
         modelContext: ModelContext
     ) async {
         isGenerating = true
-        generationProgress = "Generating arrangement..."
+        generationProgress = String(localized: "Generating arrangement...")
         
         // Capture values needed off main actor
         let projectRef = project
@@ -49,7 +49,7 @@ class StudioViewModel {
         includeDrums: Bool = true
     ) async {
         isGenerating = true
-        generationProgress = "Regenerating notes..."
+        generationProgress = String(localized: "Regenerating notes...")
         
         await Task.yield()
         

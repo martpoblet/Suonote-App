@@ -1,510 +1,307 @@
 import SwiftUI
 import AVFoundation
 
+/// A single take: scrub and play it, rename it, change its type, link it to
+/// a section, shape it on the pedalboard (heard live), share or delete it.
 struct RecordingDetailView: View {
     @Bindable var recording: Recording
-    @Environment(\.dismiss) private var dismiss
-    @StateObject private var effectsProcessor = AudioEffectsProcessor()
-    @State private var isPlaying = false
-    @State private var showingTypePicker = false
-    @State private var editingName = false
-    @State private var tempName = ""
-    @State private var waveformHeights: [CGFloat] = []
-    
     let sections: [SectionTemplate]
+    @ObservedObject var player: RecordTakePlayer
     let onUpdate: () -> Void
-    
+    var onDelete: (() -> Void)? = nil
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var showingTypePicker = false
+    @FocusState private var nameFocused: Bool
+
+    private var isPlaying: Bool { player.isPlaying(recording) }
+    private var isLoaded: Bool { player.isLoaded(recording) }
+
+    private var effectsBinding: Binding<AudioEffectsProcessor.EffectSettings> {
+        Binding(
+            get: { recording.recordEffectSettings },
+            set: { recording.recordEffectSettings = $0 }
+        )
+    }
+
+    private var linkedSection: SectionTemplate? {
+        guard let id = recording.linkedSectionId else { return nil }
+        return sections.first { $0.id == id }
+    }
+
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    // Header con waveform visual
-                    waveformHeader
-                    
-                    // Info básica
-                    basicInfoSection
-                    
-                    // Audio Effects
-                    audioEffectsSection
-                    
-                    // Link Section
-                    linkSectionView
-                }
-                .padding(24)
-            }
-            .background(DesignSystem.Colors.backgroundSecondary)
-            .navigationTitle("Edit Recording")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") {
-                        onUpdate()
-                        dismiss()
-                    }
-                    .foregroundStyle(DesignSystem.Colors.primaryDark)
-                }
+        SheetScaffold(title: recording.name.isEmpty ? String(localized: "Untitled take") : recording.name, subtitle: subtitle) {
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xl) {
+                playerCard
+                detailsSection
+                effectsSection
+                actionsSection
             }
         }
-        .toolbarBackground(DesignSystem.Colors.backgroundSecondary, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .presentationBackground(DesignSystem.Colors.backgroundSecondary)
         .presentationDetents([.large])
+        .studioModalStyle()
         .sheet(isPresented: $showingTypePicker) {
             RecordingTypePickerSheet(selectedType: Binding(
                 get: { recording.recordingType },
-                set: { recording.recordingType = $0 }
+                set: { recording.recordingType = $0; onUpdate() }
             ))
-            .studioModalStyle()
         }
-        .onAppear {
-            tempName = recording.name
-            loadEffectsFromRecording()
-            loadWaveform()
+        .onDisappear {
+            onUpdate()
         }
     }
-    
-    private func loadWaveform() {
-        let samples = FileManagerUtils.extractWaveform(from: recording.fileName, samples: 50)
-        waveformHeights = samples.map { max(10, $0 * 80) }
+
+    private var subtitle: String {
+        "\(recording.recordingType.recordDisplayName) · \(recording.createdAt.formatted(date: .abbreviated, time: .shortened))"
     }
-    
-    private var waveformHeader: some View {
-        VStack(spacing: 16) {
-            // Visual waveform placeholder
-            RoundedRectangle(cornerRadius: 16)
-                .fill(recording.recordingType.color.opacity(0.2))
-                .frame(height: 100)
-                .overlay(
-                    HStack(spacing: 2) {
-                        ForEach(waveformHeights.indices, id: \.self) { index in
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(recording.recordingType.color.opacity(0.6))
-                                .frame(width: 3, height: waveformHeights[index])
-                        }
+
+    // MARK: Player
+
+    private var playerCard: some View {
+        VStack(spacing: DesignSystem.Spacing.md) {
+            RecordWaveformView(
+                fileName: recording.fileName,
+                samples: 72,
+                progress: player.progress(for: recording) ?? 0,
+                isActive: isLoaded,
+                barSpacing: 2.5,
+                onSeek: { fraction in
+                    HapticFeedback.light.trigger()
+                    player.seek(recording, to: fraction)
+                }
+            )
+            .frame(height: 88)
+
+            HStack {
+                Text(RecordFormat.duration(isLoaded ? player.currentTime : 0))
+                Spacer()
+                Text(RecordFormat.duration(isLoaded && player.duration > 0 ? player.duration : recording.duration))
+            }
+            .font(DesignSystem.Typography.timecode)
+            .foregroundStyle(DesignSystem.Colors.textTertiary)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Position \(RecordFormat.spoken(isLoaded ? player.currentTime : 0)) of \(RecordFormat.spoken(recording.duration))")
+
+            HStack(spacing: DesignSystem.Spacing.xl) {
+                transportButton(icon: "gobackward.5", label: "Back 5 seconds") {
+                    player.skip(recording, by: -5)
+                }
+
+                Button {
+                    HapticFeedback.medium.trigger()
+                    player.toggle(recording)
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(isPlaying ? DesignSystem.Colors.primary : DesignSystem.Colors.textPrimary)
+                            .frame(width: 64, height: 64)
+                        Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundStyle(isPlaying ? DesignSystem.Colors.onPrimary : DesignSystem.Colors.background)
+                            .offset(x: isPlaying ? 0 : 2)
+                            .contentTransition(.symbolEffect(.replace))
                     }
-                )
-            
-            HStack(spacing: 12) {
-                Image(systemName: recording.recordingType.icon)
-                    .font(DesignSystem.Typography.title2)
-                    .foregroundStyle(recording.recordingType.color)
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(recording.name)
-                        .font(DesignSystem.Typography.title3)
-                        .fontWeight(.bold)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    
-                    Text(formatDuration(recording.duration))
+                }
+                .buttonStyle(AnimatedPressButtonStyle(scale: 0.94))
+                .accessibilityLabel(isPlaying ? "Pause" : "Play")
+
+                transportButton(icon: "goforward.5", label: "Forward 5 seconds") {
+                    player.skip(recording, by: 5)
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .padding(DesignSystem.Spacing.md)
+        .cardStyle(color: isLoaded ? DesignSystem.Colors.primary.opacity(0.45) : nil)
+    }
+
+    private func transportButton(icon: String, label: LocalizedStringKey, action: @escaping () -> Void) -> some View {
+        Button {
+            HapticFeedback.light.trigger()
+            action()
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 20, weight: .medium))
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+
+    // MARK: Details
+
+    private var detailsSection: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+            SectionHeader(title: String(localized: "Details"))
+
+            VStack(spacing: 0) {
+                // Name
+                HStack(spacing: DesignSystem.Spacing.sm) {
+                    Text("Name")
                         .font(DesignSystem.Typography.subheadline)
                         .foregroundStyle(DesignSystem.Colors.textSecondary)
-                }
-                
-                Spacer()
-                
-                Button {
-                    playWithEffects()
-                } label: {
-                    Image(systemName: isPlaying ? "stop.circle.fill" : "play.circle.fill")
-                        .font(DesignSystem.Typography.title2)
-                        .foregroundStyle(recording.recordingType.color)
-                }
-            }
-        }
-    }
-    
-    private var basicInfoSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Basic Info")
-                .font(DesignSystem.Typography.headline)
-                .foregroundStyle(DesignSystem.Colors.textPrimary)
-            
-            // Name
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Name")
-                    .font(DesignSystem.Typography.subheadline)
-                    .foregroundStyle(DesignSystem.Colors.textSecondary)
-                
-                HStack {
-                    TextField("Recording name", text: $tempName)
-                        .textFieldStyle(.plain)
+                    TextField("Take name", text: $recording.name)
+                        .font(DesignSystem.Typography.headline)
                         .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        .onChange(of: tempName) { _, newValue in
-                            recording.name = newValue
-                        }
-                    
-                    if tempName != recording.name {
-                        Button("Reset") {
-                            tempName = recording.name
-                        }
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(DesignSystem.Colors.warning)
-                    }
+                        .multilineTextAlignment(.trailing)
+                        .submitLabel(.done)
+                        .focused($nameFocused)
+                        .onSubmit { onUpdate() }
                 }
-                .padding(12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(DesignSystem.Colors.surfaceSecondary)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(DesignSystem.Colors.border, lineWidth: 1)
-                        )
-                )
-            }
-            
-            // Type
-            Button {
-                showingTypePicker = true
-            } label: {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Recording Type")
+                .padding(DesignSystem.Spacing.md)
+
+                Hairline()
+
+                // Type
+                Button {
+                    showingTypePicker = true
+                } label: {
+                    HStack(spacing: DesignSystem.Spacing.sm) {
+                        Text("Type")
                             .font(DesignSystem.Typography.subheadline)
                             .foregroundStyle(DesignSystem.Colors.textSecondary)
-                        
-                        HStack(spacing: 8) {
-                            Image(systemName: recording.recordingType.icon)
-                            Text(recording.recordingType.rawValue)
-                                .font(DesignSystem.Typography.subheadline)
-                        }
-                        .foregroundStyle(recording.recordingType.color)
+                        Spacer(minLength: 0)
+                        Image(systemName: recording.recordingType.icon)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(recording.recordingType.color)
+                        Text(recording.recordingType.recordDisplayName)
+                            .font(DesignSystem.Typography.bodyMedium)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(DesignSystem.Colors.textTertiary)
                     }
-                    
-                    Spacer()
-                    
-                    Image(systemName: "chevron.right")
+                    .padding(DesignSystem.Spacing.md)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Type, \(recording.recordingType.recordDisplayName)")
+                .accessibilityHint("Opens the type picker")
+
+                Hairline()
+
+                // Favorite
+                Toggle(isOn: Binding(
+                    get: { recording.isFavorite },
+                    set: { recording.isFavorite = $0; HapticFeedback.selection.trigger(); onUpdate() }
+                )) {
+                    Text("Favorite")
+                        .font(DesignSystem.Typography.subheadline)
                         .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
-                .padding(12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(DesignSystem.Colors.surfaceSecondary)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(DesignSystem.Colors.border, lineWidth: 1)
-                        )
-                )
-            }
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(DesignSystem.Colors.surfaceSecondary)
-        )
-    }
-    
-    private var audioEffectsSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Audio Effects")
-                .font(DesignSystem.Typography.headline)
-                .foregroundStyle(DesignSystem.Colors.textPrimary)
-            
-            // Reverb
-            EffectToggle(
-                title: "Reverb",
-                icon: "waveform.path.ecg",
-                color: DesignSystem.Colors.primary,
-                isEnabled: Binding(
-                    get: { recording.reverbEnabled },
-                    set: { recording.reverbEnabled = $0 }
-                )
-            ) {
-                VStack(spacing: 12) {
-                    EffectSlider(
-                        title: "Mix",
-                        value: Binding(
-                            get: { recording.reverbMix },
-                            set: { recording.reverbMix = $0 }
-                        ),
-                        range: 0...1
-                    )
-                    
-                    EffectSlider(
-                        title: "Size",
-                        value: Binding(
-                            get: { recording.reverbSize },
-                            set: { recording.reverbSize = $0 }
-                        ),
-                        range: 0...1
-                    )
-                }
-            }
-            
-            // Delay
-            EffectToggle(
-                title: "Delay",
-                icon: "arrow.triangle.2.circlepath",
-                color: DesignSystem.Colors.info,
-                isEnabled: Binding(
-                    get: { recording.delayEnabled },
-                    set: { recording.delayEnabled = $0 }
-                )
-            ) {
-                VStack(spacing: 12) {
-                    EffectSlider(
-                        title: "Time",
-                        value: Binding(
-                            get: { recording.delayTime },
-                            set: { recording.delayTime = $0 }
-                        ),
-                        range: 0.1...0.8,
-                        format: "%.2fs"
-                    )
-                    
-                    EffectSlider(
-                        title: "Feedback",
-                        value: Binding(
-                            get: { recording.delayFeedback },
-                            set: { recording.delayFeedback = $0 }
-                        ),
-                        range: 0...0.9
-                    )
-                    
-                    EffectSlider(
-                        title: "Mix",
-                        value: Binding(
-                            get: { recording.delayMix },
-                            set: { recording.delayMix = $0 }
-                        ),
-                        range: 0...1
-                    )
-                }
-            }
-            
-            // EQ
-            EffectToggle(
-                title: "Equalizer",
-                icon: "slider.horizontal.3",
-                color: DesignSystem.Colors.success,
-                isEnabled: Binding(
-                    get: { recording.eqEnabled },
-                    set: { recording.eqEnabled = $0 }
-                )
-            ) {
-                VStack(spacing: 12) {
-                    EffectSlider(
-                        title: "Low",
-                        value: Binding(
-                            get: { recording.lowGain },
-                            set: { recording.lowGain = $0 }
-                        ),
-                        range: -24...24,
-                        format: "%.0f dB"
-                    )
-                    
-                    EffectSlider(
-                        title: "Mid",
-                        value: Binding(
-                            get: { recording.midGain },
-                            set: { recording.midGain = $0 }
-                        ),
-                        range: -24...24,
-                        format: "%.0f dB"
-                    )
-                    
-                    EffectSlider(
-                        title: "High",
-                        value: Binding(
-                            get: { recording.highGain },
-                            set: { recording.highGain = $0 }
-                        ),
-                        range: -24...24,
-                        format: "%.0f dB"
-                    )
-                }
-            }
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(DesignSystem.Colors.surfaceSecondary)
-        )
-    }
-    
-    private var linkSectionView: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Link to Section")
-                .font(DesignSystem.Typography.headline)
-                .foregroundStyle(DesignSystem.Colors.textPrimary)
-            
-            if sections.isEmpty {
-                Text("No sections available")
-                    .font(DesignSystem.Typography.subheadline)
-                    .foregroundStyle(DesignSystem.Colors.textSecondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 20)
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        // Unlink button
-                        if recording.linkedSectionId != nil {
-                            Button {
-                                recording.linkedSectionId = nil
-                            } label: {
-                                VStack(spacing: 8) {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(DesignSystem.Typography.title2)
-                                        .foregroundStyle(DesignSystem.Colors.error)
-                                    
-                                    Text("Unlink")
-                                        .font(DesignSystem.Typography.caption)
+                .tint(DesignSystem.Colors.accent)
+                .padding(DesignSystem.Spacing.md)
+
+                Hairline()
+
+                // Section link
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                    Text("Linked section")
+                        .font(DesignSystem.Typography.subheadline)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    if sections.isEmpty {
+                        Text("Add sections in Compose to link this take.")
+                            .font(DesignSystem.Typography.italicSmall)
+                            .foregroundStyle(DesignSystem.Colors.textTertiary)
+                    } else {
+                        ScrollView(.horizontal) {
+                            HStack(spacing: DesignSystem.Spacing.xs) {
+                                SelectableChip(title: String(localized: "None"), isSelected: recording.linkedSectionId == nil) {
+                                    link(nil)
                                 }
-                                .frame(width: 80, height: 80)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(DesignSystem.Colors.error.opacity(0.2))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .stroke(DesignSystem.Colors.error, lineWidth: 1.5)
-                                        )
-                                )
-                            }
-                        }
-                        
-                        ForEach(sections) { section in
-                            Button {
-                                recording.linkedSectionId = section.id
-                            } label: {
-                                VStack(spacing: 8) {
-                                    Text(section.name)
-                                        .font(DesignSystem.Typography.subheadline)
-                                        .lineLimit(2)
-                                    
-                                    Text("\(section.bars) bars")
-                                        .font(DesignSystem.Typography.caption2)
-                                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                                ForEach(sections) { section in
+                                    SelectableChip(
+                                        title: section.name,
+                                        dot: section.color,
+                                        isSelected: recording.linkedSectionId == section.id
+                                    ) {
+                                        link(section.id)
+                                    }
                                 }
-                                .foregroundStyle(DesignSystem.Colors.textPrimary)
-                                .frame(width: 100, height: 80)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(recording.linkedSectionId == section.id ? DesignSystem.Colors.primary.opacity(0.2) : DesignSystem.Colors.surfaceSecondary)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .stroke(recording.linkedSectionId == section.id ? DesignSystem.Colors.primary : DesignSystem.Colors.border, lineWidth: recording.linkedSectionId == section.id ? 2 : 1)
-                                        )
-                                )
                             }
+                            .padding(.horizontal, DesignSystem.Spacing.md)
+                            .padding(.vertical, 1)
                         }
+                        .scrollIndicators(.hidden)
+                        .padding(.horizontal, -DesignSystem.Spacing.md)
                     }
                 }
+                .padding(DesignSystem.Spacing.md)
+            }
+            .cardStyle()
+
+            Text("Recorded at \(recording.bpm) BPM in \(recording.timeTop)/\(recording.timeBottom)")
+                .font(DesignSystem.Typography.caption)
+                .foregroundStyle(DesignSystem.Colors.textTertiary)
+                .padding(.horizontal, DesignSystem.Spacing.xxs)
+        }
+    }
+
+    // MARK: Effects
+
+    private var effectsSection: some View {
+        let active = recording.recordEffectSettings.recordActiveCount
+        return VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+            SectionHeader(
+                title: String(localized: "Effects"),
+                detail: active == 0 ? String(localized: "Dry") : String(localized: "\(active) on"),
+                actionTitle: active > 0 ? String(localized: "Bypass all") : nil,
+                action: active > 0 ? { bypassAll() } : nil
+            )
+            Text(isPlaying ? "Changes are heard as you play." : "Press play to hear changes live.")
+                .font(DesignSystem.Typography.italicSmall)
+                .foregroundStyle(DesignSystem.Colors.textSecondary)
+            RecordPedalboard(settings: effectsBinding) {
+                player.refreshEffects(for: recording)
             }
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(DesignSystem.Colors.surfaceSecondary)
-        )
     }
-    
-    private func loadEffectsFromRecording() {
-        effectsProcessor.settings.reverbEnabled = recording.reverbEnabled
-        effectsProcessor.settings.reverbMix = recording.reverbMix
-        effectsProcessor.settings.reverbSize = recording.reverbSize
-        
-        effectsProcessor.settings.delayEnabled = recording.delayEnabled
-        effectsProcessor.settings.delayTime = recording.delayTime
-        effectsProcessor.settings.delayFeedback = recording.delayFeedback
-        effectsProcessor.settings.delayMix = recording.delayMix
-        
-        effectsProcessor.settings.eqEnabled = recording.eqEnabled
-        effectsProcessor.settings.lowGain = recording.lowGain
-        effectsProcessor.settings.midGain = recording.midGain
-        effectsProcessor.settings.highGain = recording.highGain
-        
-        effectsProcessor.settings.compressionEnabled = recording.compressionEnabled
-        effectsProcessor.settings.compressionThreshold = recording.compressionThreshold
-        effectsProcessor.settings.compressionRatio = recording.compressionRatio
-    }
-    
-    private func playWithEffects() {
-        if isPlaying {
-            effectsProcessor.stop()
-            isPlaying = false
-        } else {
-            loadEffectsFromRecording()
-            guard let url = FileManagerUtils.existingRecordingURL(for: recording.fileName) else {
-                print("Recording file not found for: \(recording.fileName)")
-                return
-            }
-            
-            do {
-                try effectsProcessor.playAudio(url: url) {
-                    isPlaying = false
+
+    // MARK: Actions
+
+    private var actionsSection: some View {
+        HStack(spacing: DesignSystem.Spacing.sm) {
+            if let url = recording.recordFileURL {
+                ShareLink(item: url, preview: SharePreview(recording.name)) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                        .frame(maxWidth: .infinity)
                 }
-                isPlaying = true
-            } catch {
-                print("Failed to play recording with effects: \(error)")
-                isPlaying = false
+                .buttonStyle(OutlineButtonStyle())
             }
-        }
-    }
-    
-    private func formatDuration(_ duration: TimeInterval) -> String {
-        let minutes = Int(duration) / 60
-        let seconds = Int(duration) % 60
-        return String(format: "%d:%02d", minutes, seconds)
-    }
-}
-
-// MARK: - Effect Components
-
-struct EffectToggle<Content: View>: View {
-    let title: String
-    let icon: String
-    let color: Color
-    @Binding var isEnabled: Bool
-    @ViewBuilder let content: Content
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Toggle(isOn: $isEnabled) {
-                HStack(spacing: 8) {
-                    Image(systemName: icon)
-                        .foregroundStyle(color)
-                    Text(title)
-                        .font(DesignSystem.Typography.subheadline)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
+            if let onDelete {
+                Button(role: .destructive) {
+                    if isLoaded { player.stop() }
+                    onDelete()
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                        .frame(maxWidth: .infinity)
                 }
-            }
-            .tint(color)
-            
-            if isEnabled {
-                content
+                .buttonStyle(OutlineButtonStyle(tint: DesignSystem.Colors.error))
             }
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(DesignSystem.Colors.surfaceSecondary)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(isEnabled ? color.opacity(0.5) : DesignSystem.Colors.border, lineWidth: 1)
-                )
-        )
+        .padding(.top, DesignSystem.Spacing.xs)
     }
-}
 
-struct EffectSlider: View {
-    let title: String
-    @Binding var value: Float
-    let range: ClosedRange<Float>
-    var format: String = "%.2f"
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(title)
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundStyle(DesignSystem.Colors.textSecondary)
-                Spacer()
-                Text(String(format: format, value))
-                    .font(DesignSystem.Typography.caption.monospacedDigit())
-                    .foregroundStyle(DesignSystem.Colors.textPrimary)
-            }
-            
-            Slider(value: $value, in: range)
-                .tint(DesignSystem.Colors.primary)
+    // MARK: Helpers
+
+    private func link(_ id: UUID?) {
+        HapticFeedback.selection.trigger()
+        recording.linkedSectionId = id
+        onUpdate()
+    }
+
+    private func bypassAll() {
+        HapticFeedback.light.trigger()
+        var settings = recording.recordEffectSettings
+        settings.reverbEnabled = false
+        settings.delayEnabled = false
+        settings.eqEnabled = false
+        settings.compressionEnabled = false
+        withAnimation(DesignSystem.Animations.quickSpring) {
+            recording.recordEffectSettings = settings
         }
+        player.refreshEffects(for: recording)
     }
 }

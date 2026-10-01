@@ -26,8 +26,10 @@ struct SyncStatusIndicator: View {
     private var statusColor: Color {
         switch syncState {
         case .synced:
-            return DesignSystem.Colors.success
-        case .syncing, .paused:
+            return DesignSystem.Colors.textTertiary
+        case .syncing:
+            return DesignSystem.Colors.primaryDark
+        case .paused:
             return DesignSystem.Colors.warning
         case .failed:
             return DesignSystem.Colors.error
@@ -52,13 +54,13 @@ struct SyncStatusIndicator: View {
     private var statusText: String {
         switch syncState {
         case .synced:
-            return "Synced"
+            return String(localized: "Synced")
         case .syncing:
-            return "Syncing…"
+            return String(localized: "Syncing…")
         case .paused:
-            return "Sync paused"
+            return String(localized: "Sync paused")
         case .failed:
-            return "Sync failed"
+            return String(localized: "Sync failed")
         }
     }
 
@@ -84,20 +86,20 @@ struct SyncStatusIndicator: View {
                 HStack(spacing: 6) {
                     ZStack {
                         Image(systemName: "checkmark.icloud")
-                            .font(DesignSystem.Typography.caption)
+                            .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(statusColor)
                             .opacity(syncState == .synced ? 1 : 0)
                         Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(DesignSystem.Typography.caption)
+                            .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(statusColor)
                             .rotationEffect(.degrees(rotation))
                             .opacity(syncState == .syncing ? 1 : 0)
                         Image(systemName: "exclamationmark.icloud")
-                            .font(DesignSystem.Typography.caption)
+                            .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(DesignSystem.Colors.warning)
                             .opacity(syncState == .paused ? 1 : 0)
                         Image(systemName: "xmark.icloud")
-                            .font(DesignSystem.Typography.caption)
+                            .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(DesignSystem.Colors.error)
                             .opacity(syncState == .failed ? 1 : 0)
                     }
@@ -113,7 +115,8 @@ struct SyncStatusIndicator: View {
                     }
                 }
                 .contentShape(Rectangle())
-                .accessibilityLabel(statusText)
+                .accessibilityLabel("iCloud: \(statusText)")
+                .accessibilityHint("Shows sync details")
                 .animation(.easeInOut(duration: 0.2), value: syncState)
             }
             .buttonStyle(.plain)
@@ -125,8 +128,8 @@ struct SyncStatusIndicator: View {
                     lastErrorMessage: lastErrorMessage,
                     isPaused: syncState == .paused
                 )
-                    .presentationDetents([.fraction(0.42)])
-                    .presentationDragIndicator(.visible)
+                    .presentationDetents([.medium, .large])
+                    .studioModalStyle()
             }
             .onAppear {
                 updateAnimationState(state: syncState)
@@ -170,74 +173,83 @@ private struct SyncDetailsSheet: View {
     let failureCode: SyncFailureCode
     let lastErrorMessage: String
     let isPaused: Bool
-    @Environment(\.dismiss) private var dismiss
     @AppStorage(SyncStatusDefaultsKeys.lastSuccess) private var lastSyncTime: Double = 0
     @AppStorage(SyncStatusDefaultsKeys.pendingSince) private var pendingSince: Double = 0
     @AppStorage(SyncStatusDefaultsKeys.lastFailure) private var lastFailureTime: Double = 0
 
+    private var isSyncing: Bool { hasChanges && !hasFailure && !isPaused }
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 12) {
+        SheetScaffold(title: String(localized: "iCloud sync"), subtitle: statusSubtitle) {
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.lg) {
+                HStack(spacing: DesignSystem.Spacing.sm) {
                     ZStack {
                         Circle()
-                            .fill(DesignSystem.Colors.surfaceSecondary)
-                            .frame(width: 46, height: 46)
+                            .fill(statusIconColor.opacity(0.14))
+                            .frame(width: 44, height: 44)
                         Image(systemName: statusIconName)
-                            .font(DesignSystem.Typography.title3)
+                            .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(statusIconColor)
-                            .rotationEffect(.degrees(hasChanges && !hasFailure && !isPaused ? 360 : 0))
-                            .animation(hasChanges && !hasFailure && !isPaused ? .linear(duration: 1.1).repeatForever(autoreverses: false) : .default, value: hasChanges && !hasFailure && !isPaused)
+                            .symbolEffect(.rotate, options: .repeating, isActive: isSyncing)
                     }
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("iCloud Sync")
-                            .font(DesignSystem.Typography.title3)
-                            .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        Text(statusSubtitle)
-                            .font(DesignSystem.Typography.callout)
-                            .foregroundStyle(DesignSystem.Colors.textSecondary)
-                    }
-                    Spacer()
-                }
-
-                VStack(alignment: .leading, spacing: 10) {
                     Text(summaryText)
-                        .font(DesignSystem.Typography.body)
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-
-                    Text("Details")
-                        .font(DesignSystem.Typography.calloutBold)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-
-                    Text(detailsText)
                         .font(DesignSystem.Typography.callout)
                         .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(14)
-                .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(DesignSystem.Colors.surfaceSecondary)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(DesignSystem.Colors.border.opacity(0.6), lineWidth: 1)
-                        )
-                )
 
-                Button {
-                    dismiss()
-                } label: {
-                    Text("Done")
-                        .font(DesignSystem.Typography.bodyBold)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(DesignSystem.Colors.primary)
-                        .foregroundStyle(DesignSystem.Colors.textWhite)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                VStack(spacing: 0) {
+                    ForEach(Array(facts.enumerated()), id: \.offset) { index, fact in
+                        if index > 0 { Hairline().padding(.leading, DesignSystem.Spacing.md) }
+                        HStack(alignment: .firstTextBaseline, spacing: DesignSystem.Spacing.sm) {
+                            Text(fact.label)
+                                .font(DesignSystem.Typography.callout)
+                                .foregroundStyle(DesignSystem.Colors.textSecondary)
+                            Spacer(minLength: DesignSystem.Spacing.sm)
+                            Text(fact.value)
+                                .font(DesignSystem.Typography.calloutBold)
+                                .foregroundStyle(fact.isProblem ? DesignSystem.Colors.error : DesignSystem.Colors.textPrimary)
+                                .multilineTextAlignment(.trailing)
+                        }
+                        .padding(.horizontal, DesignSystem.Spacing.md)
+                        .padding(.vertical, DesignSystem.Spacing.sm)
+                    }
                 }
+                .cardStyle()
+
+                Text(footnote)
+                    .font(DesignSystem.Typography.italicSmall)
+                    .foregroundStyle(DesignSystem.Colors.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(20)
         }
-        .background(DesignSystem.Colors.background)
+    }
+
+    private var facts: [(label: String, value: String, isProblem: Bool)] {
+        var rows: [(String, String, Bool)] = [
+            (String(localized: "Last sync"), lastSyncTime > 0 ? relativeDateString(from: Date(timeIntervalSince1970: lastSyncTime)) : String(localized: "Never"), false)
+        ]
+        if pendingSince > 0 {
+            rows.append((String(localized: "Pending since"), relativeDateString(from: Date(timeIntervalSince1970: pendingSince)), false))
+        }
+        if hasFailure {
+            if lastFailureTime > 0 {
+                rows.append((String(localized: "Last failed export"), relativeDateString(from: Date(timeIntervalSince1970: lastFailureTime)), true))
+            }
+            let message = lastErrorMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+            rows.append((String(localized: "Error"), message.isEmpty ? failureCode.userMessage : message, true))
+        }
+        return rows
+    }
+
+    private var footnote: String {
+        if hasFailure && failureCode == .quotaExceeded {
+            return String(localized: "Free up iCloud storage to resume sync. Your songs are safe on this device.")
+        }
+        if hasChanges && isPaused {
+            return String(localized: "If sync doesn't resume, check your connection and iCloud storage.")
+        }
+        return String(localized: "Sync can take a few moments depending on your connection.")
     }
 
     private var statusIconName: String {
@@ -265,64 +277,28 @@ private struct SyncDetailsSheet: View {
 
     private var summaryText: String {
         if hasFailure {
-            return "Latest iCloud export failed. Your changes stay safe locally until sync can resume."
+            return String(localized: "The latest upload to iCloud failed. Your changes stay safe on this device until sync resumes.")
         }
         return hasChanges
-            ? "Changes are pending. Sync runs automatically in the background when the device is online."
-            : "All changes are saved locally. iCloud keeps syncing automatically in the background."
+            ? String(localized: "Changes are waiting to upload. Sync runs in the background whenever you're online.")
+            : String(localized: "Everything is saved on this device and in iCloud. Sync keeps running in the background.")
     }
 
     private var statusSubtitle: String {
         if hasFailure {
             if failureCode == .quotaExceeded {
-                return "Sync failed — iCloud storage full"
+                return String(localized: "Paused — iCloud storage is full.")
             }
-            return "Sync failed — check details"
+            return String(localized: "Something went wrong.")
         }
 
         if hasChanges {
             if isPaused {
-                return "Sync paused — check iCloud storage"
+                return String(localized: "Paused for now.")
             }
-            return "Syncing changes…"
+            return String(localized: "Syncing your changes…")
         }
-        return "Up to date"
-    }
-
-    private var detailsText: String {
-        let lastSync = lastSyncTime > 0 ? relativeDateString(from: Date(timeIntervalSince1970: lastSyncTime)) : "Never"
-        var lines = [
-            "• Last sync: \(lastSync)",
-            "• Sync may take a few moments depending on connection.",
-            "• Your data is safe locally while it syncs."
-        ]
-
-        if hasFailure {
-            if lastFailureTime > 0 {
-                let lastFailure = relativeDateString(from: Date(timeIntervalSince1970: lastFailureTime))
-                lines.insert("• Last failed export: \(lastFailure)", at: 1)
-            }
-
-            let message = lastErrorMessage.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !message.isEmpty {
-                lines.insert("• Cloud error: \(message)", at: 2)
-            } else {
-                lines.insert("• Cloud error: \(failureCode.userMessage)", at: 2)
-            }
-
-            if failureCode == .quotaExceeded {
-                lines.append("• Free up iCloud storage to resume sync.")
-            }
-        }
-
-        if pendingSince > 0 {
-            let pending = relativeDateString(from: Date(timeIntervalSince1970: pendingSince))
-            lines.insert("• Pending changes since: \(pending)", at: 1)
-        }
-        if hasChanges && isPaused {
-            lines.append("• If sync doesn’t resume, free up iCloud storage.")
-        }
-        return lines.joined(separator: "\n")
+        return String(localized: "Up to date.")
     }
 
     private func relativeDateString(from date: Date) -> String {

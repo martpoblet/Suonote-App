@@ -126,38 +126,38 @@ enum ChordQuality: String, Codable, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .major: return "Major"
-        case .minor: return "Minor"
-        case .diminished: return "Diminished"
-        case .augmented: return "Augmented"
-        case .power: return "Power"
-        case .sus2: return "Suspended 2"
-        case .sus4: return "Suspended 4"
-        case .sixth: return "6th"
-        case .minorSixth: return "Minor 6th"
-        case .dominant7: return "Dominant 7th"
-        case .major7: return "Major 7th"
-        case .minor7: return "Minor 7th"
-        case .minorMajor7: return "Minor-Major 7th"
-        case .diminished7: return "Diminished 7th"
-        case .halfDiminished7: return "Half Diminished"
-        case .augmented7: return "Augmented 7th"
+        case .major: return String(localized: "Major")
+        case .minor: return String(localized: "Minor")
+        case .diminished: return String(localized: "Diminished")
+        case .augmented: return String(localized: "Augmented")
+        case .power: return String(localized: "Power")
+        case .sus2: return String(localized: "Suspended 2")
+        case .sus4: return String(localized: "Suspended 4")
+        case .sixth: return String(localized: "6th")
+        case .minorSixth: return String(localized: "Minor 6th")
+        case .dominant7: return String(localized: "Dominant 7th")
+        case .major7: return String(localized: "Major 7th")
+        case .minor7: return String(localized: "Minor 7th")
+        case .minorMajor7: return String(localized: "Minor-Major 7th")
+        case .diminished7: return String(localized: "Diminished 7th")
+        case .halfDiminished7: return String(localized: "Half Diminished")
+        case .augmented7: return String(localized: "Augmented 7th")
         case .dominant7sus4: return "7sus4"
-        case .dominant9: return "Dominant 9th"
-        case .major9: return "Major 9th"
-        case .minor9: return "Minor 9th"
-        case .dominant11: return "Dominant 11th"
-        case .minor11: return "Minor 11th"
-        case .major11: return "Major 11th"
-        case .dominant13: return "Dominant 13th"
-        case .minor13: return "Minor 13th"
-        case .major13: return "Major 13th"
-        case .add9: return "Add 9"
-        case .add11: return "Add 11"
-        case .dominant7sharp9: return "7#9 (Hendrix)"
+        case .dominant9: return String(localized: "Dominant 9th")
+        case .major9: return String(localized: "Major 9th")
+        case .minor9: return String(localized: "Minor 9th")
+        case .dominant11: return String(localized: "Dominant 11th")
+        case .minor11: return String(localized: "Minor 11th")
+        case .major11: return String(localized: "Major 11th")
+        case .dominant13: return String(localized: "Dominant 13th")
+        case .minor13: return String(localized: "Minor 13th")
+        case .major13: return String(localized: "Major 13th")
+        case .add9: return String(localized: "Add 9")
+        case .add11: return String(localized: "Add 11")
+        case .dominant7sharp9: return String(localized: "7#9 (Hendrix)")
         case .dominant7flat9: return "7♭9"
         case .dominant7sharp11: return "7#11"
-        case .altered: return "Altered"
+        case .altered: return String(localized: "Altered")
         }
     }
     
