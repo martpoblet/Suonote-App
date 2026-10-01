@@ -603,6 +603,11 @@ struct StatTile: View {
                 Text(label)
             }
             .eyebrow()
+            // Longer translations ("TONALIDAD", "COMPASES") shrink instead of
+            // breaking mid-word in narrow four-up rows.
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .allowsTightening(true)
             Text(value)
                 .font(DesignSystem.Typography.title2)
                 .foregroundStyle(tint)

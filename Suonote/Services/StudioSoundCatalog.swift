@@ -38,6 +38,17 @@ enum StudioSoundCatalog {
         }
     }
 
+    /// Parallel "amp" saturation for sampled electric basses (nil = none).
+    /// GM bass samples are dull and almost inaudible on phone speakers; the
+    /// mid harmonics give them growl and presence without touching the low end.
+    static func bassAmpDrive(for variant: InstrumentVariant?) -> Double? {
+        switch variant {
+        case .fingerBass, .pickBass: return 1.0
+        case .fretlessBass, .slapBass1, .slapBass2: return 0.6
+        default: return nil
+        }
+    }
+
     /// Variants played by Suonote's own synth engine instead of the SoundFont.
     static func synthPreset(for variant: InstrumentVariant?) -> SynthPreset? {
         switch variant {
@@ -235,8 +246,8 @@ enum StudioSoundCatalog {
         .distortionGuitar: 0.9,
         .ukulele: 1.0,
         .harmonicsGuitar: -0.9,
-        .fingerBass: 4.2,
-        .pickBass: 5.8,
+        .fingerBass: 3.4,         // includes the bass amp (bassAmpDrive)
+        .pickBass: 5.0,
         .acousticBass: 6.5,
         .fretlessBass: 2.6,
         .synthBass: 5.5,

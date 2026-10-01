@@ -64,3 +64,13 @@ RMS (400 ms windows), targeting -20 dBFS. Re-measure whenever the bank changes; 
 - **AVFAudio race** — configure effect parameters *before* connecting nodes; connecting at a
   new sample rate makes Apple units rebuild their parameter tree on a background queue and
   setting parameters concurrently crashes (seen at 48 kHz).
+
+## v4 — a bass that plays like a bassist
+- **`StudioBassComposer`** writes the pop (`pocket`) and rock (`drive`) lines in 4/4:
+  - **Locked to the kick.** It reads the drum track's kicks, or the groove's kicks when there's no drum part yet. A full regeneration does drums first.
+  - **Follows the song's energy.** Held roots in light verses, the kick pocket in fuller verses, steady eighths building through pre-choruses, and kick roots with pushes, octave pops and the odd ghost note in choruses.
+  - **Connects the chords.** Diatonic approach notes (chromatic only for jazz, or when the scale step is the root itself). A stepwise walk into choruses and pre-choruses, and a small fill closing every four-bar phrase.
+  - **Articulates.** Notes stop just before the next one; pick-ups are short.
+  - **Register.** Roots stay in A1–A2. The fifth or octave flips below when the root already sits high. Slash chords use the chord's own fifth (A over D/F#, not C#).
+- **`SuonoteBassAmpUnit`** is an in-process AUv3 effect on sampled electric basses (`StudioSoundCatalog.bassAmpDrive`). It adds a parallel path: high-pass at 220 Hz, asymmetric tanh, then two-pole low-pass at 2.8 kHz. That adds ≈ +2.5–3 dB of 600 Hz–3 kHz harmonics, so the bass is heard on phone speakers, and the low end stays clean. It also runs in the sound previewer, where non-bass variants get drive 0, so auditions match the mix.
+- Arranger: light sections keep the bass pick-up in their last bar. Notes humanized a hair before a section boundary now count as part of the section they belong to, both for arranging and for section dynamics.

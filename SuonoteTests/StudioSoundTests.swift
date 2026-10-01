@@ -249,7 +249,143 @@ final class StudioSoundTests: XCTestCase {
         XCTAssertGreaterThan(downbeat.velocity, firstBar.filter { $0.startBeat > 0.4 && $0.startBeat < 0.6 }.first?.velocity ?? 0)
     }
 
+    // MARK: - Bass composer
+
+    @MainActor
+    func testPocketBassLocksToTheKick() throws {
+        let project = try makeBandProject(style: .pop)
+        let bass = try XCTUnwrap(project.studioTracks.first { $0.instrument == .bass })
+        let drums = try XCTUnwrap(project.studioTracks.first { $0.instrument == .drums })
+        let pattern: BassPattern = bass.bassPattern == .auto ? StudioGenerator.recommendedBass(for: .pop) : bass.bassPattern
+        XCTAssertEqual(pattern, .pocket)
+        // First chorus: bars 9–16 (beats 32–64).
+        let chorusKicks: [StudioNote] = drums.notes.filter { $0.pitch == 36 && $0.startBeat >= 32 && $0.startBeat < 64 }
+        let kicks: [Double] = chorusKicks.map(\.startBeat).filter { (beat: Double) -> Bool in
+            let halves = beat * 2
+            return abs(halves.rounded() - halves) < 0.01
+        }
+        XCTAssertFalse(kicks.isEmpty)
+        for kick in kicks {
+            XCTAssertTrue(bass.notes.contains { abs($0.startBeat - kick) < 0.08 }, "No bass note with the kick at beat \(kick)")
+        }
+    }
+
+    @MainActor
+    func testBassLineBuildsFromVerseToChorus() throws {
+        let project = try makeBandProject(style: .pop)
+        let bass = try XCTUnwrap(project.studioTracks.first { $0.instrument == .bass })
+        func notesPerBar(_ beats: Range<Double>) -> Double {
+            Double(bass.notes.filter { beats.contains($0.startBeat) }.count) / ((beats.upperBound - beats.lowerBound) / 4)
+        }
+        let lightVerse = notesPerBar(0..<28)     // first verse, before its last bar
+        let chorus = notesPerBar(32..<60)
+        XCTAssertLessThanOrEqual(lightVerse, 2.01, "First verse holds the roots")
+        XCTAssertGreaterThan(chorus, lightVerse + 1.5, "Chorus drives harder than the first verse")
+    }
+
+    @MainActor
+    func testBassWalksStepwiseIntoTheChorus() throws {
+        let project = try makeBandProject(style: .pop)
+        let bass = try XCTUnwrap(project.studioTracks.first { $0.instrument == .bass })
+        let sorted = bass.notes.sorted { $0.startBeat < $1.startBeat }
+        let walk = sorted.filter { $0.startBeat >= 29.9 && $0.startBeat < 32 }
+        XCTAssertGreaterThanOrEqual(walk.count, 3, "A walk-up in the bar before the chorus")
+        let landing = try XCTUnwrap(sorted.first { $0.startBeat >= 31.95 })
+        XCTAssertEqual(landing.pitch % 12, 5, "Lands on the chorus root (F)")
+        let line = walk.map(\.pitch) + [landing.pitch]
+        for (a, b) in zip(line, line.dropFirst()) {
+            XCTAssertLessThanOrEqual(abs(b - a), 2, "Walk moves by step: \(line)")
+        }
+    }
+
+    @MainActor
+    func testComposedBassStaysInTheBassRegister() throws {
+        for style in [StudioStyle.pop, .rock] {
+            let project = try makeBandProject(style: style)
+            let bass = try XCTUnwrap(project.studioTracks.first { $0.instrument == .bass })
+            XCTAssertFalse(bass.notes.isEmpty)
+            for note in bass.notes {
+                XCTAssertTrue((33...52).contains(note.pitch), "\(style) bass note \(note.pitch) outside A1–E3")
+            }
+        }
+    }
+
+    @MainActor
+    func testSlashChordBassUsesTheChordsFifth() throws {
+        let project = try makeBandProject(
+            style: .pop, key: "G",
+            verse: [("G", .major, nil), ("D", .major, "F#"), ("E", .minor, nil), ("C", .major, nil)]
+        )
+        let bass = try XCTUnwrap(project.studioTracks.first { $0.instrument == .bass })
+        // D/F# lives in bars 2 and 6 of each verse.
+        let verseStarts: [Double] = [0, 64]
+        for start in verseStarts {
+            for bar in [1.0, 5.0] {
+                let from = start + bar * 4
+                let notes = bass.notes.filter { $0.startBeat >= from - 0.05 && $0.startBeat < from + 3.4 }
+                XCTAssertFalse(notes.isEmpty)
+                for note in notes {
+                    XCTAssertTrue([2, 6, 9].contains(note.pitch % 12), "Bass \(note.pitch) clashes with D/F#")
+                }
+            }
+        }
+    }
+
     // MARK: - Helpers
+
+    private var bandContainer: ModelContainer?
+
+    /// Verse–Chorus–Verse–Chorus (8 bars each) with drums and bass added the
+    /// way the "+" flow does, without humanization.
+    @MainActor
+    private func makeBandProject(
+        style: StudioStyle,
+        key: String = "C",
+        verse: [(String, ChordQuality, String?)] = [("C", .major, nil), ("G", .major, nil), ("A", .minor, nil), ("F", .major, nil)],
+        chorus: [(String, ChordQuality, String?)] = [("F", .major, nil), ("G", .major, nil), ("E", .minor, nil), ("A", .minor, nil)]
+    ) throws -> Project {
+        let container = try ModelContainer(for: Project.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        bandContainer = container
+        let context = ModelContext(container)
+        let project = Project(title: "Band", keyRoot: key, keyMode: .major, bpm: 100)
+        context.insert(project)
+        func section(_ name: String, _ chords: [(String, ChordQuality, String?)]) -> SectionTemplate {
+            let section = SectionTemplate(name: name, bars: 8)
+            context.insert(section)
+            section.project = project
+            project.sectionTemplates.append(section)
+            for (bar, chord) in (chords + chords).enumerated() {
+                let event = ChordEvent(barIndex: bar, beatOffset: 0, duration: 4, root: chord.0, quality: chord.1)
+                event.slashRoot = chord.2
+                context.insert(event)
+                event.sectionTemplate = section
+                section.chordEvents.append(event)
+            }
+            return section
+        }
+        let verseSection = section("Verse", verse)
+        let chorusSection = section("Chorus", chorus)
+        for (index, template) in [verseSection, chorusSection, verseSection, chorusSection].enumerated() {
+            let item = ArrangementItem(orderIndex: index)
+            context.insert(item)
+            item.project = project
+            project.arrangementItems.append(item)
+            item.sectionTemplate = template
+        }
+        project.studioStyle = style
+        for instrument in [StudioInstrument.drums, .bass] {
+            let track = StudioTrack(name: instrument.title, instrument: instrument, orderIndex: project.studioTracks.count, style: style)
+            track.project = project
+            project.studioTracks.append(track)
+            context.insert(track)
+            track.regenerateNaturalness = 0
+            if instrument == .drums {
+                track.drumPreset = DrumPreset.defaultPreset(for: style, beatsPerBar: 4, timeBottom: 4)
+            }
+            StudioGenerator.regenerateTrack(track, project: project, style: style, modelContext: context)
+        }
+        return project
+    }
 
     @MainActor
     private func makeProject(style: StudioStyle) throws -> Project {

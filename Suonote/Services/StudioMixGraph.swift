@@ -28,6 +28,8 @@ final class StudioMixGraph {
         /// Optional sub-bass layer that doubles a sampled bass for weight.
         let layer: AVAudioUnitMIDIInstrument?
         let tone: AVAudioUnitEQ
+        /// Parallel mid saturation for sampled electric basses.
+        let amp: AVAudioUnitEffect?
         let compressor: AVAudioUnitEffect
         let reverb: AVAudioUnitReverb
         let delay: AVAudioUnitDelay
@@ -122,7 +124,7 @@ final class StudioMixGraph {
     func teardown() {
         for chain in chains.values {
             chain.player?.stop()
-            [chain.sampler, chain.layer, chain.player, chain.inputMixer, chain.tone, chain.compressor, chain.reverb, chain.delay, chain.channel]
+            [chain.sampler, chain.layer, chain.player, chain.inputMixer, chain.tone, chain.amp, chain.compressor, chain.reverb, chain.delay, chain.channel]
                 .compactMap { $0 as AVAudioNode? }
                 .forEach { engine.detach($0) }
         }
@@ -191,13 +193,21 @@ final class StudioMixGraph {
             inputMixer = upmix
         }
         if let layer { engine.attach(layer) }
+        let resolvedVariant = SoundFontManager.resolvedVariant(for: track.instrument, variant: track.variant)
+        var amp: AVAudioUnitEffect?
+        if !track.instrument.isAudio, let drive = StudioSoundCatalog.bassAmpDrive(for: resolvedVariant) {
+            SuonoteBassAmpUnit.register()
+            let unit = AVAudioUnitEffect(audioComponentDescription: SuonoteBassAmpUnit.componentDescription)
+            (unit.auAudioUnit as? SuonoteBassAmpUnit)?.drive = drive
+            engine.attach(unit)
+            amp = unit
+        }
 
         let role = StudioSoundCatalog.role(for: track.instrument, variant: track.variant)
         var profile = StudioSoundCatalog.mixProfile(for: role, style: style)
         if track.instrument.isAudio {
             profile = StudioSoundCatalog.MixProfile(levelDB: 0, pan: 0, ambience: 0.12, highPassHz: 60, lowPassHz: 0, sustainPedal: false)
         }
-        let resolvedVariant = SoundFontManager.resolvedVariant(for: track.instrument, variant: track.variant)
         let trim = track.instrument.isAudio ? 0 : StudioSoundCatalog.loudnessTrimDB(for: resolvedVariant, instrument: track.instrument)
         let ambienceBus = nextAmbienceBus
         nextAmbienceBus += 1
@@ -207,6 +217,7 @@ final class StudioMixGraph {
             inputMixer: inputMixer,
             layer: layer,
             tone: tone,
+            amp: amp,
             compressor: compressor,
             reverb: reverb,
             delay: delay,
@@ -232,7 +243,12 @@ final class StudioMixGraph {
         } else {
             engine.connect(source, to: tone, format: format)
         }
-        engine.connect(tone, to: compressor, format: format)
+        if let amp {
+            engine.connect(tone, to: amp, format: format)
+            engine.connect(amp, to: compressor, format: format)
+        } else {
+            engine.connect(tone, to: compressor, format: format)
+        }
         engine.connect(compressor, to: reverb, format: format)
         engine.connect(reverb, to: delay, format: format)
         engine.connect(delay, to: channel, format: format)

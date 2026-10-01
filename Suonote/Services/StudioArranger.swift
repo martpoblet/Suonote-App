@@ -198,7 +198,8 @@ enum StudioArranger {
                 result.append(note)
                 continue
             }
-            guard let span = map.span(at: note.startBeat) else {
+            // Humanized notes can start a hair before their section.
+            guard let span = map.span(at: note.startBeat + 0.06) else {
                 result.append(note)
                 continue
             }
@@ -259,9 +260,14 @@ enum StudioArranger {
             }
         case .bass:
             if span.energy <= 2, !thinBand {
-                // Verses: hold the roots, leave space.
-                guard onStrongBeat else { return nil }
-                duration = max(duration, 1.5)
+                // Verses: hold the roots, leave space — but keep the pick-up
+                // that leads into the next section.
+                let leadsIntoNext = span.nextRole != nil && note.startBeat >= span.endBeat - beatsPerBar - 0.001
+                if onStrongBeat, !leadsIntoNext {
+                    duration = max(duration, 1.5)
+                } else if !onStrongBeat, !leadsIntoNext {
+                    return nil
+                }
                 velocity = Int(Double(velocity) * 0.9)
             }
             if span.role == .outro, span.startBeat + Double(span.bars - 1) * beatsPerBar <= note.startBeat {

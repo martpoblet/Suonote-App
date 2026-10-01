@@ -111,7 +111,9 @@ struct StudioGenerator {
     private static func applySectionDynamics(_ notes: [StudioNote], dynamics: [SectionDynamic]) {
         guard !dynamics.isEmpty else { return }
         for note in notes {
-            let scale = dynamicScale(at: note.startBeat, dynamics: dynamics)
+            // Humanized notes can start a hair before their section; judge by
+            // where they were written.
+            let scale = dynamicScale(at: note.startBeat + 0.06, dynamics: dynamics)
             note.velocity = min(127, max(1, Int(Float(note.velocity) * scale.velocity)))
         }
     }
@@ -184,7 +186,8 @@ struct StudioGenerator {
                 compingPattern: track.compingPattern,
                 bassPattern: track.bassPattern,
                 sectionBoundaryBars: sectionBounds,
-                arrangement: arrangement
+                arrangement: arrangement,
+                bassSong: instrument == .bass ? StudioBassComposer.SongContext(project: project, style: style) : nil
             )
             let arranged = StudioArranger.arrange(notes, instrument: instrument, variant: track.variant, project: project, style: style)
             applySectionDynamics(arranged, dynamics: dynamics)
@@ -233,7 +236,9 @@ struct StudioGenerator {
         includeDrums: Bool = true
     ) {
         let context = RegenerationContext(project: project, style: style)
-        for track in project.studioTracks where !track.instrument.isAudio {
+        // Drums first, so the bass locks to the new kick pattern.
+        let ordered = project.studioTracks.sorted { ($0.instrument == .drums ? 0 : 1) < ($1.instrument == .drums ? 0 : 1) }
+        for track in ordered where !track.instrument.isAudio {
             if track.instrument == .drums, !includeDrums {
                 continue
             }
@@ -302,7 +307,8 @@ struct StudioGenerator {
             compingPattern: track.compingPattern,
             bassPattern: track.bassPattern,
             sectionBoundaryBars: context.sectionBounds,
-            arrangement: context.arrangement
+            arrangement: context.arrangement,
+            bassSong: track.instrument == .bass ? StudioBassComposer.SongContext(project: project, style: style) : nil
         )
         let arranged = track.followsArrangement
             ? StudioArranger.arrange(notes, instrument: track.instrument, variant: track.variant, project: project, style: style)
@@ -394,7 +400,8 @@ struct StudioGenerator {
                 arpeggioRate: track.regenerateArpeggioRate,
                 arpeggioPattern: track.regenerateArpeggioPattern,
                 compingPattern: track.compingPattern,
-                bassPattern: track.bassPattern
+                bassPattern: track.bassPattern,
+                bassSong: track.instrument == .bass ? StudioBassComposer.SongContext(project: project, style: style) : nil
             )
             var newNotes = notes.filter { note in
                 let beat = note.startBeat
@@ -468,7 +475,8 @@ struct StudioGenerator {
                 arpeggioRate: track.regenerateArpeggioRate,
                 arpeggioPattern: track.regenerateArpeggioPattern,
                 compingPattern: track.compingPattern,
-                bassPattern: track.bassPattern
+                bassPattern: track.bassPattern,
+                bassSong: track.instrument == .bass ? StudioBassComposer.SongContext(project: project, style: style) : nil
             )
             let arranged = track.followsArrangement
                 ? StudioArranger.arrange(notes, instrument: track.instrument, variant: track.variant, project: project, style: style)
@@ -534,7 +542,8 @@ struct StudioGenerator {
             arpeggioPattern: arpeggioPattern,
             compingPattern: compingPattern,
             bassPattern: bassPattern,
-            arrangement: arrangement
+            arrangement: arrangement,
+            bassSong: instrument == .bass ? StudioBassComposer.SongContext(project: project, style: style) : nil
         )
         guard followsArrangement else { return notes }
         let arranged = StudioArranger.arrange(notes, instrument: instrument, variant: variant, project: project, style: style)
@@ -711,7 +720,8 @@ struct StudioGenerator {
         compingPattern: CompingPattern = .auto,
         bassPattern: BassPattern = .auto,
         sectionBoundaryBars: Set<Int> = [],
-        arrangement: ArrangementContext = .solo
+        arrangement: ArrangementContext = .solo,
+        bassSong: StudioBassComposer.SongContext? = nil
     ) -> [StudioNote] {
         let generated: [StudioNote]
         switch instrument {
@@ -744,7 +754,8 @@ struct StudioGenerator {
                 keyRoot: keyRoot,
                 intensity: intensity,
                 complexity: complexity,
-                bassPattern: bassPattern
+                bassPattern: bassPattern,
+                song: bassSong
             )
         case .piano:
             // Piano plays as two hands: a low-register left-hand foundation
@@ -1668,7 +1679,8 @@ struct StudioGenerator {
         keyRoot: String,
         intensity: Double = 0.5,
         complexity: Double = 0.5,
-        bassPattern requested: BassPattern = .auto
+        bassPattern requested: BassPattern = .auto,
+        song: StudioBassComposer.SongContext? = nil
     ) -> [StudioNote] {
         // "Auto" plays the style's recommended feel (same as the starter band).
         let bassPattern = requested == .auto ? recommendedBass(for: style) : requested
@@ -1679,6 +1691,21 @@ struct StudioGenerator {
         let floor = variant == .synthSubBass || octaveShift < 2 ? fullRange.lowerBound : max(fullRange.lowerBound, 33)
         let range = floor + 12 <= fullRange.upperBound ? floor...fullRange.upperBound : fullRange
         let bassProfile = bassVoicingProfile(variant: variant, style: style)
+        if StudioBassComposer.composes(bassPattern, beatsPerBar: beatsPerBar, timeBottom: timeBottom) {
+            return StudioBassComposer.compose(StudioBassComposer.Line(
+                chords: chords,
+                pattern: bassPattern,
+                style: style,
+                beatsPerBar: beatsPerBar,
+                range: range,
+                velocity: scaledVelocity(
+                    base: bassVelocity(for: style) + bassProfile.velocityOffset,
+                    intensity: intensity,
+                    range: 36
+                ),
+                song: song
+            ))
+        }
         var lastPitch = anchorPitch(for: keyRoot, in: range)
         var notes: [StudioNote] = []
 

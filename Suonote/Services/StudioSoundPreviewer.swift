@@ -25,6 +25,11 @@ final class StudioSoundPreviewer: ObservableObject {
     /// The instrument currently auditioning (sampler or synth).
     private var current: AVAudioUnitMIDIInstrument?
     private let tone = AVAudioUnitEQ(numberOfBands: 1)
+    /// The mix's bass amp, so electric basses audition as they'll sound.
+    private lazy var amp: AVAudioUnitEffect = {
+        SuonoteBassAmpUnit.register()
+        return AVAudioUnitEffect(audioComponentDescription: SuonoteBassAmpUnit.componentDescription)
+    }()
     private let room = AVAudioUnitReverb()
     private var isSetup = false
     private var loadedKey: String?
@@ -39,17 +44,19 @@ final class StudioSoundPreviewer: ObservableObject {
             if !engine.isRunning { try? engine.start() }
             return engine.isRunning
         }
-        [sampler, synth, inputMix, tone, room].forEach { engine.attach($0) }
+        [sampler, synth, inputMix, tone, amp, room].forEach { engine.attach($0) }
         // Configure units before connecting (parameter-tree rebuild race).
         tone.bands[0].filterType = .highPass
         tone.bands[0].frequency = 35
         tone.bands[0].bypass = false
         room.loadFactoryPreset(.mediumRoom)
         room.wetDryMix = 14
+        (amp.auAudioUnit as? SuonoteBassAmpUnit)?.drive = 0
         engine.connect(sampler, to: inputMix, format: nil)
         engine.connect(synth, to: inputMix, format: nil)
         engine.connect(inputMix, to: tone, format: nil)
-        engine.connect(tone, to: room, format: nil)
+        engine.connect(tone, to: amp, format: nil)
+        engine.connect(amp, to: room, format: nil)
         engine.connect(room, to: engine.mainMixerNode, format: nil)
         engine.mainMixerNode.outputVolume = 0.8
         do {
@@ -129,6 +136,7 @@ final class StudioSoundPreviewer: ObservableObject {
     private func load(_ variant: InstrumentVariant, instrument: StudioInstrument) -> Bool {
         let key = variant.rawValue
         tone.globalGain = StudioSoundCatalog.loudnessTrimDB(for: variant, instrument: instrument)
+        (amp.auAudioUnit as? SuonoteBassAmpUnit)?.drive = StudioSoundCatalog.bassAmpDrive(for: variant) ?? 0
         if let preset = StudioSoundCatalog.synthPreset(for: variant) {
             (synth.auAudioUnit as? SuonoteSynthAudioUnit)?.preset = preset
             current = synth
