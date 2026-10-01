@@ -199,6 +199,15 @@ struct StudioTabView: View {
         } message: {
             Text("Every generated track gets fresh notes in the \(project.studioStyle?.title ?? String(localized: "current")) style. Hand edits are replaced.")
         }
+        #if DEBUG
+        .task {
+            // App Store screenshots: `-ScreenshotOpen piano` opens that track's editor.
+            guard let name = UserDefaults.standard.string(forKey: "ScreenshotOpen"),
+                  let instrument = StudioInstrument(rawValue: name) else { return }
+            try? await Task.sleep(for: .seconds(1.2))
+            editingTrack = project.studioTracks.first { $0.instrument == instrument }
+        }
+        #endif
         .fullScreenCover(item: $editingTrack, onDismiss: {
             editingTrack = nil
             applyMixState()

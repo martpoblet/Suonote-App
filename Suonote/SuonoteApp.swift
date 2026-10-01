@@ -119,6 +119,9 @@ struct SuonoteApp: App {
                 } message: {
                     Text("iCloud sync could not be opened, so Suonote started with a local recovery store. Your existing Cloud data was not deleted.")
                 }
+                #if DEBUG
+                .task { await ScreenshotSeeder.seedIfRequested(sharedModelContainer.mainContext) }
+                #endif
                 .onAppear {
                     if UserDefaults.standard.bool(forKey: "didOpenLocalRecoveryStore") {
                         showMigrationAlert = true

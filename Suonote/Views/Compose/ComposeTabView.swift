@@ -90,6 +90,17 @@ struct ComposeTabView: View {
                 self.focusedItemId = nil
             }
         }
+        #if DEBUG
+        .task {
+            // App Store screenshots: `-ScreenshotOpen palette` opens the chord palette on the chorus.
+            guard UserDefaults.standard.string(forKey: "ScreenshotOpen") == "palette" else { return }
+            try? await Task.sleep(for: .seconds(1.2))
+            let sections = project.arrangementItems.sorted { $0.orderIndex < $1.orderIndex }.compactMap(\.sectionTemplate)
+            if let chorus = sections.first(where: { StudioArranger.Role.from(name: $0.name) == .chorus }) ?? sections.first {
+                paletteSlot = ChordSlot(barIndex: 1, beatOffset: 0, sectionId: chorus.id)
+            }
+        }
+        #endif
         .sheet(item: $paletteSlot) { slot in
             if let section = section(for: slot.sectionId) {
                 ChordPaletteSheet(section: section, slot: slot, project: project, preview: chordPreview)

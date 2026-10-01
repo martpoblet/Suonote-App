@@ -116,22 +116,34 @@ struct ProjectsListView: View {
         } message: { _ in
             Text("Its sections, lyrics and Studio parts will be removed. This can't be undone.")
         }
-        .onOpenURL { url in
-            // suonote://project/<id>[/compose|studio|lyrics|record] (widget links)
-            let parts = url.pathComponents.dropFirst()
-            guard url.scheme == "suonote", url.host == "project",
-                  let idString = parts.first,
-                  let projectId = UUID(uuidString: idString),
-                  let project = allProjects.first(where: { $0.id == projectId }) else { return }
-            let tab: ProjectDetailTab
-            switch parts.dropFirst().first {
-            case "studio": tab = .studio
-            case "lyrics": tab = .lyrics
-            case "record": tab = .record
-            default: tab = .compose
+        .onOpenURL { url in openDeepLink(url) }
+        #if DEBUG
+        .task {
+            // App Store screenshots: `-ScreenshotRoute studio` opens the seeded demo song.
+            guard let tab = UserDefaults.standard.string(forKey: "ScreenshotRoute") else { return }
+            try? await Task.sleep(for: .seconds(1.5))
+            if let url = URL(string: "suonote://project/\(ScreenshotSeeder.goldenHourID.uuidString)/\(tab)") {
+                openDeepLink(url)
             }
-            pushedRoute = LibraryRoute(project: project, tab: tab)
         }
+        #endif
+    }
+
+    /// suonote://project/<id>[/compose|studio|lyrics|record] (widget links)
+    private func openDeepLink(_ url: URL) {
+        let parts = url.pathComponents.dropFirst()
+        guard url.scheme == "suonote", url.host == "project",
+              let idString = parts.first,
+              let projectId = UUID(uuidString: idString),
+              let project = allProjects.first(where: { $0.id == projectId }) else { return }
+        let tab: ProjectDetailTab
+        switch parts.dropFirst().first {
+        case "studio": tab = .studio
+        case "lyrics": tab = .lyrics
+        case "record": tab = .record
+        default: tab = .compose
+        }
+        pushedRoute = LibraryRoute(project: project, tab: tab)
     }
 
     // MARK: Toolbar

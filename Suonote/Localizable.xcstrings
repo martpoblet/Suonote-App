@@ -3178,6 +3178,16 @@
         }
       }
     },
+    "Chorus idea": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Idea de estribillo"
+          }
+        }
+      }
+    },
     "Chorus — take 3": {
       "localizations": {
         "es": {
@@ -5501,6 +5511,16 @@
         }
       },
       "comment": "Instrument sound name"
+    },
+    "Guitar riff": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Riff de guitarra"
+          }
+        }
+      }
     },
     "Guitar shape: %@": {
       "localizations": {
@@ -8749,6 +8769,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Piano"
+          }
+        }
+      }
+    },
+    "Piano voicings": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voicings de piano"
           }
         }
       }
