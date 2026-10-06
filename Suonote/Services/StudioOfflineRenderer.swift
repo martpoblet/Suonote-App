@@ -82,8 +82,9 @@ enum StudioOfflineRenderer {
             player.play()
         }
 
+        // A song made only of recordings has no MIDI to sequence.
         do {
-            try sequencer.start()
+            if !sequencer.tracks.isEmpty { try sequencer.start() }
         } catch {
             throw RenderError.engine(String(localized: "Could not start the sequencer."))
         }

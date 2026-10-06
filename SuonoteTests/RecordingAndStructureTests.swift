@@ -1,5 +1,6 @@
 import XCTest
 import SwiftData
+import AVFoundation
 @testable import Suonote
 
 /// Take alignment (clicks heard by the mic) and repeating bars in Compose.
@@ -152,6 +153,121 @@ final class RecordingAndStructureTests: XCTestCase {
         let (two, other) = try makeSection(bars: 2, chords: [])
         _ = other
         XCTAssertEqual(ComposeRepeatOption.endings(of: two).map(\.range), [1..<2, 0..<2])
+    }
+}
+
+// MARK: - Take → Studio timing, end to end (offline, silent)
+
+final class TakeTimingPipelineTests: XCTestCase {
+    private let takeRate = 48_000.0
+
+    /// A take as TakeCapture writes it: mono AAC at the mic's rate, with a
+    /// short click at each of `clickSeconds`.
+    private func writeTake(clicks clickSeconds: [Double], seconds: Double, to url: URL) throws {
+        try? FileManager.default.removeItem(at: url)
+        let file = try AVAudioFile(
+            forWriting: url,
+            settings: [
+                AVFormatIDKey: kAudioFormatMPEG4AAC,
+                AVSampleRateKey: takeRate,
+                AVNumberOfChannelsKey: 1,
+                AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
+            ],
+            commonFormat: .pcmFormatFloat32,
+            interleaved: false
+        )
+        let frames = Int(seconds * takeRate)
+        let format = AVAudioFormat(standardFormatWithSampleRate: takeRate, channels: 1)!
+        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(frames))!
+        buffer.frameLength = AVAudioFrameCount(frames)
+        let data = buffer.floatChannelData![0]
+        for i in 0..<frames { data[i] = 0 }
+        for click in clickSeconds {
+            let start = Int(click * takeRate)
+            for i in 0..<Int(0.02 * takeRate) where start + i < frames {
+                let t = Double(i) / takeRate
+                data[start + i] = Float(sin(2 * .pi * 1_000 * t) * max(0, 1 - t / 0.02)) * 0.8
+            }
+        }
+        // Write in tap-sized chunks, like the live capture does.
+        var offset = 0
+        while offset < frames {
+            let count = min(4_800, frames - offset)
+            let chunk = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(count))!
+            chunk.frameLength = AVAudioFrameCount(count)
+            chunk.floatChannelData![0].update(from: data + offset, count: count)
+            try file.write(from: chunk)
+            offset += count
+        }
+    }
+
+    /// Onset times (seconds) of transients in a file: first sample over 30%
+    /// of the file's peak after at least 80 ms of quiet.
+    private func onsets(in url: URL) throws -> [Double] {
+        let file = try AVAudioFile(forReading: url)
+        let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length))!
+        try file.read(into: buffer)
+        let samples = UnsafeBufferPointer(start: buffer.floatChannelData![0], count: Int(buffer.frameLength))
+        let rate = file.processingFormat.sampleRate
+        let peak = samples.map(abs).max() ?? 0
+        guard peak > 0 else { return [] }
+        var result: [Double] = []
+        var lastLoud = -Int.max / 2
+        for (i, sample) in samples.enumerated() where abs(sample) >= peak * 0.3 {
+            if i - lastLoud > Int(0.08 * rate) { result.append(Double(i) / rate) }
+            lastLoud = i
+        }
+        return result
+    }
+
+    func testAACRoundTripKeepsClicksInPlace() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("roundtrip.m4a")
+        let clicks = [0.0, 0.5, 1.0, 1.5]
+        try writeTake(clicks: clicks, seconds: 2.5, to: url)
+        let found = try onsets(in: url)
+        XCTAssertEqual(found.count, clicks.count, "found \(found)")
+        for (expected, actual) in zip(clicks, found) {
+            XCTAssertEqual(actual, expected, accuracy: 0.002, "AAC shifted a click: \(found)")
+        }
+    }
+
+    @MainActor
+    func testTakeLinesUpWithTheBandInTheMix() async throws {
+        let container = try ModelContainer(for: Project.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let context = ModelContext(container)
+
+        func project(withTake: Bool) throws -> Project {
+            let project = Project(title: "Timing", status: .idea, tags: [], keyRoot: "C", keyMode: .major, bpm: 120, timeTop: 4, timeBottom: 4)
+            context.insert(project)
+            project.studioStyle = .pop
+            // No sections: the render is one 4/4 bar (2 s at 120 bpm).
+            if withTake {
+                let fileName = "timing-\(UUID().uuidString).m4a"
+                try writeTake(clicks: (0..<4).map { Double($0) * 0.5 }, seconds: 2.5, to: FileManagerUtils.recordingURL(for: fileName))
+                let recording = Recording(name: "Take", fileName: fileName, duration: 2.5, bpm: 120, recordingType: .voice)
+                recording.project = project
+                project.recordings.append(recording)
+                let track = StudioTrack(name: "Take", instrument: .audio, orderIndex: 0, audioRecordingId: recording.id, audioStartBeat: 0)
+                track.project = project
+                project.studioTracks.append(track)
+            } else {
+                let track = StudioTrack(name: "Drums", instrument: .drums, orderIndex: 0, style: .pop)
+                track.notes = (0..<4).map { StudioNote(startBeat: Double($0), duration: 0.25, pitch: 36, velocity: 120) }
+                track.project = project
+                project.studioTracks.append(track)
+            }
+            return project
+        }
+
+        let band = try onsets(in: try await StudioOfflineRenderer.render(project: try project(withTake: false), format: .wav, tail: 0.5))
+        let take = try onsets(in: try await StudioOfflineRenderer.render(project: try project(withTake: true), format: .wav, tail: 0.5))
+        print("TIMING band onsets: \(band.map { Int(($0 * 1000).rounded()) }) ms")
+        print("TIMING take onsets: \(take.map { Int(($0 * 1000).rounded()) }) ms")
+        XCTAssertGreaterThanOrEqual(band.count, 4)
+        XCTAssertGreaterThanOrEqual(take.count, 4)
+        for (kick, click) in zip(band, take) {
+            XCTAssertEqual(click, kick, accuracy: 0.012, "take vs band: \(Int((click - kick) * 1000)) ms")
+        }
     }
 }
 
