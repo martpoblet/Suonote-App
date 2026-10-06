@@ -1,36 +1,49 @@
 {
-  "sourceLanguage": "en",
-  "strings": {
-    "Create a new song in ${applicationName}": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crear una canción nueva en ${applicationName}"
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Create a new song in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Create a new song in ${applicationName}",
+              "New project in ${applicationName}",
+              "Start songwriting in ${applicationName}"
+            ]
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Crear una canción nueva en ${applicationName}"
           }
         }
       }
     },
-    "New project in ${applicationName}": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nuevo proyecto en ${applicationName}"
+    "New project in ${applicationName}" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nuevo proyecto en ${applicationName}"
           }
         }
       }
     },
-    "Start songwriting in ${applicationName}": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Empezar a componer en ${applicationName}"
+    "Start songwriting in ${applicationName}" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezar a componer en ${applicationName}"
           }
         }
       }
     }
   },
-  "version": "1.0"
+  "version" : "1.0"
 }

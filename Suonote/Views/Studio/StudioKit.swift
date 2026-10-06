@@ -116,7 +116,7 @@ extension Project {
                     if lhs.beatOffset != rhs.beatOffset { return lhs.beatOffset < rhs.beatOffset }
                     return lhs.id.uuidString < rhs.id.uuidString
                 }
-                let symbols = chords.map(StudioMusic.chordText)
+                let symbols = chords.map { StudioMusic.chordText($0) }
                 let chordLabel: String? = symbols.isEmpty
                     ? nil
                     : symbols.prefix(2).joined(separator: " ") + (symbols.count > 2 ? " +" : "")

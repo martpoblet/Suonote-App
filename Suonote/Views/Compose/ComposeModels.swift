@@ -437,11 +437,37 @@ enum ComposeChordOps {
         section.bars += 1
     }
 
-    static func duplicateBar(in section: SectionTemplate, bar: Int) {
-        let source = section.chordEvents.filter { $0.barIndex == bar }
-        insertBar(in: section, at: bar + 1)
-        for chord in source {
-            place(ComposeChordValue(chord), in: section, bar: bar + 1, beat: chord.beatOffset, duration: chord.duration)
+    /// Longest a section can get (matches the length stepper).
+    static let maxBars = 64
+
+    /// Whether `bars` more bars still fit in the section.
+    static func canAdd(_ bars: Int, to section: SectionTemplate) -> Bool {
+        bars > 0 && section.bars + bars <= maxBars
+    }
+
+    /// Copies the bars in `range` and inserts the copies right after it,
+    /// `times` over: [A B] ×2 → [A B A B A B]. Later bars move along.
+    static func repeatBars(in section: SectionTemplate, range: Range<Int>, times: Int) {
+        let lower = max(0, range.lowerBound)
+        let upper = min(section.bars, range.upperBound)
+        let length = upper - lower
+        guard length > 0, times > 0, canAdd(length * times, to: section) else { return }
+
+        let source = section.chordEvents
+            .filter { $0.barIndex >= lower && $0.barIndex < upper }
+            .map { (bar: $0.barIndex - lower, value: ComposeChordValue($0), beat: $0.beatOffset, duration: $0.duration) }
+
+        let added = length * times
+        for chord in section.chordEvents where chord.barIndex >= upper {
+            chord.barIndex += added
+        }
+        section.bars += added
+
+        for copy in 0..<times {
+            let base = upper + copy * length
+            for item in source {
+                place(item.value, in: section, bar: base + item.bar, beat: item.beat, duration: item.duration)
+            }
         }
     }
 

@@ -167,7 +167,7 @@ struct ImmersiveLyricsEditor: View {
     private func bottomBar(for section: SectionTemplate) -> some View {
         let lines = LyricsAnalysis.lines(section.lyricsText)
         let words = LyricsAnalysis.wordCount(section.lyricsText)
-        let syllables = lines.map(LyricsAnalysis.syllables(inLine:))
+        let syllables = lines.map { LyricsAnalysis.syllables(inLine: $0) }
         let average = syllables.isEmpty ? 0 : Int((Double(syllables.reduce(0, +)) / Double(syllables.count)).rounded())
 
         return HStack(spacing: DesignSystem.Spacing.sm) {

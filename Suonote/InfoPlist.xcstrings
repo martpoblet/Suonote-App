@@ -3,7 +3,7 @@
   "strings" : {
     "CFBundleDisplayName" : {
       "comment" : "Bundle display name",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14,6 +14,18 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
+            "value" : "Suonote"
+          }
+        }
+      }
+    },
+    "CFBundleName" : {
+      "comment" : "Bundle name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
             "value" : "Suonote"
           }
         }
@@ -36,6 +48,9 @@
           }
         }
       }
+    },
+    "Suonote Bar Row Drag Payload" : {
+
     }
   },
   "version" : "1.0"

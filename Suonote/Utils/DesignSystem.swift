@@ -621,10 +621,12 @@ struct StatTile: View {
 /// Thin horizontal rule in the paper's ink.
 struct Hairline: View {
     var color: Color = DesignSystem.Colors.border
+    @Environment(\.displayScale) private var displayScale
+
     var body: some View {
         Rectangle()
             .fill(color)
-            .frame(height: 1 / UIScreen.main.scale)
+            .frame(height: 1 / displayScale)
             .frame(maxWidth: .infinity)
     }
 }

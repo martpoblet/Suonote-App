@@ -85,7 +85,7 @@ nonisolated final class SuonoteSynthAudioUnit: AUAudioUnit {
 
 // MARK: - Presets
 
-struct SynthPreset: Equatable, Sendable {
+nonisolated struct SynthPreset: Equatable, Sendable {
     var saw2Detune: Double      // cents
     var sawMix: Double          // saw level (each)
     var subLevel: Double        // sine level

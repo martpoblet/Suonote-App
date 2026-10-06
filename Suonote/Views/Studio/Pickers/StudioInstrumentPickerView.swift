@@ -27,9 +27,9 @@ extension TrackStyleChoice {
 
 // MARK: - Add instrument sheet
 
-/// Tap an instrument to add it straight away with a sound and part that suit
-/// the song's style; tap "Customize" to choose the sound and playing style
-/// first. Recordings can be placed on the timeline from the same sheet.
+/// Tap an instrument, choose how it plays (the style's suggestion is already
+/// picked) and add it. Recordings can be placed on the timeline from the
+/// same sheet.
 struct StudioInstrumentPickerView: View {
     let availableInstruments: [StudioInstrument]
     let instrumentCounts: [StudioInstrument: Int]
@@ -47,9 +47,9 @@ struct StudioInstrumentPickerView: View {
 
     private var subtitle: String {
         if let style {
-            return String(localized: "Tap to add — each part starts with a \(style.title) sound.")
+            return String(localized: "Pick an instrument, then choose how it plays in this \(style.title) song.")
         }
-        return String(localized: "Tap an instrument to add it to the song.")
+        return String(localized: "Pick an instrument, then choose how it plays.")
     }
 
     var body: some View {
@@ -75,6 +75,15 @@ struct StudioInstrumentPickerView: View {
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
+            #if DEBUG
+            .task {
+                // Screenshots: `-ScreenshotOpen add:strings` opens that instrument's style step.
+                guard let name = UserDefaults.standard.string(forKey: "ScreenshotOpen"), name.hasPrefix("add:"),
+                      let instrument = StudioInstrument(rawValue: String(name.dropFirst(4))) else { return }
+                try? await Task.sleep(for: .seconds(0.8))
+                customizing = instrument
+            }
+            #endif
             .navigationDestination(item: $customizing) { instrument in
                 TrackStyleStepView(
                     instrument: instrument,
@@ -101,9 +110,8 @@ struct StudioInstrumentPickerView: View {
         ZStack(alignment: .topTrailing) {
             Button {
                 guard !isFull else { return }
-                onPick(instrument, .recommended(for: instrument, style: style, beatsPerBar: beatsPerBar, timeBottom: timeBottom))
-                haptic(.success)
-                dismiss()
+                haptic(.selection)
+                customizing = instrument
             } label: {
                 VStack(alignment: .leading, spacing: 6) {
                     StudioInstrumentBadge(instrument: instrument, size: 38, isDimmed: isFull)
@@ -129,21 +137,14 @@ struct StudioInstrumentPickerView: View {
             .disabled(isFull)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(accessibilityLabel(instrument, count: count, isFull: isFull, soundName: soundName))
-            .accessibilityHint(isFull ? "" : "Adds the track")
+            .accessibilityHint(isFull ? "" : "Choose how it plays, then add it")
 
             if !isFull {
-                Button {
-                    customizing = instrument
-                } label: {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                        .frame(width: 32, height: 32)
-                        .contentShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .padding(8)
-                .accessibilityLabel("Customize \(instrument.title) before adding")
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(DesignSystem.Colors.textTertiary)
+                    .padding(14)
+                    .accessibilityHidden(true)
             }
         }
     }
@@ -294,7 +295,8 @@ struct TrackStyleStepView: View {
                         Text(instrument.title)
                             .font(DesignSystem.Typography.title)
                             .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        Text("How should it sound and play?")
+                        Text(style.map { String(localized: "How should it play in this \($0.title) song?") }
+                             ?? String(localized: "How should it sound and play?"))
                             .font(DesignSystem.Typography.italicSmall)
                             .foregroundStyle(DesignSystem.Colors.textSecondary)
                     }

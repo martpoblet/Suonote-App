@@ -265,8 +265,29 @@ struct ComposeMeasureView: View {
     @ViewBuilder
     private var measureMenu: some View {
         Section("Bar \(bar + 1)") {
-            Button { perform(String(localized: "Duplicate bar")) { ComposeChordOps.duplicateBar(in: section, bar: bar) } } label: {
-                Label("Duplicate bar", systemImage: "plus.square.on.square")
+            Menu {
+                ForEach(1...3, id: \.self) { times in
+                    Button {
+                        perform(String(localized: "Repeat bars"), toast: String(localized: "Bar \(bar + 1) repeated")) {
+                            ComposeChordOps.repeatBars(in: section, range: bar..<(bar + 1), times: times)
+                        }
+                    } label: {
+                        Text(times == 1 ? String(localized: "Once more") : String(localized: "\(times) more times"))
+                    }
+                    .disabled(!ComposeChordOps.canAdd(times, to: section))
+                }
+            } label: {
+                Label("Repeat bar", systemImage: "repeat.1")
+            }
+            if bar > 0 {
+                Button {
+                    perform(String(localized: "Repeat bars"), toast: String(localized: "Bars 1–\(bar + 1) repeated")) {
+                        ComposeChordOps.repeatBars(in: section, range: 0..<(bar + 1), times: 1)
+                    }
+                } label: {
+                    Label("Repeat bars 1–\(bar + 1)", systemImage: "repeat")
+                }
+                .disabled(!ComposeChordOps.canAdd(bar + 1, to: section))
             }
             Button { perform(String(localized: "Insert bar")) { ComposeChordOps.insertBar(in: section, at: bar) } } label: {
                 Label("Insert bar before", systemImage: "arrow.left.to.line")

@@ -15,7 +15,20 @@ struct StudioAudioTrackView: View {
 
     private var beatsPerBar: Int { max(1, project.timeTop) }
 
-    private var startBar: Int { Int(track.audioStartBeat / Double(beatsPerBar)) + 1 }
+    /// The clip sits on a bar plus an optional nudge (a fraction of a beat
+    /// either way), so a take can be lined up by ear without a new field.
+    private var startBar: Int { max(1, Int((track.audioStartBeat / Double(beatsPerBar)).rounded()) + 1) }
+
+    private var nudgeBeats: Double { track.audioStartBeat - Double((startBar - 1) * beatsPerBar) }
+
+    private var beatSeconds: Double {
+        60.0 / max(1, project.quarterNoteBpm()) * 4.0 / Double(max(1, project.timeBottom))
+    }
+
+    private var nudgeMilliseconds: Int { Int((nudgeBeats * beatSeconds * 1000).rounded()) }
+
+    private static let nudgeStep = 10
+    private static let nudgeLimit = 300
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
@@ -58,12 +71,16 @@ struct StudioAudioTrackView: View {
                     Stepper("Start bar", value: Binding(
                         get: { startBar },
                         set: { newBar in
-                            track.audioStartBeat = Double(max(0, newBar - 1) * beatsPerBar)
+                            track.audioStartBeat = Double(max(0, newBar - 1) * beatsPerBar) + nudgeBeats
                             onChange()
                         }
                     ), in: 1...max(1, project.studioTotalBars))
                     .labelsHidden()
                 }
+
+                Hairline()
+
+                timingRow
             } else {
                 EmptyStateView(
                     icon: "waveform.slash",
@@ -83,6 +100,62 @@ struct StudioAudioTrackView: View {
             }.value
             waveformSamples = samples
         }
+    }
+
+    /// Moves the take a few milliseconds earlier or later against the band.
+    private var timingRow: some View {
+        HStack(spacing: DesignSystem.Spacing.sm) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Timing").eyebrow()
+                Text(nudgeLabel)
+                    .font(DesignSystem.Typography.title3)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                Text("Sounds early or late? Nudge it.")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundStyle(DesignSystem.Colors.textTertiary)
+            }
+            Spacer(minLength: 0)
+            if nudgeMilliseconds != 0 {
+                Button {
+                    setNudge(milliseconds: 0)
+                } label: {
+                    Image(systemName: "arrow.counterclockwise")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Reset")
+                .transition(.opacity)
+            }
+            Stepper("Timing", value: Binding(
+                get: { nudgeMilliseconds },
+                set: { setNudge(milliseconds: $0) }
+            ), in: -Self.nudgeLimit...Self.nudgeLimit, step: Self.nudgeStep)
+            .labelsHidden()
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var nudgeLabel: String {
+        switch nudgeMilliseconds {
+        case 0: return String(localized: "On the grid")
+        case ..<0: return String(localized: "\(abs(nudgeMilliseconds)) ms earlier")
+        default: return String(localized: "\(nudgeMilliseconds) ms later")
+        }
+    }
+
+    private func setNudge(milliseconds: Int) {
+        let clamped = min(Self.nudgeLimit, max(-Self.nudgeLimit, milliseconds))
+        let barStart = Double((startBar - 1) * beatsPerBar)
+        withAnimation(DesignSystem.Animations.quickSpring) {
+            track.audioStartBeat = barStart + Double(clamped) / 1000 / beatSeconds
+        }
+        haptic(.selection)
+        onChange()
     }
 
     private func durationText(_ seconds: TimeInterval) -> String {
