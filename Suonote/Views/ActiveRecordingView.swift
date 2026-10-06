@@ -319,16 +319,28 @@ struct ActiveRecordingView: View {
         VStack(spacing: DesignSystem.Spacing.xl) {
             Spacer(minLength: 0)
             Text("Count-in").eyebrow()
-            Text("\(audioManager.countInBeatsRemaining)")
-                .font(DesignSystem.Typography.hero)
-                .monospacedDigit()
-                .foregroundStyle(DesignSystem.Colors.textPrimary)
-                .contentTransition(.numericText(countsDown: true))
-                .animation(DesignSystem.Animations.quickSpring, value: audioManager.countInBeatsRemaining)
-                .accessibilityLabel("Count-in, \(audioManager.countInBeatsRemaining)")
+            ZStack {
+                RecordClickPulse(
+                    clock: audioManager.beatClock,
+                    beatsPerBar: beatsPerBar,
+                    tint: DesignSystem.Colors.primary,
+                    accent: DesignSystem.Colors.textPrimary
+                )
+                Text("\(audioManager.countInBeatsRemaining)")
+                    .font(DesignSystem.Typography.hero)
+                    .monospacedDigit()
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+                    .contentTransition(.numericText(countsDown: true))
+                    .animation(DesignSystem.Animations.quickSpring, value: audioManager.countInBeatsRemaining)
+                    .accessibilityLabel("Count-in, \(audioManager.countInBeatsRemaining)")
+            }
 
-            let elapsedInBar = (countInBars * beatsPerBar - audioManager.countInBeatsRemaining) % beatsPerBar
-            beatDots(active: elapsedInBar, tint: DesignSystem.Colors.textPrimary)
+            RecordBeatLights(
+                clock: audioManager.beatClock,
+                beatsPerBar: beatsPerBar,
+                tint: DesignSystem.Colors.primary,
+                accent: DesignSystem.Colors.textPrimary
+            )
 
             Text("Recording starts on one.")
                 .font(DesignSystem.Typography.italicSmall)
@@ -376,7 +388,12 @@ struct ActiveRecordingView: View {
                     .font(DesignSystem.Typography.calloutBold)
                     .monospacedDigit()
                     .foregroundStyle(DesignSystem.Colors.textSecondary)
-                beatDots(active: beat, tint: DesignSystem.Colors.primary)
+                RecordBeatLights(
+                    clock: audioManager.beatClock,
+                    beatsPerBar: beatsPerBar,
+                    tint: DesignSystem.Colors.primary,
+                    accent: DesignSystem.Colors.record
+                )
             }
             .accessibilityElement(children: .combine)
 
@@ -409,19 +426,6 @@ struct ActiveRecordingView: View {
             Spacer(minLength: 0)
         }
         .transition(.opacity)
-    }
-
-    private func beatDots(active: Int, tint: Color) -> some View {
-        HStack(spacing: 10) {
-            ForEach(0..<beatsPerBar, id: \.self) { beat in
-                Circle()
-                    .fill(beat <= active ? tint : DesignSystem.Colors.border)
-                    .frame(width: beat == 0 ? 12 : 9, height: beat == 0 ? 12 : 9)
-                    .scaleEffect(beat == active && !reduceMotion ? 1.25 : 1)
-                    .animation(DesignSystem.Animations.quickSpring, value: active)
-            }
-        }
-        .accessibilityHidden(true)
     }
 
     // MARK: Transport

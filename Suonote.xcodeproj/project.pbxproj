@@ -12,6 +12,8 @@
 		11A613932F3D4F4C0055F55B /* SuonoteWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 11A613842F3D4F4B0055F55B /* SuonoteWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		24C0DE012F5A000000000001 /* MusicTheoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24C0DE002F5A000000000001 /* MusicTheoryTests.swift */; };
 		24C0DE112F5A000000000002 /* StudioGeneratorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24C0DE102F5A000000000002 /* StudioGeneratorTests.swift */; };
+		24C0DE312F5A000000000004 /* RecordingAndStructureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24C0DE302F5A000000000004 /* RecordingAndStructureTests.swift */; };
+		24C0DE212F5A000000000003 /* StudioSoundTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24C0DE202F5A000000000003 /* StudioSoundTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -54,6 +56,8 @@
 		24C0DE002F5A000000000001 /* MusicTheoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicTheoryTests.swift; sourceTree = "<group>"; };
 		24C0DE022F5A000000000001 /* SuonoteTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SuonoteTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		24C0DE102F5A000000000002 /* StudioGeneratorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudioGeneratorTests.swift; sourceTree = "<group>"; };
+		24C0DE302F5A000000000004 /* RecordingAndStructureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingAndStructureTests.swift; sourceTree = "<group>"; };
+		24C0DE202F5A000000000003 /* StudioSoundTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudioSoundTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -151,6 +155,8 @@
 			children = (
 				24C0DE002F5A000000000001 /* MusicTheoryTests.swift */,
 				24C0DE102F5A000000000002 /* StudioGeneratorTests.swift */,
+				24C0DE302F5A000000000004 /* RecordingAndStructureTests.swift */,
+				24C0DE202F5A000000000003 /* StudioSoundTests.swift */,
 			);
 			path = SuonoteTests;
 			sourceTree = "<group>";
@@ -313,6 +319,8 @@
 			files = (
 				24C0DE012F5A000000000001 /* MusicTheoryTests.swift in Sources */,
 				24C0DE112F5A000000000002 /* StudioGeneratorTests.swift in Sources */,
+				24C0DE312F5A000000000004 /* RecordingAndStructureTests.swift in Sources */,
+				24C0DE212F5A000000000003 /* StudioSoundTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -78,8 +78,22 @@ enum StudioOfflineRenderer {
                   let recording = project.recordings.first(where: { $0.id == recordingId }),
                   let url = FileManagerUtils.existingRecordingURL(for: recording.fileName),
                   let file = try? AVAudioFile(forReading: url) else { continue }
-            let startFrame = AVAudioFramePosition(max(0, track.audioStartBeat * uiBeatSeconds) * sampleRate)
-            player.scheduleFile(file, at: AVAudioTime(sampleTime: startFrame, atRate: sampleRate), completionHandler: nil)
+            // A take nudged earlier than bar 1 starts partway into its file.
+            let startSeconds = track.audioStartBeat * uiBeatSeconds
+            if startSeconds >= 0 {
+                let startFrame = AVAudioFramePosition(startSeconds * sampleRate)
+                player.scheduleFile(file, at: AVAudioTime(sampleTime: startFrame, atRate: sampleRate), completionHandler: nil)
+            } else {
+                let skip = AVAudioFramePosition(-startSeconds * file.processingFormat.sampleRate)
+                guard skip < file.length else { continue }
+                player.scheduleSegment(
+                    file,
+                    startingFrame: skip,
+                    frameCount: AVAudioFrameCount(file.length - skip),
+                    at: AVAudioTime(sampleTime: 0, atRate: sampleRate),
+                    completionHandler: nil
+                )
+            }
             player.play()
         }
 

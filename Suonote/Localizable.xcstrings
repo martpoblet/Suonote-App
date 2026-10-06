@@ -624,6 +624,16 @@
         }
       }
     },
+    "%lld bars repeated": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld compases repetidos"
+          }
+        }
+      }
+    },
     "%lld bars · %lld%% written": {
       "localizations": {
         "es": {
@@ -710,6 +720,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld tomas vinculadas"
+          }
+        }
+      }
+    },
+    "%lld more times": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld veces más"
+          }
+        }
+      }
+    },
+    "%lld ms earlier": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld ms antes"
+          }
+        }
+      }
+    },
+    "%lld ms later": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld ms después"
           }
         }
       }
@@ -2331,6 +2371,16 @@
         }
       }
     },
+    "Bar %lld repeated": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compás %lld repetido"
+          }
+        }
+      }
+    },
     "Bar %lld · Beat %lld": {
       "localizations": {
         "es": {
@@ -2367,6 +2417,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Compás vaciado"
+          }
+        }
+      }
+    },
+    "Bar repeated": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compás repetido"
           }
         }
       }
@@ -2408,6 +2468,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Compases %lld–%lld"
+          }
+        }
+      }
+    },
+    "Bars 1–%lld repeated": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compases 1–%lld repetidos"
           }
         }
       }
@@ -3018,6 +3088,16 @@
         }
       }
     },
+    "Choose how it plays, then add it": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elegí cómo toca y después agregalo"
+          }
+        }
+      }
+    },
     "Choose style": {
       "localizations": {
         "es": {
@@ -3569,6 +3649,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Continuar"
+          }
+        }
+      }
+    },
+    "Copies the last bars to the end of the section": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copia los últimos compases al final de la sección"
           }
         }
       }
@@ -5776,6 +5866,16 @@
         }
       }
     },
+    "How should it play in this %@ song?": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cómo querés que toque en esta canción %@?"
+          }
+        }
+      }
+    },
     "How should it sound and play?": {
       "localizations": {
         "es": {
@@ -6496,6 +6596,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Largo (40-60)"
+          }
+        }
+      }
+    },
+    "Last %lld bars": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Últimos %lld compases"
+          }
+        }
+      }
+    },
+    "Last bar": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Último compás"
           }
         }
       }
@@ -8178,6 +8298,16 @@
         }
       }
     },
+    "Once more": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una vez más"
+          }
+        }
+      }
+    },
     "One chord per bar": {
       "localizations": {
         "es": {
@@ -8820,6 +8950,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Elige un estilo"
+          }
+        }
+      }
+    },
+    "Pick an instrument, then choose how it plays in this %@ song.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elegí un instrumento y después cómo toca en esta canción %@."
+          }
+        }
+      }
+    },
+    "Pick an instrument, then choose how it plays.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elegí un instrumento y después cómo toca."
           }
         }
       }
@@ -9485,6 +9635,56 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reordenar secciones"
+          }
+        }
+      }
+    },
+    "Repeat": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repetir"
+          }
+        }
+      }
+    },
+    "Repeat at the end": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repetir al final"
+          }
+        }
+      }
+    },
+    "Repeat bar": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repetir compás"
+          }
+        }
+      }
+    },
+    "Repeat bars": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repetir compases"
+          }
+        }
+      }
+    },
+    "Repeat bars 1–%lld": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repetir compases 1–%lld"
           }
         }
       }
@@ -10563,6 +10763,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sonido: %@"
+          }
+        }
+      }
+    },
+    "Sounds early or late? Nudge it.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Suena adelantada o atrasada? Movela un poco."
           }
         }
       }
@@ -11984,6 +12194,16 @@
         }
       }
     },
+    "Timing": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajuste de tiempo"
+          }
+        }
+      }
+    },
     "Title": {
       "localizations": {
         "es": {
@@ -12680,6 +12900,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Redonda"
+          }
+        }
+      }
+    },
+    "Whole section (%lld bars)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toda la sección (%lld compases)"
           }
         }
       }

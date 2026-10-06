@@ -201,11 +201,15 @@ struct StudioTabView: View {
         }
         #if DEBUG
         .task {
-            // App Store screenshots: `-ScreenshotOpen piano` opens that track's editor.
-            guard let name = UserDefaults.standard.string(forKey: "ScreenshotOpen"),
-                  let instrument = StudioInstrument(rawValue: name) else { return }
+            // App Store screenshots: `-ScreenshotOpen piano` opens that track's
+            // editor; `addTrack` (or `add:<instrument>`) opens the add-track sheet.
+            guard let name = UserDefaults.standard.string(forKey: "ScreenshotOpen") else { return }
             try? await Task.sleep(for: .seconds(1.2))
-            editingTrack = project.studioTracks.first { $0.instrument == instrument }
+            if name == "addTrack" || name.hasPrefix("add:") {
+                showingInstrumentPicker = true
+            } else if let instrument = StudioInstrument(rawValue: name) {
+                editingTrack = project.studioTracks.first { $0.instrument == instrument }
+            }
         }
         #endif
         .fullScreenCover(item: $editingTrack, onDismiss: {
@@ -701,12 +705,15 @@ struct StudioTabView: View {
 
     private func addAudioTrack(from recording: Recording) {
         let orderIndex = (project.studioTracks.map(\.orderIndex).max() ?? -1) + 1
+        // A take recorded for a section starts where that section plays.
+        let startBeat = recording.linkedSectionId
+            .flatMap { StudioGenerator.firstStartBeat(ofSection: $0, in: project) } ?? 0
         let track = StudioTrack(
             name: recording.name,
             instrument: .audio,
             orderIndex: orderIndex,
             audioRecordingId: recording.id,
-            audioStartBeat: 0
+            audioStartBeat: startBeat
         )
         track.project = project
         project.studioTracks.append(track)

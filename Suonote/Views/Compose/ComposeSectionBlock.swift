@@ -124,6 +124,11 @@ struct ComposeSectionBlock: View {
             }
             Section {
                 Button { addBar() } label: { Label("Add bar", systemImage: "plus") }
+                Menu {
+                    repeatButtons
+                } label: {
+                    Label("Repeat bars", systemImage: "repeat")
+                }
                 if !section.chordEvents.isEmpty {
                     Button { clearChords() } label: { Label("Clear chords", systemImage: "eraser") }
                 }
@@ -164,6 +169,17 @@ struct ComposeSectionBlock: View {
             }
             .buttonStyle(.plain)
 
+            Menu {
+                repeatButtons
+            } label: {
+                Label("Repeat", systemImage: "repeat")
+                    .font(DesignSystem.Typography.buttonSmall)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+            }
+            .menuOrder(.fixed)
+            .simultaneousGesture(TapGesture().onEnded { haptic(.light) })
+            .accessibilityHint("Copies the last bars to the end of the section")
+
             Spacer(minLength: 0)
 
             if let slot = firstEmptySlot {
@@ -188,6 +204,34 @@ struct ComposeSectionBlock: View {
         return ChordSlot(barIndex: next.bar, beatOffset: next.beat, sectionId: section.id)
     }
 
+    /// Repeat choices for the end of the section. Each copies those bars
+    /// (chords included) right after themselves.
+    @ViewBuilder
+    private var repeatButtons: some View {
+        let options = ComposeRepeatOption.endings(of: section)
+        Section("Repeat at the end") {
+            ForEach(options) { option in
+                Button {
+                    repeatBars(option)
+                } label: {
+                    Label(option.title, systemImage: option.icon)
+                }
+                .disabled(!ComposeChordOps.canAdd(option.range.count, to: section))
+            }
+        }
+    }
+
+    private func repeatBars(_ option: ComposeRepeatOption) {
+        haptic(.light)
+        let count = option.range.count
+        editor.perform(
+            String(localized: "Repeat bars"),
+            toast: count == 1 ? String(localized: "Bar repeated") : String(localized: "\(count) bars repeated")
+        ) {
+            ComposeChordOps.repeatBars(in: section, range: option.range, times: 1)
+        }
+    }
+
     private func addBar() {
         editor.perform(String(localized: "Add bar")) {
             ComposeChordOps.insertBar(in: section, at: section.bars)
@@ -201,6 +245,41 @@ struct ComposeSectionBlock: View {
                 ComposeChordOps.clearBar(in: section, bar: bar, context: editor.modelContext)
             }
         }
+    }
+}
+
+// MARK: - Repeat options
+
+/// A run of bars at the end of a section that can be played again.
+struct ComposeRepeatOption: Identifiable {
+    let title: String
+    let icon: String
+    let range: Range<Int>
+
+    var id: String { "\(range.lowerBound)-\(range.upperBound)" }
+
+    /// The last bar, the last 2 and 4 bars, and the whole section — whichever
+    /// the section is long enough for, without repeats.
+    static func endings(of section: SectionTemplate) -> [ComposeRepeatOption] {
+        let bars = max(1, section.bars)
+        var options: [ComposeRepeatOption] = [
+            ComposeRepeatOption(title: String(localized: "Last bar"), icon: "repeat.1", range: (bars - 1)..<bars)
+        ]
+        for length in [2, 4] where bars >= length {
+            options.append(ComposeRepeatOption(
+                title: String(localized: "Last \(length) bars"),
+                icon: "repeat",
+                range: (bars - length)..<bars
+            ))
+        }
+        if ![1, 2, 4].contains(bars) {
+            options.append(ComposeRepeatOption(
+                title: String(localized: "Whole section (\(bars) bars)"),
+                icon: "arrow.trianglehead.2.clockwise",
+                range: 0..<bars
+            ))
+        }
+        return options
     }
 }
 

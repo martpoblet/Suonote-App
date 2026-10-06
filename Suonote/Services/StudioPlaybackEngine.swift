@@ -317,11 +317,17 @@ final class StudioPlaybackEngine: ObservableObject {
     private func beginPlayback() {
         guard let sequencer else { return }
 
-        scheduleAudioTracks(startBeat: currentBeat)
-        sequencer.currentPositionInBeats = beatClock.uiBeatToSequencerBeat(currentBeat)
+        let sequencerStartBeat = beatClock.uiBeatToSequencerBeat(currentBeat)
+        sequencer.currentPositionInBeats = sequencerStartBeat
 
         do {
             try sequencer.start()
+            // Recordings start on the sequencer's own clock: the host time at
+            // which its first beat renders. Starting them "now" instead let
+            // takes drift a few render cycles against the band.
+            var clockError: NSError?
+            let anchor = sequencer.hostTime(forBeats: sequencerStartBeat, error: &clockError)
+            scheduleAudioTracks(startBeat: currentBeat, anchorHostTime: clockError == nil && anchor > 0 ? anchor : nil)
             isPlaying = true
             installMeterTaps()
             startPlayheadTimer()
@@ -657,39 +663,40 @@ final class StudioPlaybackEngine: ObservableObject {
         }
     }
 
-    private func scheduleAudioTracks(startBeat: Double) {
+    private func scheduleAudioTracks(startBeat: Double, anchorHostTime: UInt64?) {
         // UI beats are timeBottom-based; convert to seconds using the project's BPM + meter.
         let uiBeatSeconds = beatClock.uiBeatSeconds
+        let anchor = anchorHostTime ?? engine.outputNode.lastRenderTime?.hostTime ?? mach_absolute_time()
+        // Never schedule in the past: a late start skips into the file instead,
+        // so the take stays on the beat it belongs to.
+        let earliest = mach_absolute_time() + AVAudioTime.hostTime(forSeconds: 0.005)
 
         for (trackId, info) in audioTrackInfo {
             guard let node = graph?.chains[trackId]?.player else { continue }
-            let offsetSeconds = (startBeat - info.startBeat) * uiBeatSeconds
-            let sampleRate = info.sampleRate
             node.stop()
 
-            if offsetSeconds >= 0 {
-                let startFrame = AVAudioFramePosition(offsetSeconds * sampleRate)
-                let remainingFrames = max(0, info.length - startFrame)
-                guard remainingFrames > 0 else { continue }
-                let startTime = hostTime(after: 0)
-                node.scheduleSegment(
-                    info.file,
-                    startingFrame: startFrame,
-                    frameCount: AVAudioFrameCount(remainingFrames),
-                    at: startTime
-                )
-                play(node, at: startTime)
-            } else {
-                let delay = abs(offsetSeconds)
-                let startTime = hostTime(after: delay)
-                node.scheduleSegment(
-                    info.file,
-                    startingFrame: 0,
-                    frameCount: AVAudioFrameCount(info.length),
-                    at: startTime
-                )
-                play(node, at: startTime)
+            // Seconds into the file at the anchor (negative: the clip starts later).
+            var fileSeconds = (startBeat - info.startBeat) * uiBeatSeconds
+            var startHost = anchor
+            if fileSeconds < 0 {
+                startHost += AVAudioTime.hostTime(forSeconds: -fileSeconds)
+                fileSeconds = 0
             }
+            if startHost < earliest {
+                fileSeconds += AVAudioTime.seconds(forHostTime: earliest) - AVAudioTime.seconds(forHostTime: startHost)
+                startHost = earliest
+            }
+
+            let startFrame = AVAudioFramePosition(fileSeconds * info.sampleRate)
+            let remainingFrames = info.length - startFrame
+            guard remainingFrames > 0 else { continue }
+            node.scheduleSegment(
+                info.file,
+                startingFrame: startFrame,
+                frameCount: AVAudioFrameCount(remainingFrames),
+                at: nil
+            )
+            node.play(at: AVAudioTime(hostTime: startHost))
         }
     }
 
@@ -840,22 +847,6 @@ final class StudioPlaybackEngine: ObservableObject {
         sequencer.rate = 1
     }
 
-
-    private func hostTime(after delaySeconds: Double) -> AVAudioTime? {
-        // Host-time scheduling keeps audio start sample-accurate. Right after
-        // engine start `lastRenderTime` can still be nil; fall back to the
-        // current host clock so future-start tracks keep their offset (A-08).
-        let baseHostTime = engine.outputNode.lastRenderTime?.hostTime ?? mach_absolute_time()
-        return AVAudioTime(hostTime: baseHostTime + AVAudioTime.hostTime(forSeconds: max(0, delaySeconds)))
-    }
-
-    private func play(_ node: AVAudioPlayerNode, at time: AVAudioTime?) {
-        if let time {
-            node.play(at: time)
-        } else {
-            node.play()
-        }
-    }
 
     // MARK: - MIDI Export
 

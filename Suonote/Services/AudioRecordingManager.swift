@@ -17,21 +17,24 @@ class AudioRecordingManager: NSObject, ObservableObject {
     @Published private(set) var countInBeatsRemaining = 0
     /// Beats elapsed since recording actually began (0 = downbeat of bar 1).
     @Published private(set) var recordedBeats = 0
-    /// Seconds captured so far (from the recorder itself, not a UI timer).
+    /// Seconds since the downbeat, on the take's own beat clock.
     @Published private(set) var elapsedTime: TimeInterval = 0
 
-    private var audioRecorder: AVAudioRecorder?
+    /// The beat clock of the take in progress (nil when idle). Views use it
+    /// to draw the visual click in step with the audible one.
+    @Published private(set) var beatClock: RecordBeatClock?
+
+    private var capture: TakeCapture?
     private var audioPlayer: AVAudioPlayer?
-    private var clickPlayer: AVAudioPlayer?
-    private var metronomeTimer: Timer?
+    private var pollTimer: Timer?
+    private var lastBeatIndex = Int.min
+    private var pollTicks = 0
 
     private var project: Project?
-    private var recordingStartTime: Date?
     private var countInBars = 1
     private var clickEnabled = true
     private var currentRecordingType: RecordingType = .voice
     private var currentLinkedSectionId: UUID?
-    private var meterTimer: Timer?
 
     func setup(project: Project) {
         self.project = project
@@ -49,55 +52,47 @@ class AudioRecordingManager: NSObject, ObservableObject {
         guard let project = project, !isBusy else { return }
 
         configureAudioSession(category: .playAndRecord, options: [.defaultToSpeaker, .allowBluetoothA2DP])
+        // Small I/O buffers keep the click tight and the latency low.
+        try? AVAudioSession.sharedInstance().setPreferredIOBufferDuration(0.005)
 
         self.countInBars = max(0, countIn)
         self.clickEnabled = clickEnabled
         self.currentRecordingType = recordingType
         self.currentLinkedSectionId = linkedSectionId
 
-        let fileName = "\(UUID().uuidString).m4a"
-        let url = FileManagerUtils.recordingURL(for: fileName)
-
-        let settings: [String: Any] = [
-            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-            AVSampleRateKey: 44100,
-            AVNumberOfChannelsKey: 1,
-            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
-        ]
-
+        let beatsPerBar = max(1, project.tempoBeatsPerBar)
+        let totalCountInBeats = countInBars * beatsPerBar
+        let capture = TakeCapture(url: FileManagerUtils.recordingURL(for: "\(UUID().uuidString).m4a"))
         do {
-            audioRecorder = try AVAudioRecorder(url: url, settings: settings)
-            audioRecorder?.delegate = self
-            audioRecorder?.isMeteringEnabled = true
-            audioRecorder?.prepareToRecord()
+            // The click and the microphone share one sample clock, so the take
+            // starts exactly on the downbeat after the count-in (see TakeCapture).
+            beatClock = try capture.start(
+                beatSeconds: project.tempoBeatInterval(),
+                beatsPerBar: beatsPerBar,
+                countInBeats: totalCountInBeats,
+                clickWhileRecording: clickEnabled
+            )
         } catch {
             AppLog.audio.error("Failed to start recording: \(String(describing: error))")
-            audioRecorder = nil
+            capture.cancel()
+            beatClock = nil
             return
         }
+        self.capture = capture
 
         recordedBeats = 0
         elapsedTime = 0
-        let totalCountInBeats = countInBars * project.tempoBeatsPerBar
+        lastBeatIndex = Int.min
         countInBeatsRemaining = totalCountInBeats
         isCountingIn = totalCountInBeats > 0
-
-        if totalCountInBeats == 0 {
-            beginCapture()
-        }
-        // The metronome clock drives the count-in (always audible, so the
-        // player can hear where "one" is) and, if requested, the click while
-        // recording. Recording starts exactly on the downbeat after the
-        // count-in — previously the view counted a bar and then the manager
-        // waited another bar, and dismissing during count-in left a recorder
-        // running in the background.
-        startMetronome(countInBeats: totalCountInBeats)
+        isRecording = totalCountInBeats == 0
+        startPolling()
     }
 
     /// Stops and keeps the take. Returns the new `Recording` (nil if nothing was captured).
     @discardableResult
     func stopRecording() -> Recording? {
-        guard let recorder = audioRecorder, let project = project else { return nil }
+        guard let capture, let project = project else { return nil }
 
         // Stopped while still counting in: nothing was captured.
         guard isRecording else {
@@ -105,19 +100,23 @@ class AudioRecordingManager: NSObject, ObservableObject {
             return nil
         }
 
-        let capturedTime = recorder.currentTime
-        recorder.stop()
+        stopPolling()
+        let duration = capture.stop()
         isRecording = false
         isCountingIn = false
-        stopMetronome()
-        stopMeterTimer()
+        resetLevels()
+        self.capture = nil
+        beatClock = nil
 
-        let fallback = Date().timeIntervalSince(recordingStartTime ?? Date())
-        let duration = capturedTime > 0 ? capturedTime : fallback
+        guard duration > 0 else {
+            try? FileManager.default.removeItem(at: capture.url)
+            currentLinkedSectionId = nil
+            return nil
+        }
 
         let recording = Recording(
             name: String(localized: "Take \(project.recordings.count + 1)"),
-            fileName: recorder.url.lastPathComponent,
+            fileName: capture.url.lastPathComponent,
             duration: duration,
             bpm: project.bpm,
             timeTop: project.timeTop,
@@ -132,24 +131,21 @@ class AudioRecordingManager: NSObject, ObservableObject {
         project.updatedAt = Date()
         try? project.modelContext?.save()
         currentLinkedSectionId = nil
-        audioRecorder = nil
         return recording
     }
 
     /// Stops without saving and deletes the partial file.
     func cancelRecording() {
-        stopMetronome()
-        stopMeterTimer()
-        if let recorder = audioRecorder {
-            if recorder.isRecording { recorder.stop() }
-            recorder.deleteRecording()
-        }
-        audioRecorder = nil
+        stopPolling()
+        capture?.cancel()
+        capture = nil
+        beatClock = nil
         isRecording = false
         isCountingIn = false
         countInBeatsRemaining = 0
         recordedBeats = 0
         elapsedTime = 0
+        resetLevels()
         currentLinkedSectionId = nil
     }
 
@@ -180,92 +176,63 @@ class AudioRecordingManager: NSObject, ObservableObject {
         currentlyPlayingRecording = nil
     }
 
-    // MARK: - Capture
+    // MARK: - Beat clock
 
-    private func beginCapture() {
-        guard let recorder = audioRecorder else { return }
-        recorder.record()
-        isCountingIn = false
-        countInBeatsRemaining = 0
-        isRecording = true
-        recordingStartTime = Date()
-        startMeterTimer()
+    /// Follows the beat clock: count-in, the downbeat, beats while rolling,
+    /// input levels, and keeps the click queue topped up.
+    private func startPolling() {
+        stopPolling()
+        pollTicks = 0
+        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.poll() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        pollTimer = timer
+        poll()
     }
 
-    // MARK: - Metronome
+    private func stopPolling() {
+        pollTimer?.invalidate()
+        pollTimer = nil
+    }
 
-    private func startMetronome(countInBeats: Int) {
-        stopMetronome()
-        let interval = project?.tempoBeatInterval() ?? 0.5
-        let beatsPerBar = max(1, project?.tempoBeatsPerBar ?? (project?.timeTop ?? 4))
-        var beatCount = 0
+    private func poll() {
+        guard let capture, let clock = beatClock else { return }
+        let heard = clock.heardBeats()
+        capture.scheduleClicks(throughSeconds: max(0, heard) * clock.beatSeconds + 3)
 
-        let tick: () -> Void = { [weak self] in
-            guard let self else { return }
-            let isAccent = beatCount % beatsPerBar == 0
-
-            if beatCount < countInBeats {
-                // Count-in: always click so "one" is unmistakable.
-                self.playClickSound(isAccent: isAccent)
-                self.countInBeatsRemaining = countInBeats - beatCount
+        let beatIndex = Int(heard.rounded(.down))
+        if beatIndex >= 0, beatIndex != lastBeatIndex {
+            lastBeatIndex = beatIndex
+            if beatIndex < clock.countInBeats {
+                countInBeatsRemaining = clock.countInBeats - beatIndex
             } else {
-                if beatCount == countInBeats, !self.isRecording {
-                    self.beginCapture()
+                if !isRecording {
+                    isCountingIn = false
+                    countInBeatsRemaining = 0
+                    isRecording = true
                 }
-                if self.clickEnabled {
-                    self.playClickSound(isAccent: isAccent)
-                }
-                self.recordedBeats = beatCount - countInBeats
+                recordedBeats = beatIndex - clock.countInBeats
                 // Haptic pulse only alongside the click (taps can bleed into the mic).
-                if self.isRecording && self.clickEnabled {
+                if clickEnabled {
+                    let isAccent = recordedBeats % clock.beatsPerBar == 0
                     UIImpactFeedbackGenerator(style: isAccent ? .medium : .light).impactOccurred(intensity: isAccent ? 0.8 : 0.4)
                 }
             }
-            beatCount += 1
         }
 
-        // First beat sounds immediately; the rest follow on the grid.
-        tick()
-        let timer = Timer(timeInterval: interval, repeats: true) { _ in
-            MainActor.assumeIsolated { tick() }
+        // Levels and the clock readout at 20 Hz, like the old meter timer.
+        pollTicks += 1
+        guard pollTicks % 3 == 0 else { return }
+        if isRecording {
+            let levels = capture.currentLevels
+            currentMeterLevel = levels.rms
+            currentPeakLevel = levels.peak
+            elapsedTime = max(0, heard - Double(clock.countInBeats)) * clock.beatSeconds
         }
-        RunLoop.main.add(timer, forMode: .common)
-        metronomeTimer = timer
     }
 
-    private func stopMetronome() {
-        metronomeTimer?.invalidate()
-        metronomeTimer = nil
-    }
-
-    private func playClickSound(isAccent: Bool) {
-        MetronomeClickPlayer.shared.play(accent: isAccent)
-    }
-
-    private func startMeterTimer() {
-        meterTimer?.invalidate()
-        let timer = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.updateMeters() }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        meterTimer = timer
-    }
-
-    private func updateMeters() {
-        guard let recorder = audioRecorder, recorder.isRecording else { return }
-        recorder.updateMeters()
-        // Convert dB (-160...0) to normalized 0...1
-        let minDb: Float = -60
-        let average = max(0, (recorder.averagePower(forChannel: 0) - minDb) / (-minDb))
-        let peak = max(0, (recorder.peakPower(forChannel: 0) - minDb) / (-minDb))
-        currentMeterLevel = min(1, average)
-        currentPeakLevel = min(1, peak)
-        elapsedTime = recorder.currentTime
-    }
-
-    private func stopMeterTimer() {
-        meterTimer?.invalidate()
-        meterTimer = nil
+    private func resetLevels() {
         currentMeterLevel = 0
         currentPeakLevel = 0
     }
@@ -280,14 +247,6 @@ class AudioRecordingManager: NSObject, ObservableObject {
             try session.setActive(true)
         } catch {
             AppLog.audio.error("Failed to configure audio session: \(String(describing: error))")
-        }
-    }
-}
-
-extension AudioRecordingManager: AVAudioRecorderDelegate {
-    func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
-        if !flag {
-            AppLog.audio.error("Recording failed")
         }
     }
 }

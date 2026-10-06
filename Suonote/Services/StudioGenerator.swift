@@ -641,6 +641,11 @@ struct StudioGenerator {
         return ranges
     }
 
+    /// Timeline beat where a section first plays in the arrangement.
+    static func firstStartBeat(ofSection sectionId: UUID, in project: Project) -> Double? {
+        sectionRanges(for: project).first { $0.sectionId == sectionId }?.startBeat
+    }
+
     private static func removeNotes(
         in ranges: [SectionRange],
         from track: StudioTrack,
