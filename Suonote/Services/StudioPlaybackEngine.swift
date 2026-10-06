@@ -157,11 +157,11 @@ final class StudioPlaybackEngine: ObservableObject {
             forName: AVAudioSession.interruptionNotification,
             object: nil,
             queue: .main
-        ) { notification in
+        ) { [weak self] notification in
             // Extract Sendable values before hopping to the main actor.
             let typeValue = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
             let optionsValue = notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt
-            Task { @MainActor [weak self] in
+            Task { @MainActor in
                 self?.handleInterruption(typeValue: typeValue, optionsValue: optionsValue)
             }
         }
@@ -171,9 +171,9 @@ final class StudioPlaybackEngine: ObservableObject {
             forName: AVAudioSession.routeChangeNotification,
             object: nil,
             queue: .main
-        ) { notification in
+        ) { [weak self] notification in
             let reasonValue = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
-            Task { @MainActor [weak self] in
+            Task { @MainActor in
                 self?.handleRouteChange(reasonValue: reasonValue)
             }
         }
@@ -321,13 +321,13 @@ final class StudioPlaybackEngine: ObservableObject {
         sequencer.currentPositionInBeats = sequencerStartBeat
 
         do {
+            // Recordings are anchored to the moment the sequencer starts; a
+            // take scheduled a moment later skips ahead to stay on its beat.
+            // (Don't ask the sequencer for `hostTime(forBeats:)` here: right
+            // after `start()` it raises an Objective-C exception, -10852.)
+            let anchor = mach_absolute_time()
             try sequencer.start()
-            // Recordings start on the sequencer's own clock: the host time at
-            // which its first beat renders. Starting them "now" instead let
-            // takes drift a few render cycles against the band.
-            var clockError: NSError?
-            let anchor = sequencer.hostTime(forBeats: sequencerStartBeat, error: &clockError)
-            scheduleAudioTracks(startBeat: currentBeat, anchorHostTime: clockError == nil && anchor > 0 ? anchor : nil)
+            scheduleAudioTracks(startBeat: currentBeat, anchorHostTime: anchor)
             isPlaying = true
             installMeterTaps()
             startPlayheadTimer()

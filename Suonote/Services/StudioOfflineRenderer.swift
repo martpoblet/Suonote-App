@@ -78,22 +78,7 @@ enum StudioOfflineRenderer {
                   let recording = project.recordings.first(where: { $0.id == recordingId }),
                   let url = FileManagerUtils.existingRecordingURL(for: recording.fileName),
                   let file = try? AVAudioFile(forReading: url) else { continue }
-            // A take nudged earlier than bar 1 starts partway into its file.
-            let startSeconds = track.audioStartBeat * uiBeatSeconds
-            if startSeconds >= 0 {
-                let startFrame = AVAudioFramePosition(startSeconds * sampleRate)
-                player.scheduleFile(file, at: AVAudioTime(sampleTime: startFrame, atRate: sampleRate), completionHandler: nil)
-            } else {
-                let skip = AVAudioFramePosition(-startSeconds * file.processingFormat.sampleRate)
-                guard skip < file.length else { continue }
-                player.scheduleSegment(
-                    file,
-                    startingFrame: skip,
-                    frameCount: AVAudioFrameCount(file.length - skip),
-                    at: AVAudioTime(sampleTime: 0, atRate: sampleRate),
-                    completionHandler: nil
-                )
-            }
+            guard schedule(file, on: player, startSeconds: track.audioStartBeat * uiBeatSeconds, sampleRate: sampleRate) else { continue }
             player.play()
         }
 
@@ -181,5 +166,32 @@ enum StudioOfflineRenderer {
         progress?(1)
         AppLog.studio.info("Rendered mix to \(url.lastPathComponent)")
         return url
+    }
+}
+
+extension StudioOfflineRenderer {
+    /// Queues a take at its place in the song. A take nudged earlier than
+    /// bar 1 starts partway into its file. Returns false if nothing is left.
+    fileprivate static func schedule(
+        _ file: AVAudioFile,
+        on player: AVAudioPlayerNode,
+        startSeconds: Double,
+        sampleRate: Double
+    ) -> Bool {
+        if startSeconds >= 0 {
+            let startFrame = AVAudioFramePosition(startSeconds * sampleRate)
+            player.scheduleFile(file, at: AVAudioTime(sampleTime: startFrame, atRate: sampleRate), completionHandler: nil)
+            return true
+        }
+        let skip = AVAudioFramePosition(-startSeconds * file.processingFormat.sampleRate)
+        guard skip < file.length else { return false }
+        player.scheduleSegment(
+            file,
+            startingFrame: skip,
+            frameCount: AVAudioFrameCount(file.length - skip),
+            at: AVAudioTime(sampleTime: 0, atRate: sampleRate),
+            completionHandler: nil
+        )
+        return true
     }
 }
