@@ -118,8 +118,18 @@ struct StudioAudioTrackView: View {
             }
             Spacer(minLength: 0)
             if nudgeMilliseconds != 0 {
-                Button("Reset") { setNudge(milliseconds: 0) }
-                    .buttonStyle(OutlineButtonStyle(compact: true))
+                Button {
+                    setNudge(milliseconds: 0)
+                } label: {
+                    Image(systemName: "arrow.counterclockwise")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Reset")
+                .transition(.opacity)
             }
             Stepper("Timing", value: Binding(
                 get: { nudgeMilliseconds },

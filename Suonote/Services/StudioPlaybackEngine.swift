@@ -36,7 +36,7 @@ final class StudioPlaybackEngine: ObservableObject {
 
     private struct AudioTrackInfo {
         let url: URL
-        let startBeat: Double
+        var startBeat: Double
         let file: AVAudioFile
         let format: AVAudioFormat
         let sampleRate: Double
@@ -161,8 +161,9 @@ final class StudioPlaybackEngine: ObservableObject {
             // Extract Sendable values before hopping to the main actor.
             let typeValue = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
             let optionsValue = notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt
+            let owner = self
             Task { @MainActor in
-                self?.handleInterruption(typeValue: typeValue, optionsValue: optionsValue)
+                owner?.handleInterruption(typeValue: typeValue, optionsValue: optionsValue)
             }
         }
         sessionObservers.append(interruptionObserver)
@@ -173,8 +174,9 @@ final class StudioPlaybackEngine: ObservableObject {
             queue: .main
         ) { [weak self] notification in
             let reasonValue = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
+            let owner = self
             Task { @MainActor in
-                self?.handleRouteChange(reasonValue: reasonValue)
+                owner?.handleRouteChange(reasonValue: reasonValue)
             }
         }
         sessionObservers.append(routeChangeObserver)
@@ -186,6 +188,7 @@ final class StudioPlaybackEngine: ObservableObject {
 
         switch type {
         case .began:
+            Self.playbackSessionActive = false
             wasPlayingBeforeInterruption = isPlaying
             if isPlaying {
                 pause()
@@ -321,12 +324,17 @@ final class StudioPlaybackEngine: ObservableObject {
         sequencer.currentPositionInBeats = sequencerStartBeat
 
         do {
+            playbackGeneration += 1
+            bandClock = nil
             let startPosition = sequencer.currentPositionInSeconds
+            // Listen before starting: the first click renders right away.
+            if !audioTrackInfo.isEmpty {
+                listenForFirstClick(startBeat: currentBeat, requestedAt: mach_absolute_time(), generation: playbackGeneration)
+            }
             try sequencer.start()
             isPlaying = true
             installMeterTaps()
             startPlayheadTimer()
-            playbackGeneration += 1
             if !audioTrackInfo.isEmpty {
                 alignRecordings(to: sequencer, from: startPosition, startBeat: currentBeat, generation: playbackGeneration)
             }
@@ -357,12 +365,90 @@ final class StudioPlaybackEngine: ObservableObject {
                 }
                 try? await Task.sleep(for: .milliseconds(2))
             }
-            guard let self, self.isPlaying, self.playbackGeneration == generation else { return }
+            // The click already gave the real clock: nothing to guess.
+            guard let self, self.isPlaying, self.playbackGeneration == generation, self.bandClock == nil else { return }
             if anchor == nil {
                 AppLog.studio.error("Sequencer clock didn't move; starting recordings unaligned")
             }
-            self.scheduleAudioTracks(startBeat: startBeat, anchorHostTime: anchor ?? requested)
+            let estimate = BandClock(hostTime: anchor ?? requested, uiBeat: startBeat, isMeasured: false)
+            self.bandClock = estimate
+            self.scheduleAudioTracks(startBeat: startBeat, anchorHostTime: estimate.hostTime)
         }
+    }
+
+    // MARK: - Band clock
+
+    /// Ties a beat of the band to the host time it renders at.
+    private struct BandClock {
+        let hostTime: UInt64
+        let uiBeat: Double
+        /// True once taken from the click actually rendering, not estimated.
+        let isMeasured: Bool
+    }
+
+    /// The running band's clock, used to start and move recordings.
+    private var bandClock: BandClock?
+
+    /// Watches the click track (always sequenced, even when muted) for the
+    /// first beat after a start. Its render time is the band's real clock,
+    /// whatever delay the sequencer adds when it starts; recordings are then
+    /// (re)started to match it.
+    private func listenForFirstClick(startBeat: Double, requestedAt: UInt64, generation: Int) {
+        guard let sampler = metronomeSampler else { return }
+        let format = sampler.outputFormat(forBus: 0)
+        guard format.sampleRate > 0, format.channelCount > 0 else { return }
+        let sampleRate = format.sampleRate
+        let once = FirstClickLatch()
+        sampler.removeTap(onBus: 0)
+        sampler.installTap(onBus: 0, bufferSize: 512, format: format) { [weak self] buffer, when in
+            guard when.isHostTimeValid, let channel = buffer.floatChannelData?[0] else { return }
+            guard let onset = once.onset(in: channel, frames: Int(buffer.frameLength)) else { return }
+            let hostTime = when.hostTime + AVAudioTime.hostTime(forSeconds: Double(onset) / sampleRate)
+            let owner = self
+            Task { @MainActor in
+                owner?.firstClickHeard(atHostTime: hostTime, startBeat: startBeat, requestedAt: requestedAt, generation: generation)
+            }
+        }
+    }
+
+    private func firstClickHeard(atHostTime hostTime: UInt64, startBeat: Double, requestedAt: UInt64, generation: Int) {
+        metronomeSampler?.removeTap(onBus: 0)
+        guard isPlaying, playbackGeneration == generation else { return }
+        // Clicks fall on whole beats. The start delay is far less than half a
+        // beat, so the beat due at that moment, rounded, is the one heard.
+        let sinceRequest = AVAudioTime.seconds(forHostTime: hostTime) - AVAudioTime.seconds(forHostTime: requestedAt)
+        let due = (startBeat + sinceRequest / beatClock.uiBeatSeconds).rounded()
+        let clickBeat = max(due, (startBeat - 0.001).rounded(.up))
+        let measured = BandClock(hostTime: hostTime, uiBeat: clickBeat, isMeasured: true)
+        let previous = bandClock
+        bandClock = measured
+        // Restart takes only if the estimate they started on was off.
+        if let previous {
+            let drift = abs(Self.seconds(from: previous, to: measured, beatSeconds: beatClock.uiBeatSeconds))
+            guard drift > 0.002 else { return }
+            AppLog.studio.info("Recordings re-aligned to the band by \(Int(drift * 1000)) ms")
+        }
+        scheduleAudioTracks(startBeat: measured.uiBeat, anchorHostTime: measured.hostTime)
+    }
+
+    /// How far `b`'s clock is from `a`'s, in seconds (positive: `b` later).
+    private static func seconds(from a: BandClock, to b: BandClock, beatSeconds: Double) -> Double {
+        let aSeconds = AVAudioTime.seconds(forHostTime: a.hostTime) - a.uiBeat * beatSeconds
+        let bSeconds = AVAudioTime.seconds(forHostTime: b.hostTime) - b.uiBeat * beatSeconds
+        return bSeconds - aSeconds
+    }
+
+    /// A recording's start bar or nudge changed: move just that take. The
+    /// band keeps playing (rebuilding the sequence used to silence it).
+    func audioClipMoved(_ track: StudioTrack) {
+        guard var info = audioTrackInfo[track.id] else {
+            needsSequenceRebuild = true
+            return
+        }
+        info.startBeat = track.audioStartBeat
+        audioTrackInfo[track.id] = info
+        guard isPlaying, let bandClock else { return }
+        scheduleAudioTracks(startBeat: bandClock.uiBeat, anchorHostTime: bandClock.hostTime, only: track.id)
     }
 
     // MARK: - Count-in (A-04)
@@ -467,6 +553,8 @@ final class StudioPlaybackEngine: ObservableObject {
         cancelCountIn()
         stopPlayheadTimer()
         removeMeterTaps()
+        metronomeSampler?.removeTap(onBus: 0)
+        bandClock = nil
         isPlaying = false
         
         if resetPosition {
@@ -524,6 +612,11 @@ final class StudioPlaybackEngine: ObservableObject {
         // A sound/instrument change needs new nodes: rebuild now if playing
         // (brief restart), otherwise on the next play.
         let signature = Self.graphSignature(for: resolvedTracks(from: project), style: project.studioStyle)
+        if track.instrument.isAudio, signature == graphSignature {
+            updateBeatClock(for: project)
+            audioClipMoved(track)
+            return
+        }
         guard signature == graphSignature, !track.instrument.isAudio else {
             if isPlaying {
                 rebuildSequenceIncremental(project: project)
@@ -566,12 +659,23 @@ final class StudioPlaybackEngine: ObservableObject {
         project.studioTracks.sorted { $0.orderIndex < $1.orderIndex }
     }
 
+    /// Whether this engine already set up and activated the playback session.
+    private static var playbackSessionActive = false
+
     private func configureAudioSession() {
+        // Setting the category or activating blocks the main thread for a
+        // moment, so only do it when something (a recording) changed it.
+        let current = AVAudioSession.sharedInstance()
+        if Self.playbackSessionActive, current.category == .playback,
+           current.mode == .default, current.categoryOptions == [.mixWithOthers] {
+            return
+        }
         Self.audioSessionQueue.sync {
             let session = AVAudioSession.sharedInstance()
             do {
                 try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
                 try session.setActive(true)
+                Self.playbackSessionActive = true
             } catch {
                 AppLog.audio.error("Failed to configure audio session: \(String(describing: error))")
             }
@@ -692,7 +796,7 @@ final class StudioPlaybackEngine: ObservableObject {
         }
     }
 
-    private func scheduleAudioTracks(startBeat: Double, anchorHostTime: UInt64?) {
+    private func scheduleAudioTracks(startBeat: Double, anchorHostTime: UInt64?, only trackId: UUID? = nil) {
         // UI beats are timeBottom-based; convert to seconds using the project's BPM + meter.
         let uiBeatSeconds = beatClock.uiBeatSeconds
         let anchor = anchorHostTime ?? engine.outputNode.lastRenderTime?.hostTime ?? mach_absolute_time()
@@ -700,8 +804,8 @@ final class StudioPlaybackEngine: ObservableObject {
         // so the take stays on the beat it belongs to.
         let earliest = mach_absolute_time() + AVAudioTime.hostTime(forSeconds: 0.005)
 
-        for (trackId, info) in audioTrackInfo {
-            guard let node = graph?.chains[trackId]?.player else { continue }
+        for (id, info) in audioTrackInfo where trackId == nil || id == trackId {
+            guard let node = graph?.chains[id]?.player else { continue }
             node.stop()
 
             // Seconds into the file at the anchor (negative: the clip starts later).
@@ -983,5 +1087,42 @@ final class StudioPlaybackEngine: ObservableObject {
             }
         }
         MusicTrackNewMetaEvent(track, 0, event)
+    }
+}
+
+/// Finds the first click after a start, once, from the audio thread. A
+/// click only counts after a stretch of silence, so the tail of a click from
+/// before a restart isn't mistaken for the new downbeat.
+nonisolated final class FirstClickLatch: @unchecked Sendable {
+    private let lock = NSLock()
+    private var found = false
+    private var isFirstBuffer = true
+    /// Starts "quiet": playback starts from silence unless a tail is ringing.
+    private var quietFrames = FirstClickLatch.quietNeeded
+
+    private static let threshold: Float = 0.002
+    private static let quietNeeded = 256
+
+    func onset(in channel: UnsafePointer<Float>, frames: Int) -> Int? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !found else { return nil }
+        if isFirstBuffer {
+            isFirstBuffer = false
+            // Sound already playing when listening began is an old tail.
+            if frames > 0, abs(channel[0]) > Self.threshold { quietFrames = 0 }
+        }
+        for index in 0..<frames {
+            if abs(channel[index]) > Self.threshold {
+                if quietFrames >= Self.quietNeeded {
+                    found = true
+                    return index
+                }
+                quietFrames = 0
+            } else {
+                quietFrames += 1
+            }
+        }
+        return nil
     }
 }

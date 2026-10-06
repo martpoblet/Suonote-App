@@ -40,8 +40,11 @@ class AudioRecordingManager: NSObject, ObservableObject {
         self.project = project
     }
 
-    /// Whether a take is armed (counting in) or rolling.
-    var isBusy: Bool { isRecording || isCountingIn }
+    /// Set while the audio session is being prepared for a take.
+    private var pendingStart: UUID?
+
+    /// Whether a take is being prepared, armed (counting in) or rolling.
+    var isBusy: Bool { isRecording || isCountingIn || pendingStart != nil }
 
     func startRecording(
         countIn: Int,
@@ -49,12 +52,27 @@ class AudioRecordingManager: NSObject, ObservableObject {
         recordingType: RecordingType = .voice,
         linkedSectionId: UUID? = nil
     ) {
-        guard let project = project, !isBusy else { return }
+        guard project != nil, !isBusy else { return }
+        let token = UUID()
+        pendingStart = token
+        // The session is set up off the main thread (it can block for a
+        // moment); the take starts once it's ready, unless it was cancelled.
+        Task { @MainActor in
+            // Small I/O buffers keep the click tight and the latency low.
+            await Self.configureSession(.playAndRecord, options: [.defaultToSpeaker, .allowBluetoothA2DP], ioBufferDuration: 0.005)
+            guard self.pendingStart == token else { return }
+            self.pendingStart = nil
+            self.beginTake(countIn: countIn, clickEnabled: clickEnabled, recordingType: recordingType, linkedSectionId: linkedSectionId)
+        }
+    }
 
-        configureAudioSession(category: .playAndRecord, options: [.defaultToSpeaker, .allowBluetoothA2DP])
-        // Small I/O buffers keep the click tight and the latency low.
-        try? AVAudioSession.sharedInstance().setPreferredIOBufferDuration(0.005)
-
+    private func beginTake(
+        countIn: Int,
+        clickEnabled: Bool,
+        recordingType: RecordingType,
+        linkedSectionId: UUID?
+    ) {
+        guard let project else { return }
         self.countInBars = max(0, countIn)
         self.clickEnabled = clickEnabled
         self.currentRecordingType = recordingType
@@ -136,6 +154,7 @@ class AudioRecordingManager: NSObject, ObservableObject {
 
     /// Stops without saving and deletes the partial file.
     func cancelRecording() {
+        pendingStart = nil
         stopPolling()
         capture?.cancel()
         capture = nil
@@ -150,8 +169,13 @@ class AudioRecordingManager: NSObject, ObservableObject {
     }
 
     func playRecording(_ recording: Recording) {
-        configureAudioSession(category: .playback, options: [.mixWithOthers])
+        Task { @MainActor in
+            await Self.configureSession(.playback, options: [.mixWithOthers])
+            self.startPlayback(of: recording)
+        }
+    }
 
+    private func startPlayback(of recording: Recording) {
         guard let url = FileManagerUtils.existingRecordingURL(for: recording.fileName) else {
             AppLog.audio.error("Recording file not found for: \(recording.fileName)")
             return
@@ -237,16 +261,29 @@ class AudioRecordingManager: NSObject, ObservableObject {
         currentPeakLevel = 0
     }
 
-    private func configureAudioSession(
-        category: AVAudioSession.Category,
-        options: AVAudioSession.CategoryOptions
-    ) {
-        let session = AVAudioSession.sharedInstance()
-        do {
-            try session.setCategory(category, mode: .default, options: options)
-            try session.setActive(true)
-        } catch {
-            AppLog.audio.error("Failed to configure audio session: \(String(describing: error))")
+    nonisolated private static let sessionLog = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Suonote", category: "audio")
+
+    /// Sets and activates the audio session on a background queue: doing it
+    /// on the main thread can stall the UI while the hardware switches.
+    nonisolated private static func configureSession(
+        _ category: AVAudioSession.Category,
+        options: AVAudioSession.CategoryOptions,
+        ioBufferDuration: TimeInterval? = nil
+    ) async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let session = AVAudioSession.sharedInstance()
+                do {
+                    try session.setCategory(category, mode: .default, options: options)
+                    if let ioBufferDuration {
+                        try? session.setPreferredIOBufferDuration(ioBufferDuration)
+                    }
+                    try session.setActive(true)
+                } catch {
+                    sessionLog.error("Failed to configure audio session: \(String(describing: error))")
+                }
+                continuation.resume()
+            }
         }
     }
 }
