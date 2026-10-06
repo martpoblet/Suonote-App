@@ -321,18 +321,47 @@ final class StudioPlaybackEngine: ObservableObject {
         sequencer.currentPositionInBeats = sequencerStartBeat
 
         do {
-            // Recordings are anchored to the moment the sequencer starts; a
-            // take scheduled a moment later skips ahead to stay on its beat.
-            // (Don't ask the sequencer for `hostTime(forBeats:)` here: right
-            // after `start()` it raises an Objective-C exception, -10852.)
-            let anchor = mach_absolute_time()
+            let startPosition = sequencer.currentPositionInSeconds
             try sequencer.start()
-            scheduleAudioTracks(startBeat: currentBeat, anchorHostTime: anchor)
             isPlaying = true
             installMeterTaps()
             startPlayheadTimer()
+            playbackGeneration += 1
+            if !audioTrackInfo.isEmpty {
+                alignRecordings(to: sequencer, from: startPosition, startBeat: currentBeat, generation: playbackGeneration)
+            }
         } catch {
             AppLog.studio.error("Failed to start sequencer: \(String(describing: error))")
+        }
+    }
+
+    /// Bumped on every start, so a late alignment never touches a newer run.
+    private var playbackGeneration = 0
+
+    /// Starts recordings on the band's real clock. The sequencer begins a
+    /// moment after `start()` returns, so takes started "now" ran ahead of
+    /// the band. Its position is watched until it moves; the take is then
+    /// started from the matching point in its file. (`hostTime(forBeats:)`
+    /// can't be used: right after `start()` it raises -10852.)
+    private func alignRecordings(to sequencer: AVAudioSequencer, from startPosition: TimeInterval, startBeat: Double, generation: Int) {
+        let requested = mach_absolute_time()
+        Task { @MainActor [weak self] in
+            var anchor: UInt64?
+            for _ in 0..<150 {
+                guard let self, self.isPlaying, self.playbackGeneration == generation else { return }
+                let elapsed = sequencer.currentPositionInSeconds - startPosition
+                if elapsed > 0.000_5 {
+                    // The band's start beat sounded `elapsed` seconds ago.
+                    anchor = mach_absolute_time() - AVAudioTime.hostTime(forSeconds: elapsed)
+                    break
+                }
+                try? await Task.sleep(for: .milliseconds(2))
+            }
+            guard let self, self.isPlaying, self.playbackGeneration == generation else { return }
+            if anchor == nil {
+                AppLog.studio.error("Sequencer clock didn't move; starting recordings unaligned")
+            }
+            self.scheduleAudioTracks(startBeat: startBeat, anchorHostTime: anchor ?? requested)
         }
     }
 
