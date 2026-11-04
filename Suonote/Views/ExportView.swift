@@ -251,14 +251,7 @@ struct ExportView: View {
         }
     }
 
-    private var safeFileStem: String {
-        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
-        let stem = project.title
-            .replacingOccurrences(of: " ", with: "_")
-            .unicodeScalars.filter { allowed.contains($0) }
-        let result = String(String.UnicodeScalarView(stem))
-        return result.isEmpty ? "Song" : result
-    }
+    private var safeFileStem: String { ExportFileName.stem(for: project.title) }
 
     private func makeFiles(for format: ExportFormat) -> [URL] {
         switch format {
@@ -274,9 +267,16 @@ struct ExportView: View {
             return takeURLs
         case .pdf:
             let data = ChordChartPDFGenerator.generatePDF(for: project)
+            guard !data.isEmpty else {
+                AppLog.general.error("PDF export produced no data")
+                return []
+            }
             return write(data, name: "\(safeFileStem)_chords.pdf")
         case .projectFile:
-            guard let data = SuonoteProjectExchange.export(project: project) else { return [] }
+            guard let data = SuonoteProjectExchange.export(project: project) else {
+                AppLog.general.error("Suonote file export produced no data")
+                return []
+            }
             return write(data, name: "\(safeFileStem).suonote")
         case .studioMix:
             return []   // rendered asynchronously in exportMix()
@@ -317,20 +317,85 @@ struct ShareSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
+// MARK: - File names
+
+/// File-name sanitising shared by every exporter: titles may contain `/`, `:`
+/// and other characters that are not valid in a file name.
+enum ExportFileName {
+    static func stem(for title: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+        let scalars = title
+            .replacingOccurrences(of: " ", with: "_")
+            .unicodeScalars.filter { allowed.contains($0) }
+        let result = String(String.UnicodeScalarView(scalars.prefix(80)))
+        return result.isEmpty ? "Song" : result
+    }
+}
+
+// MARK: - MIDI tick math
+
+/// Pure tick math for the chord and bass tracks. Chord positions are relative
+/// to the start of their section (`sectionStartTick`); MIDI delta times are
+/// measured from the previous event on the same track (`lastEventTick`).
+struct MIDITickClock {
+    static let ticksPerQuarter: Double = 480
+
+    let beatsPerBar: Int
+    let ticksPerGridBeat: Double
+    /// Absolute tick where the current section begins.
+    private(set) var sectionStartTick: Double = 0
+    /// Absolute tick of the last event written to the track.
+    private(set) var lastEventTick: Double = 0
+
+    init(timeTop: Int, timeBottom: Int) {
+        beatsPerBar = max(1, timeTop)
+        ticksPerGridBeat = MIDITickClock.ticksPerQuarter * (4.0 / Double(max(1, timeBottom)))
+    }
+
+    /// Places a note inside the current section. Returns the delta to write
+    /// before its note-on and the note length (the delta before its note-off).
+    mutating func place(barIndex: Int, beatOffset: Double, duration: Double) -> (delta: UInt32, length: UInt32) {
+        let gridBeats = Double(max(0, barIndex) * beatsPerBar) + max(0, beatOffset)
+        let absoluteStart = (sectionStartTick + gridBeats * ticksPerGridBeat).rounded()
+        // Overlapping chords are pushed to the previous note-off (delta never negative).
+        let delta = max(0, absoluteStart - lastEventTick)
+        let length = (max(0, duration) * ticksPerGridBeat).rounded()
+        lastEventTick += delta + length
+        return (MIDITickClock.clamp(delta), MIDITickClock.clamp(length))
+    }
+
+    /// Moves to the next section: it starts where this one ends, regardless
+    /// of where its last chord finished.
+    mutating func finishSection(bars: Int) {
+        sectionStartTick += (Double(max(0, bars) * beatsPerBar) * ticksPerGridBeat).rounded()
+    }
+
+    /// Delta for the end-of-track event so every track ends with the song.
+    var endOfTrackDelta: UInt32 {
+        MIDITickClock.clamp(max(0, sectionStartTick - lastEventTick))
+    }
+
+    /// Variable-length quantities hold at most 0x0FFFFFFF.
+    private static func clamp(_ ticks: Double) -> UInt32 {
+        guard ticks.isFinite, ticks > 0 else { return 0 }
+        return UInt32(min(ticks, 268_435_455))
+    }
+}
+
 // MARK: - MIDI Exporter
 
 class MIDIExporter {
     func exportProject(_ project: Project) -> URL? {
         let midiData = generateMIDIData(project)
         
-        let fileName = "\(project.title.replacingOccurrences(of: " ", with: "_")).mid"
+        let fileName = "\(ExportFileName.stem(for: project.title)).mid"
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
         
         do {
-            try midiData.write(to: tempURL)
+            try midiData.write(to: tempURL, options: .atomic)
             return tempURL
         } catch {
-            print("Error writing MIDI file: \(error)")
+            AppLog.general.error("Error writing MIDI file: \(error.localizedDescription)")
             return nil
         }
     }
@@ -377,13 +442,20 @@ class MIDIExporter {
         
         // Track name
         data.append(contentsOf: [0x00, 0xFF, 0x03])
-        let titleBytes = project.title.data(using: .utf8) ?? Data()
+        // Meta length is a variable-length quantity: keep it under 128 bytes
+        // (single byte) and never cut a UTF-8 character in half.
+        var titleBytes = Data()
+        for scalar in project.title.unicodeScalars {
+            let scalarBytes = Data(String(scalar).utf8)
+            if titleBytes.count + scalarBytes.count > 127 { break }
+            titleBytes.append(scalarBytes)
+        }
         data.append(UInt8(titleBytes.count))
         data.append(titleBytes)
         
         // Tempo (microseconds per quarter note)
         let quarterBpm = project.quarterNoteBpm()
-        let microsecondsPerQuarter = UInt32(60_000_000.0 / max(1.0, quarterBpm))
+        let microsecondsPerQuarter = UInt32(min(16_777_215.0, 60_000_000.0 / max(1.0, quarterBpm)))
         data.append(contentsOf: [0x00, 0xFF, 0x51, 0x03])
         data.append(contentsOf: [
             UInt8((microsecondsPerQuarter >> 16) & 0xFF),
@@ -393,8 +465,8 @@ class MIDIExporter {
         
         // Time signature
         data.append(contentsOf: [0x00, 0xFF, 0x58, 0x04])
-        data.append(UInt8(project.timeTop))
-        let denominator = UInt8(log2(Double(project.timeBottom)))
+        data.append(UInt8(clamping: max(1, project.timeTop)))
+        let denominator = UInt8(clamping: Int(log2(Double(max(1, project.timeBottom))).rounded()))
         data.append(denominator)
         data.append(contentsOf: [0x18, 0x08]) // Clocks per tick, 32nds per quarter
         
@@ -411,9 +483,9 @@ class MIDIExporter {
         data.append(contentsOf: [0x00, 0xFF, 0x03, 0x06])
         data.append(contentsOf: "Chords".data(using: .utf8)!)
         
-        var currentTick: Double = 0
-        let ticksPerQuarter: Double = 480
-        let ticksPerGridBeat = ticksPerQuarter * (4.0 / Double(project.timeBottom))
+        // Absolute-position clock: chord starts are measured from the start of
+        // their section, deltas from the last emitted event (see MIDITickClock).
+        var clock = MIDITickClock(timeTop: project.timeTop, timeBottom: project.timeBottom)
         
         // Process arrangement
         for item in project.arrangementItems.sorted(by: { $0.orderIndex < $1.orderIndex }) {
@@ -421,33 +493,31 @@ class MIDIExporter {
             
             for chord in section.chordEvents.sorted(by: { ($0.barIndex, $0.beatOffset) < ($1.barIndex, $1.beatOffset) }) {
                 guard !chord.isRest else { continue }
-                let chordStart = currentTick + (Double(chord.barIndex * project.timeTop) + chord.beatOffset) * ticksPerGridBeat
-                let deltaTime = UInt32(max(0, chordStart - currentTick).rounded())
-                let durationTicks = UInt32((Double(chord.duration) * ticksPerGridBeat).rounded())
                 let midiNotes = getMIDINotes(chord)
+                guard !midiNotes.isEmpty else { continue }
+                let timing = clock.place(barIndex: chord.barIndex, beatOffset: chord.beatOffset, duration: chord.duration)
                 
                 // Note on for all notes in the chord
                 for (i, note) in midiNotes.enumerated() {
-                    let delta: UInt32 = (i == 0) ? deltaTime : 0
+                    let delta: UInt32 = (i == 0) ? timing.delta : 0
                     data.append(contentsOf: encodeVariableLength(delta))
                     data.append(contentsOf: [0x90, note, 0x64])
                 }
                 
                 // Note off for all notes in the chord
                 for (i, note) in midiNotes.enumerated() {
-                    let delta: UInt32 = (i == 0) ? durationTicks : 0
+                    let delta: UInt32 = (i == 0) ? timing.length : 0
                     data.append(contentsOf: encodeVariableLength(delta))
                     data.append(contentsOf: [0x80, note, 0x00])
                 }
-                
-                currentTick = chordStart + Double(durationTicks)
             }
             
-            currentTick += Double(section.bars * project.timeTop) * ticksPerGridBeat
+            clock.finishSection(bars: section.bars)
         }
         
-        // End of track
-        data.append(contentsOf: [0x00, 0xFF, 0x2F, 0x00])
+        // End of track, padded so every track ends at the end of the song.
+        data.append(contentsOf: encodeVariableLength(clock.endOfTrackDelta))
+        data.append(contentsOf: [0xFF, 0x2F, 0x00])
         
         return data
     }
@@ -481,35 +551,30 @@ class MIDIExporter {
         // Program change: Acoustic Bass (program 32) on channel 1
         data.append(contentsOf: [0x00, 0xC1, 0x20])
         
-        var currentTick: Double = 0
-        let ticksPerQuarter: Double = 480
-        let ticksPerGridBeat = ticksPerQuarter * (4.0 / Double(project.timeBottom))
+        var clock = MIDITickClock(timeTop: project.timeTop, timeBottom: project.timeBottom)
         
         for item in project.arrangementItems.sorted(by: { $0.orderIndex < $1.orderIndex }) {
             guard let section = item.sectionTemplate else { continue }
             
             for chord in section.chordEvents.sorted(by: { ($0.barIndex, $0.beatOffset) < ($1.barIndex, $1.beatOffset) }) {
                 guard !chord.isRest else { continue }
-                let chordStart = currentTick + (Double(chord.barIndex * project.timeTop) + chord.beatOffset) * ticksPerGridBeat
-                let deltaTime = UInt32(max(0, chordStart - currentTick).rounded())
-                let durationTicks = UInt32((Double(chord.duration) * ticksPerGridBeat).rounded())
+                let timing = clock.place(barIndex: chord.barIndex, beatOffset: chord.beatOffset, duration: chord.duration)
                 
                 // Bass: root note 2 octaves below chord (C2 = 36)
                 let bassNote = UInt8(clamping: Int(getMIDINote(chord)) - 24)
                 let velocity: UInt8 = 0x60  // Moderate velocity
                 
-                data.append(contentsOf: encodeVariableLength(deltaTime))
+                data.append(contentsOf: encodeVariableLength(timing.delta))
                 data.append(contentsOf: [0x91, bassNote, velocity])
                 
-                data.append(contentsOf: encodeVariableLength(durationTicks))
+                data.append(contentsOf: encodeVariableLength(timing.length))
                 data.append(contentsOf: [0x81, bassNote, 0x00])
-                
-                currentTick = chordStart + Double(durationTicks)
             }
-            currentTick += Double(section.bars * project.timeTop) * ticksPerGridBeat
+            clock.finishSection(bars: section.bars)
         }
         
-        data.append(contentsOf: [0x00, 0xFF, 0x2F, 0x00])
+        data.append(contentsOf: encodeVariableLength(clock.endOfTrackDelta))
+        data.append(contentsOf: [0xFF, 0x2F, 0x00])
         return data
     }
     
@@ -521,10 +586,13 @@ class MIDIExporter {
         data.append(contentsOf: [0x00, 0xFF, 0x03, 0x05])
         data.append(contentsOf: "Drums".data(using: .utf8)!)
         
-        let ticksPerQuarter: Double = 480
-        let ticksPerGridBeat = ticksPerQuarter * (4.0 / Double(project.timeBottom))
-        let ticksPerBeat = UInt32(ticksPerGridBeat.rounded())
+        // Same grid as the chord and bass tracks (MIDITickClock), so every
+        // track places a given bar/beat at the same absolute tick.
+        let beatsPerBar = max(1, project.timeTop)
+        let ticksPerGridBeat = MIDITickClock.ticksPerQuarter * (4.0 / Double(max(1, project.timeBottom)))
+        let ticksPerBeat = UInt32(max(2.0, ticksPerGridBeat.rounded()))
         let halfBeat = ticksPerBeat / 2
+        let secondHalf = ticksPerBeat - halfBeat   // equals halfBeat unless the beat is odd
         
         // GM Drum notes
         let kick: UInt8 = 36
@@ -534,11 +602,11 @@ class MIDIExporter {
         
         for item in project.arrangementItems.sorted(by: { $0.orderIndex < $1.orderIndex }) {
             guard let section = item.sectionTemplate else { continue }
-            let totalBeats = section.bars * project.timeTop
+            let totalBeats = max(0, section.bars) * beatsPerBar
             
             for beat in 0..<totalBeats {
-                let isDownbeat = beat % project.timeTop == 0
-                let isBackbeat = project.timeTop >= 4 && (beat % project.timeTop == 2)
+                let isDownbeat = beat % beatsPerBar == 0
+                let isBackbeat = beatsPerBar >= 4 && (beat % beatsPerBar == 2)
                 
                 // Hihat on every beat
                 data.append(contentsOf: encodeVariableLength(0))
@@ -571,7 +639,7 @@ class MIDIExporter {
                 // Hihat on the "and" (8th note)
                 data.append(contentsOf: encodeVariableLength(0))
                 data.append(contentsOf: [0x99, hihat, UInt8(velocity - 20)])
-                data.append(contentsOf: encodeVariableLength(halfBeat))
+                data.append(contentsOf: encodeVariableLength(secondHalf))
                 data.append(contentsOf: [0x89, hihat, 0x00])
             }
         }
@@ -614,7 +682,7 @@ class TextExporter {
             // Chords
             if !section.chordEvents.isEmpty {
                 text += String(localized: "Chords:") + "\n"
-                for bar in 0..<section.bars {
+                for bar in 0..<max(0, section.bars) {
                     let barChords = section.chordEvents.filter { $0.barIndex == bar }
                         .sorted { $0.beatOffset < $1.beatOffset }
                     
@@ -635,7 +703,7 @@ class TextExporter {
             text += "\n" + String(repeating: "-", count: 40) + "\n\n"
         }
         
-        return saveToFile(text, fileName: "\(project.title)_ChordChart.txt")
+        return saveToFile(text, fileName: "\(ExportFileName.stem(for: project.title))_ChordChart.txt")
     }
     
     /// Lyric sheet in arrangement order; sections without words are skipped.
@@ -650,7 +718,7 @@ class TextExporter {
             wroteAny = true
         }
         guard wroteAny else { return nil }
-        return saveToFile(text, fileName: "\(project.title)_Lyrics.txt")
+        return saveToFile(text, fileName: "\(ExportFileName.stem(for: project.title))_Lyrics.txt")
     }
 
     func exportFullProject(_ project: Project) -> URL? {
@@ -688,7 +756,7 @@ class TextExporter {
             
             if !section.chordEvents.isEmpty {
                 text += String(localized: "CHORDS:") + "\n"
-                for bar in 0..<section.bars {
+                for bar in 0..<max(0, section.bars) {
                     let barChords = section.chordEvents.filter { $0.barIndex == bar }
                         .sorted { $0.beatOffset < $1.beatOffset }
                     
@@ -718,18 +786,23 @@ class TextExporter {
             }
         }
         
-        return saveToFile(text, fileName: "\(project.title)_Full.txt")
+        return saveToFile(text, fileName: "\(ExportFileName.stem(for: project.title))_Full.txt")
     }
     
     private func saveToFile(_ text: String, fileName: String) -> URL? {
-        let cleanFileName = fileName.replacingOccurrences(of: " ", with: "_")
+        // `fileName` is already built from a sanitized stem; strip any path
+        // separators defensively.
+        let cleanFileName = fileName
+            .replacingOccurrences(of: " ", with: "_")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: ":", with: "_")
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(cleanFileName)
         
         do {
             try text.write(to: tempURL, atomically: true, encoding: .utf8)
             return tempURL
         } catch {
-            print("Error writing text file: \(error)")
+            AppLog.general.error("Error writing text file: \(error.localizedDescription)")
             return nil
         }
     }

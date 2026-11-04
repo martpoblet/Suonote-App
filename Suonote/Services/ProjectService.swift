@@ -28,18 +28,26 @@ struct ProjectService {
         // Deep-copy chord events
         var newChords: [ChordEvent] = []
         for chord in section.chordEvents {
+            let transposedSlash: String? = {
+                guard let slash = chord.slashRoot, !slash.isEmpty, semitones != 0 else { return chord.slashRoot }
+                return NoteUtils.transpose(note: slash, semitones: semitones)
+            }()
             let newChord = ChordEvent(
                 barIndex: chord.barIndex,
                 beatOffset: chord.beatOffset,
                 duration: chord.duration,
                 isRest: chord.isRest,
-                root: semitones == 0 ? chord.root : NoteUtils.transpose(note: chord.root, semitones: semitones),
-                quality: chord.quality
+                root: semitones == 0 || chord.isRest ? chord.root : NoteUtils.transpose(note: chord.root, semitones: semitones),
+                quality: chord.quality,
+                extensions: chord.extensions,
+                slashRoot: transposedSlash
             )
             newChord.isRest = chord.isRest
-            newChord.slashRoot = chord.slashRoot
-            newChord.display = chord.display
-            if semitones != 0 { newChord.updateDisplay() }
+            if semitones == 0 {
+                newChord.display = chord.display
+            } else {
+                newChord.updateDisplay()
+            }
             newChords.append(newChord)
         }
         copy.chordEventsStore = newChords
@@ -108,6 +116,51 @@ struct ProjectService {
         return project
     }
     
+    // MARK: - Deletion
+
+    /// Deletes a song together with everything it owns.
+    ///
+    /// The relationships have no delete rules (changing them would alter the
+    /// CloudKit schema), so deleting only the `Project` would leave its
+    /// sections, chords, arrangement items, takes and Studio parts behind as
+    /// orphans. Children are removed explicitly, take audio files are removed
+    /// from disk, and the widget is cleared if it was showing this song.
+    @discardableResult
+    static func deleteProject(_ project: Project, from context: ModelContext) -> Bool {
+        let projectId = project.id
+
+        // Audio files of this song's takes, except any file another take still uses.
+        let ownRecordings = project.recordings
+        let ownIds = Set(ownRecordings.map(\.persistentModelID))
+        let others = (try? context.fetch(FetchDescriptor<Recording>())) ?? []
+        let filesInUseElsewhere = Set(others.filter { !ownIds.contains($0.persistentModelID) }.map(\.fileName))
+        for recording in ownRecordings where !recording.fileName.isEmpty && !filesInUseElsewhere.contains(recording.fileName) {
+            if let url = FileManagerUtils.existingRecordingURL(for: recording.fileName) {
+                do {
+                    try FileManager.default.removeItem(at: url)
+                } catch {
+                    AppLog.general.error("Couldn't remove take file: \(error.localizedDescription)")
+                }
+            }
+        }
+
+        for track in project.studioTracks {
+            for note in track.notes { context.delete(note) }
+            context.delete(track)
+        }
+        for section in project.sectionTemplates {
+            for chord in section.chordEvents { context.delete(chord) }
+            context.delete(section)
+        }
+        for item in project.arrangementItems { context.delete(item) }
+        for recording in ownRecordings { context.delete(recording) }
+        context.delete(project)
+
+        let saved = context.saveLogged("delete song")
+        WidgetSongSnapshot.clear(ifShowing: projectId)
+        return saved
+    }
+
     // MARK: - Version Snapshot (F-04)
     
     /// Creates a lightweight text snapshot of the current project state for comparison

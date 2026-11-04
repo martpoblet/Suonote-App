@@ -23,10 +23,27 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Suonote Song</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.suonote.project</string>
+			</array>
+		</dict>
+	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<false/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Suonote uses the microphone to record your takes.</string>
 	<key>UIAppFonts</key>
@@ -44,6 +61,7 @@
 	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
+		<string>audio</string>
 		<string>remote-notification</string>
 	</array>
 	<key>UILaunchScreen</key>
@@ -74,6 +92,26 @@
 	</array>
 	<key>UTExportedTypeDeclarations</key>
 	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.json</string>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Suonote Song</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.suonote.project</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>suonote</string>
+				</array>
+				<key>public.mime-type</key>
+				<string>application/x-suonote</string>
+			</dict>
+		</dict>
 		<dict>
 			<key>UTTypeConformsTo</key>
 			<array>

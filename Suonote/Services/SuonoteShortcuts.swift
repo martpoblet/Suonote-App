@@ -15,26 +15,23 @@ struct CreateProjectIntent: AppIntent {
     @Parameter(title: "BPM", default: 120)
     var bpm: Int
     
+    @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        let schema = Schema([Project.self])
-        let config = ModelConfiguration(
-            "Cloud",
-            schema: schema,
-            isStoredInMemoryOnly: false,
-            allowsSave: true,
-            groupContainer: .none,
-            cloudKitDatabase: .private("iCloud.Suonote")
-        )
-        let container = try ModelContainer(for: schema, configurations: [config])
-        let context = ModelContext(container)
-        
-        let project = Project(title: title)
-        project.keyRoot = key
-        project.bpm = bpm
+        // Use the app's own container: a second CloudKit-backed container on
+        // the same store would compete with it.
+        let context = AppContainer.shared.mainContext
+
+        // Same limits the Project initializer applies (20...300 BPM, a real key).
+        let clampedBpm = max(20, min(300, bpm))
+        let keyText = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        let candidate = keyText.prefix(1).uppercased() + String(keyText.dropFirst())
+        let keyRoot = MusicTheory.noteIndex(candidate) == nil ? "C" : MusicTheory.normalize(candidate)
+
+        let project = Project(title: title, keyRoot: keyRoot, bpm: clampedBpm)
         context.insert(project)
         try context.save()
         
-        return .result(dialog: "Created '\(title)' in \(key) at \(bpm) BPM")
+        return .result(dialog: "Created '\(project.title)' in \(project.keyRoot) at \(project.bpm) BPM")
     }
     
     static var openAppWhenRun: Bool = true

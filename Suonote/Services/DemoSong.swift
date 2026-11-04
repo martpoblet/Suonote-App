@@ -23,10 +23,16 @@ enum DemoSong {
     @discardableResult
     static func replace(in context: ModelContext, style: StudioStyle = .pop) -> Project {
         let existing = (try? context.fetch(FetchDescriptor<Project>())) ?? []
-        for project in existing where project.title == title && project.tags.contains("demo") {
-            context.delete(project)
+        // Only the real demo: its exact title AND the `demo` tag. A demo the
+        // user recorded takes on is kept so those recordings aren't lost.
+        for project in existing where isDemo(project) && project.recordings.isEmpty {
+            ProjectService.deleteProject(project, from: context)
         }
         return make(in: context, style: style)
+    }
+
+    private static func isDemo(_ project: Project) -> Bool {
+        project.title == title && project.tags.contains("demo")
     }
 
     @discardableResult
@@ -116,7 +122,7 @@ enum DemoSong {
             timeline: StudioGenerator.timeline(for: project)
         )
         project.updatedAt = Date()
-        try? context.save()
+        context.saveLogged("demo song")
         return project
     }
 

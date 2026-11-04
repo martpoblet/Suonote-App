@@ -53,7 +53,7 @@ struct ProjectShareView: View {
             isPresented: $showingExporter,
             document: document,
             contentType: .suonoteProject,
-            defaultFilename: "\(project.title).suonote"
+            defaultFilename: "\(ExportFileName.stem(for: project.title)).suonote"
         ) { result in
             switch result {
             case .success(let url):

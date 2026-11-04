@@ -269,9 +269,15 @@ struct LibraryStarter: Identifiable, Equatable {
 
 enum LibraryProjectCloner {
     /// Deep copy of a song: sections (shared between repeats), chords,
-    /// arrangement and Studio tracks. Recordings stay with the original.
+    /// arrangement and Studio tracks. Takes stay with the original, except the
+    /// ones an audio track plays: those are copied (file included) so the
+    /// cloned track isn't left pointing at the original's take.
     @discardableResult
     static func duplicate(_ project: Project, in context: ModelContext) -> Project {
+        // Was the Studio in sync with Compose? If so the copy starts in sync
+        // too, so opening it doesn't regenerate (and wipe) piano-roll edits.
+        let studioWasInSync = project.studioSyncSignature != nil
+            && project.studioSyncSignature == StudioSync.signature(for: project)
         let clone = Project(
             title: String(localized: "\(project.title) (copy)"),
             status: project.status == .archived ? .idea : project.status,
@@ -326,14 +332,29 @@ enum LibraryProjectCloner {
             clone.arrangementItems.append(copy)
         }
 
+        var clonedRecordingIds: [UUID: UUID] = [:]
         for track in project.studioTracks {
+            var audioRecordingId = track.audioRecordingId
+            if let sourceId = track.audioRecordingId {
+                if let mapped = clonedRecordingIds[sourceId] {
+                    audioRecordingId = mapped
+                } else if let original = project.recordings.first(where: { $0.id == sourceId }),
+                          let clonedRecording = cloneRecording(original, sectionMap: sectionMap, into: clone, in: context) {
+                    clonedRecordingIds[sourceId] = clonedRecording.id
+                    audioRecordingId = clonedRecording.id
+                } else {
+                    // The take (or its file on this device) is missing: skip the
+                    // track instead of cloning one that can't play.
+                    continue
+                }
+            }
             let copy = StudioTrack(
                 name: track.name,
                 instrument: track.instrument,
                 orderIndex: track.orderIndex,
                 isMuted: track.isMuted,
                 isSolo: track.isSolo,
-                audioRecordingId: track.audioRecordingId,
+                audioRecordingId: audioRecordingId,
                 audioStartBeat: track.audioStartBeat
             )
             copy.octaveShift = track.octaveShift
@@ -345,6 +366,11 @@ enum LibraryProjectCloner {
             copy.regenerateComplexity = track.regenerateComplexity
             copy.regenerateNaturalness = track.regenerateNaturalness
             copy.regenerateArpeggioEnabled = track.regenerateArpeggioEnabled
+            copy.regenerateArpeggioRate = track.regenerateArpeggioRate
+            copy.regenerateArpeggioPattern = track.regenerateArpeggioPattern
+            copy.compingPattern = track.compingPattern
+            copy.bassPattern = track.bassPattern
+            copy.followsArrangement = track.followsArrangement
             copy.reverbEnabled = track.reverbEnabled
             copy.reverbMix = track.reverbMix
             copy.reverbPreset = track.reverbPreset
@@ -370,8 +396,70 @@ enum LibraryProjectCloner {
             clone.studioTracks.append(copy)
         }
 
+        // The copy's chords have new ids, so the original's sync bookkeeping
+        // can't be copied verbatim: recompute it for the copy.
+        if studioWasInSync {
+            StudioSync.updateSyncState(
+                project: clone,
+                signature: StudioSync.signature(for: clone),
+                timeline: StudioGenerator.timeline(for: clone)
+            )
+        }
+
         clone.updatedAt = Date()
-        try? context.save()
+        context.saveLogged("duplicate song")
         return clone
+    }
+
+    /// Copies a take (audio file + `Recording`) into `clone`. Nil when the
+    /// audio file isn't on this device or can't be copied.
+    private static func cloneRecording(
+        _ original: Recording,
+        sectionMap: [UUID: SectionTemplate],
+        into clone: Project,
+        in context: ModelContext
+    ) -> Recording? {
+        guard let sourceURL = FileManagerUtils.existingRecordingURL(for: original.fileName) else { return nil }
+        let ext = sourceURL.pathExtension
+        let newFileName = ext.isEmpty ? UUID().uuidString : "\(UUID().uuidString).\(ext)"
+        let destination = FileManagerUtils.recordingURL(for: newFileName)
+        do {
+            try FileManager.default.copyItem(at: sourceURL, to: destination)
+        } catch {
+            AppLog.general.error("Couldn't copy take for duplicate: \(error.localizedDescription)")
+            return nil
+        }
+
+        let copy = Recording(
+            name: original.name,
+            fileName: newFileName,
+            duration: original.duration,
+            bpm: original.bpm,
+            timeTop: original.timeTop,
+            timeBottom: original.timeBottom,
+            countIn: original.countIn,
+            recordingType: original.recordingType
+        )
+        copy.createdAt = original.createdAt
+        copy.isFavorite = original.isFavorite
+        copy.linkedSectionId = original.linkedSectionId.flatMap { sectionMap[$0]?.id }
+        copy.reverbEnabled = original.reverbEnabled
+        copy.reverbMix = original.reverbMix
+        copy.reverbSize = original.reverbSize
+        copy.delayEnabled = original.delayEnabled
+        copy.delayTime = original.delayTime
+        copy.delayFeedback = original.delayFeedback
+        copy.delayMix = original.delayMix
+        copy.eqEnabled = original.eqEnabled
+        copy.lowGain = original.lowGain
+        copy.midGain = original.midGain
+        copy.highGain = original.highGain
+        copy.compressionEnabled = original.compressionEnabled
+        copy.compressionThreshold = original.compressionThreshold
+        copy.compressionRatio = original.compressionRatio
+        context.insert(copy)
+        copy.project = clone
+        clone.recordings.append(copy)
+        return copy
     }
 }

@@ -63,10 +63,11 @@ final class Project {
         self.studioLastChordIds = nil
         self.studioLastTotalBars = 0
         self.studioLastChordSignature = nil
-        self.studioLastBpm = bpm
-        self.studioLastTimeTop = timeTop
-        self.studioLastTimeBottom = timeBottom
-        self.studioLastKeyRoot = keyRoot
+        // Use the sanitized values (the parameters may have been clamped above).
+        self.studioLastBpm = self.bpm
+        self.studioLastTimeTop = self.timeTop
+        self.studioLastTimeBottom = self.timeBottom
+        self.studioLastKeyRoot = self.keyRoot
         self.studioLastKeyModeRaw = keyMode.rawValue
         self.studioTracksStore = []
     }

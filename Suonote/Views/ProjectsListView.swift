@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
 
 /// The library — Suonote's home. An editorial page: greeting, a "Continue"
 /// card for the song you touched last, then every song as a quiet row
@@ -15,6 +16,8 @@ struct ProjectsListView: View {
     @State private var showingSettings = false
     @State private var projectToDelete: Project?
     @State private var pushedRoute: LibraryRoute?
+    @State private var showingImporter = false
+    @State private var importErrorMessage: String?
     @AppStorage("librarySort") private var sortRaw: String = LibrarySort.recent.rawValue
 
     // MARK: Derived data
@@ -114,9 +117,31 @@ struct ProjectsListView: View {
             Button("Delete song", role: .destructive) { deleteProject(project) }
             Button("Cancel", role: .cancel) {}
         } message: { _ in
-            Text("Its sections, lyrics and Studio parts will be removed. This can't be undone.")
+            Text("Its sections, lyrics, recorded takes and Studio parts will be removed. This can't be undone.")
         }
-        .onOpenURL { url in openDeepLink(url) }
+        .fileImporter(isPresented: $showingImporter, allowedContentTypes: [.suonoteProject, .json]) { result in
+            switch result {
+            case .success(let url):
+                importSong(from: url)
+            case .failure(let error):
+                importErrorMessage = error.localizedDescription
+            }
+        }
+        .alert(
+            "Couldn't open song",
+            isPresented: Binding(get: { importErrorMessage != nil }, set: { if !$0 { importErrorMessage = nil } })
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(importErrorMessage ?? "")
+        }
+        .onOpenURL { url in
+            if url.isFileURL {
+                importSong(from: url)   // a .suonote file opened from Files, Mail or AirDrop
+            } else {
+                openDeepLink(url)
+            }
+        }
         #if DEBUG
         .task {
             // App Store screenshots: `-ScreenshotRoute studio` opens the seeded demo song.
@@ -129,10 +154,26 @@ struct ProjectsListView: View {
         #endif
     }
 
-    /// suonote://project/<id>[/compose|studio|lyrics|record] (widget links)
+    /// suonote://project/<id>[/compose|studio|lyrics|record] (widget links),
+    /// suonote://new (create a song) and suonote://record (record on the latest song).
     private func openDeepLink(_ url: URL) {
+        guard url.scheme == "suonote" else { return }
+        switch url.host {
+        case "new":
+            showingCreateSheet = true
+            return
+        case "record":
+            if let latest = activeProjects.first ?? allProjects.first {
+                pushedRoute = LibraryRoute(project: latest, tab: .record)
+            } else {
+                showingCreateSheet = true
+            }
+            return
+        default:
+            break
+        }
         let parts = url.pathComponents.dropFirst()
-        guard url.scheme == "suonote", url.host == "project",
+        guard url.host == "project",
               let idString = parts.first,
               let projectId = UUID(uuidString: idString),
               let project = allProjects.first(where: { $0.id == projectId }) else { return }
@@ -155,6 +196,17 @@ struct ProjectsListView: View {
                 .accessibilityLabel("Suonote")
         }
         .sharedBackgroundVisibility(.hidden)
+
+        ToolbarItem(placement: .topBarTrailing) {
+            Button {
+                showingImporter = true
+            } label: {
+                Image(systemName: "square.and.arrow.down")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+            }
+            .accessibilityLabel("Import song")
+        }
 
         ToolbarItem(placement: .topBarTrailing) {
             Button {
@@ -425,10 +477,30 @@ struct ProjectsListView: View {
     private func deleteProject(_ project: Project) {
         HapticFeedback.warning.trigger()
         withAnimation(DesignSystem.Animations.smoothSpring) {
-            modelContext.delete(project)
+            // Removes the song's sections, chords, takes (and their audio files)
+            // and Studio parts too; the relationships have no delete rules.
+            _ = ProjectService.deleteProject(project, from: modelContext)
         }
-        try? modelContext.save()
         projectToDelete = nil
+    }
+
+    /// Opens a `.suonote` file as a new song.
+    private func importSong(from url: URL) {
+        do {
+            let exchange = try SuonoteProjectExchange.importProject(from: url)
+            let project = SuonoteProjectExchange.createProject(from: exchange, modelContext: modelContext)
+            guard modelContext.saveLogged("import song") else {
+                modelContext.rollback()
+                HapticFeedback.error.trigger()
+                importErrorMessage = String(localized: "The song couldn't be saved. Please try again.")
+                return
+            }
+            HapticFeedback.success.trigger()
+            pushedRoute = LibraryRoute(project: project)
+        } catch {
+            HapticFeedback.error.trigger()
+            importErrorMessage = error.localizedDescription
+        }
     }
 
     private func toggleArchive(_ project: Project) {
@@ -437,7 +509,7 @@ struct ProjectsListView: View {
             project.status = project.status == .archived ? .idea : .archived
             project.updatedAt = Date()
         }
-        try? modelContext.save()
+        modelContext.saveLogged("archive song")
     }
 
     private func setStatus(_ status: ProjectStatus, for project: Project) {
@@ -446,7 +518,7 @@ struct ProjectsListView: View {
             project.status = status
             project.updatedAt = Date()
         }
-        try? modelContext.save()
+        modelContext.saveLogged("set status")
     }
 
     private func duplicate(_ project: Project) {
