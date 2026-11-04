@@ -20,6 +20,30 @@ class AudioRecordingManager: NSObject, ObservableObject {
     /// Seconds since the downbeat, on the take's own beat clock.
     @Published private(set) var elapsedTime: TimeInterval = 0
 
+    /// Why a take could not start (microphone busy or unavailable, etc.).
+    /// Shown by the recording screen until dismissed.
+    @Published var startError: String?
+    /// A short message about a take that ended on its own (discarded as empty,
+    /// or stopped by an interruption). Shown by the recording screen.
+    @Published var notice: String?
+
+    /// True while a take is being prepared, counted in or rolling, anywhere in
+    /// the app. Other audio code (e.g. sound previews) must not change the
+    /// shared audio session category while this is set.
+    nonisolated(unsafe) private(set) static var isCaptureActive = false
+
+    private var captureObservers: [(center: NotificationCenter, token: NSObjectProtocol)] = []
+    /// Whether this instance is the one that raised `isCaptureActive`.
+    private var holdsCaptureFlag = false
+
+    deinit {
+        for observer in captureObservers {
+            observer.center.removeObserver(observer.token)
+        }
+        if holdsCaptureFlag { Self.isCaptureActive = false }
+        ScreenAwake.release(self)
+    }
+
     /// The beat clock of the take in progress (nil when idle). Views use it
     /// to draw the visual click in step with the audible one.
     @Published private(set) var beatClock: RecordBeatClock?
@@ -53,6 +77,10 @@ class AudioRecordingManager: NSObject, ObservableObject {
         linkedSectionId: UUID? = nil
     ) {
         guard project != nil, !isBusy else { return }
+        startError = nil
+        notice = nil
+        holdsCaptureFlag = true
+        Self.isCaptureActive = true
         let token = UUID()
         pendingStart = token
         // The session is set up off the main thread (it can block for a
@@ -94,9 +122,13 @@ class AudioRecordingManager: NSObject, ObservableObject {
             AppLog.audio.error("Failed to start recording: \(String(describing: error))")
             capture.cancel()
             beatClock = nil
+            endCapture()
+            startError = String(localized: "Couldn't start recording. Check that the microphone is available and not being used by another app, then try again.")
             return
         }
         self.capture = capture
+        ScreenAwake.hold(self)
+        observeCaptureInterruptions(for: capture)
 
         recordedBeats = 0
         elapsedTime = 0
@@ -119,16 +151,19 @@ class AudioRecordingManager: NSObject, ObservableObject {
         }
 
         stopPolling()
+        removeCaptureObservers()
         let duration = capture.stop()
         isRecording = false
         isCountingIn = false
         resetLevels()
         self.capture = nil
         beatClock = nil
+        endCapture()
 
         guard duration > 0 else {
             try? FileManager.default.removeItem(at: capture.url)
             currentLinkedSectionId = nil
+            notice = String(localized: "Nothing was recorded, so the take was discarded.")
             return nil
         }
 
@@ -156,8 +191,10 @@ class AudioRecordingManager: NSObject, ObservableObject {
     func cancelRecording() {
         pendingStart = nil
         stopPolling()
+        removeCaptureObservers()
         capture?.cancel()
         capture = nil
+        endCapture()
         beatClock = nil
         isRecording = false
         isCountingIn = false
@@ -166,6 +203,91 @@ class AudioRecordingManager: NSObject, ObservableObject {
         elapsedTime = 0
         resetLevels()
         currentLinkedSectionId = nil
+    }
+
+    // MARK: - Interruptions
+
+    /// Why a take was ended by the system rather than by the user.
+    private enum StopReason { case interrupted, deviceChanged }
+
+    private func endCapture() {
+        if holdsCaptureFlag {
+            holdsCaptureFlag = false
+            Self.isCaptureActive = false
+        }
+        ScreenAwake.release(self)
+    }
+
+    private func removeCaptureObservers() {
+        for observer in captureObservers {
+            observer.center.removeObserver(observer.token)
+        }
+        captureObservers.removeAll()
+    }
+
+    /// Ends the take cleanly (so the AAC file is finalized and the take is
+    /// kept) when a call, Siri, an alarm or a device change takes the audio away.
+    private func observeCaptureInterruptions(for capture: TakeCapture) {
+        removeCaptureObservers()
+        let center = NotificationCenter.default
+
+        let interruption = center.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            let typeValue = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
+            guard let typeValue,
+                  AVAudioSession.InterruptionType(rawValue: typeValue) == .began else { return }
+            let owner = self
+            Task { @MainActor in owner?.stopForSystemEvent(.interrupted) }
+        }
+
+        let configChange = center.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: capture.audioEngine,
+            queue: .main
+        ) { [weak self] _ in
+            let owner = self
+            Task { @MainActor in owner?.stopForSystemEvent(.deviceChanged) }
+        }
+
+        let routeChange = center.addObserver(
+            forName: AVAudioSession.routeChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            let reasonValue = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
+            guard let reasonValue,
+                  AVAudioSession.RouteChangeReason(rawValue: reasonValue) == .oldDeviceUnavailable else { return }
+            let owner = self
+            Task { @MainActor in owner?.stopForSystemEvent(.deviceChanged) }
+        }
+
+        captureObservers = [
+            (center: center, token: interruption),
+            (center: center, token: configChange),
+            (center: center, token: routeChange)
+        ]
+    }
+
+    private func stopForSystemEvent(_ reason: StopReason) {
+        guard capture != nil, isBusy else { return }
+        let kept: Bool
+        if isRecording {
+            kept = stopRecording() != nil
+        } else {
+            cancelRecording()
+            kept = false
+        }
+        switch (reason, kept) {
+        case (.interrupted, true):
+            notice = String(localized: "Recording stopped: the audio was interrupted. Your take was saved.")
+        case (.deviceChanged, true):
+            notice = String(localized: "Recording stopped: the audio device changed. Your take was saved.")
+        case (_, false):
+            notice = String(localized: "Recording stopped before anything was captured.")
+        }
     }
 
     func playRecording(_ recording: Recording) {

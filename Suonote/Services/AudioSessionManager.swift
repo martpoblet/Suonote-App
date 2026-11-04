@@ -1,5 +1,6 @@
 import os
 import AVFoundation
+import UIKit
 
 /// Shared audio session and engine management (A-04)
 /// Coordinates audio sessions across MetronomeClickPlayer, ChordPreviewPlayer,
@@ -94,6 +95,34 @@ final class AudioSessionManager {
             @unknown default:
                 break
             }
+        }
+    }
+}
+
+/// Keeps the screen awake while audio work is in progress (a take being
+/// recorded, Studio playback). Holders are tracked by identity, so recording
+/// and playback can overlap and each `release` is safe to call more than once
+/// (every exit path, including `deinit`, may call it).
+nonisolated enum ScreenAwake {
+    private static let holders = OSAllocatedUnfairLock<Set<ObjectIdentifier>>(initialState: [])
+
+    static func hold(_ owner: AnyObject) {
+        let id = ObjectIdentifier(owner)
+        holders.withLock { _ = $0.insert(id) }
+        apply()
+    }
+
+    static func release(_ owner: AnyObject) {
+        let id = ObjectIdentifier(owner)
+        holders.withLock { _ = $0.remove(id) }
+        apply()
+    }
+
+    private static func apply() {
+        // Re-reads the holders on the main actor, so out-of-order hops still
+        // end on the right value.
+        Task { @MainActor in
+            UIApplication.shared.isIdleTimerDisabled = !holders.withLock { $0.isEmpty }
         }
     }
 }

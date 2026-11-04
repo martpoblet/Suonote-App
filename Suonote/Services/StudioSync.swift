@@ -35,8 +35,11 @@ enum StudioSync {
             || project.studioLastTimeBottom != project.timeBottom
         let keyChanged = project.studioLastKeyRoot != project.keyRoot
             || project.studioLastKeyModeRaw != project.keyMode.rawValue
-        let tempoChanged = project.studioLastBpm != project.bpm
-        let headerChanged = meterChanged || keyChanged || tempoChanged
+        // Tempo is deliberately NOT part of the header check: generated notes are
+        // expressed in beats and do not depend on BPM, so a tempo change must not
+        // regenerate (and wipe the user's manual piano-roll edits). The last-bpm
+        // field is still refreshed in `updateSyncState`.
+        let headerChanged = meterChanged || keyChanged
         let changedChordIds: Set<UUID> = Set(currentSignatureMap.compactMap { entry in
             let (id, signature) = entry
             guard let previous = previousSignatureMap[id] else { return nil }

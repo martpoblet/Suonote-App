@@ -147,6 +147,7 @@ final class StudioPlaybackEngine: ObservableObject {
         for observer in sessionObservers {
             NotificationCenter.default.removeObserver(observer)
         }
+        ScreenAwake.release(self)
     }
 
     // MARK: - Audio session interruptions / route changes (A-02)
@@ -280,7 +281,7 @@ final class StudioPlaybackEngine: ObservableObject {
 
         // Just rebuild the MIDI sequence in-place
         let wasPlaying = isPlaying
-        let savedBeat = currentBeat
+        let savedBeat = livePositionBeats()
 
         stop(resetPosition: false)
         updateBeatClock(for: project)
@@ -296,9 +297,18 @@ final class StudioPlaybackEngine: ObservableObject {
         if wasPlaying { play() }
     }
 
-    func play() {
+    /// Starts (or resumes) playback from `currentBeat`.
+    ///
+    /// The count-in only runs when `countIn` is true, which only the user's own
+    /// play press asks for (`playRebuildingIfNeeded`), and then only when
+    /// playback would start on a bar line (from the top, a section start, or a
+    /// loop start). Internal restarts (seeking, loop laps, rebuilds, resuming
+    /// after an interruption) and resuming a pause in the middle of a bar never
+    /// count in.
+    func play(countIn allowCountIn: Bool = false) {
         guard sequencer != nil else { return }
         cancelIdlePause()
+        ScreenAwake.hold(self)
 
         if !engine.isRunning {
             do {
@@ -308,7 +318,9 @@ final class StudioPlaybackEngine: ObservableObject {
             }
         }
 
-        if countInBars > 0, !isCountingIn {
+        let barLength = Double(max(1, currentBeatsPerBar))
+        let startsOnBarLine = currentBeat.truncatingRemainder(dividingBy: barLength) < 0.01
+        if allowCountIn, countInBars > 0, !isCountingIn, startsOnBarLine {
             startCountIn { [weak self] in
                 self?.beginPlayback()
             }
@@ -322,6 +334,10 @@ final class StudioPlaybackEngine: ObservableObject {
 
         let sequencerStartBeat = beatClock.uiBeatToSequencerBeat(currentBeat)
         sequencer.currentPositionInBeats = sequencerStartBeat
+        // The sequencer doesn't chase controllers: restore expression and
+        // sustain for this position so a start mid-song (or after an outro that
+        // faded the strings) isn't played at the previous state.
+        graph?.chaseControllers(atSequencerBeat: sequencerStartBeat)
 
         do {
             playbackGeneration += 1
@@ -340,6 +356,7 @@ final class StudioPlaybackEngine: ObservableObject {
             }
         } catch {
             AppLog.studio.error("Failed to start sequencer: \(String(describing: error))")
+            ScreenAwake.release(self)
         }
     }
 
@@ -542,7 +559,8 @@ final class StudioPlaybackEngine: ObservableObject {
         } else {
             updateProject(project)
         }
-        play()
+        // The user pressed play: the one entry point that may count in.
+        play(countIn: true)
     }
 
     func pause() {
@@ -555,7 +573,13 @@ final class StudioPlaybackEngine: ObservableObject {
         removeMeterTaps()
         metronomeSampler?.removeTap(onBus: 0)
         bandClock = nil
+        // Pausing keeps the sequencer's live position; `currentBeat` only
+        // follows the 0.1 s timer, so resuming would jump back up to 100 ms.
+        if !resetPosition, isPlaying {
+            currentBeat = livePositionBeats()
+        }
         isPlaying = false
+        ScreenAwake.release(self)
         
         if resetPosition {
             currentBeat = 0
@@ -565,6 +589,8 @@ final class StudioPlaybackEngine: ObservableObject {
         for chain in graph?.chains.values.map({ $0 }) ?? [] {
             chain.player?.stop()
         }
+        // Cut ringing notes, sustain and tails so nothing hangs after the stop.
+        graph?.silenceAll()
 
         if resetPosition {
             sequencer?.currentPositionInBeats = 0
@@ -596,11 +622,14 @@ final class StudioPlaybackEngine: ObservableObject {
 
     func seek(to beat: Double) {
         let clamped = max(0, min(beat, totalBeats))
+        let wasPlaying = isPlaying
+        // Stopping records the live position, so set the target afterwards.
+        if wasPlaying { stop(resetPosition: false) }
         currentBeat = clamped
         sequencer?.currentPositionInBeats = beatClock.uiBeatToSequencerBeat(clamped)
 
-        if isPlaying {
-            stop(resetPosition: false)
+        if wasPlaying {
+            // A seek (scrubbing, ruler taps, loop laps) never counts in.
             play()
         }
     }

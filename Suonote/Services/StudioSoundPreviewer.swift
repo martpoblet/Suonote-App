@@ -60,8 +60,12 @@ final class StudioSoundPreviewer: ObservableObject {
         engine.connect(room, to: engine.mainMixerNode, format: nil)
         engine.mainMixerNode.outputVolume = 0.8
         do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
-            try AVAudioSession.sharedInstance().setActive(true)
+            // Never switch the shared session while a take is being recorded:
+            // .playback would cut the microphone out from under it.
+            if !AudioRecordingManager.isCaptureActive {
+                try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
+                try AVAudioSession.sharedInstance().setActive(true)
+            }
             try engine.start()
             isSetup = true
         } catch {

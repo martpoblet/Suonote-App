@@ -147,7 +147,17 @@ struct StudioGenerator {
         )
         let arrangement = ArrangementContext(instruments: Set(instruments))
 
-        for (index, instrument) in instruments.enumerated() {
+        // Drums are written first so the bass can lock to the real kick pattern
+        // (see `StudioBassComposer.SongContext`). Each track keeps its own
+        // `orderIndex`, so the display order is unchanged.
+        let generationOrder = instruments.enumerated().sorted { lhs, rhs in
+            let lhsRank = lhs.element == .drums ? 0 : 1
+            let rhsRank = rhs.element == .drums ? 0 : 1
+            return lhsRank != rhsRank ? lhsRank < rhsRank : lhs.offset < rhs.offset
+        }
+        var drumTrack: StudioTrack?
+
+        for (index, instrument) in generationOrder {
             let track = StudioTrack(
                 name: instrument.title,
                 instrument: instrument,
@@ -157,6 +167,7 @@ struct StudioGenerator {
             modelContext.insert(track)
             if instrument == .drums {
                 track.drumPreset = defaultDrumPreset
+                drumTrack = track
             }
             track.octaveShift = initialOctaveShift(for: instrument, variant: track.variant)
             // Set per-instrument humanization defaults so freshly generated tracks
@@ -187,7 +198,7 @@ struct StudioGenerator {
                 bassPattern: track.bassPattern,
                 sectionBoundaryBars: sectionBounds,
                 arrangement: arrangement,
-                bassSong: instrument == .bass ? StudioBassComposer.SongContext(project: project, style: style) : nil
+                bassSong: instrument == .bass ? StudioBassComposer.SongContext(project: project, style: style, drumTrack: drumTrack) : nil
             )
             let arranged = StudioArranger.arrange(notes, instrument: instrument, variant: track.variant, project: project, style: style)
             applySectionDynamics(arranged, dynamics: dynamics)
@@ -200,7 +211,7 @@ struct StudioGenerator {
             tracks.append(track)
         }
 
-        return tracks
+        return tracks.sorted { $0.orderIndex < $1.orderIndex }
     }
 
     /// Everything regeneration needs that depends on the whole song, computed once.
@@ -328,15 +339,14 @@ struct StudioGenerator {
         newChordIds: Set<UUID>,
         previousTotalBars: Int
     ) -> Bool {
-        let timeline = buildTimeline(for: project)
+        // Same song-wide context as a full regeneration, so appended material
+        // matches the register, voicing and dynamics of what is already there.
+        let context = RegenerationContext(project: project, style: style)
+        let timeline = context.timeline
         let beatsPerBar = project.timeTop
         let timeBottom = project.timeBottom
-        let diatonicMap = diatonicQualityMap(forKey: project.keyRoot, mode: project.keyMode)
-        let defaultDrumPreset = DrumPreset.defaultPreset(
-            for: style,
-            beatsPerBar: beatsPerBar,
-            timeBottom: timeBottom
-        )
+        let diatonicMap = context.diatonicMap
+        let defaultDrumPreset = context.defaultDrumPreset
         let previousTotalBeats = Double(previousTotalBars * beatsPerBar)
         let newChordSpans = timeline.chords.filter { newChordIds.contains($0.chord.id) }
         let newChordRanges = newChordSpans.map { span in
@@ -375,6 +385,7 @@ struct StudioGenerator {
                         limit: previousTotalBeats...Double.greatestFiniteMagnitude
                     )
                 }
+                applySectionDynamics(newNotes, dynamics: context.dynamics)
                 didAppend = appendNotes(newNotes, to: track, modelContext: modelContext) || didAppend
                 continue
             }
@@ -401,6 +412,8 @@ struct StudioGenerator {
                 arpeggioPattern: track.regenerateArpeggioPattern,
                 compingPattern: track.compingPattern,
                 bassPattern: track.bassPattern,
+                sectionBoundaryBars: context.sectionBounds,
+                arrangement: context.arrangement,
                 bassSong: track.instrument == .bass ? StudioBassComposer.SongContext(project: project, style: style) : nil
             )
             var newNotes = notes.filter { note in
@@ -416,6 +429,7 @@ struct StudioGenerator {
             if track.followsArrangement {
                 newNotes = StudioArranger.arrange(newNotes, instrument: track.instrument, variant: track.variant, project: project, style: style)
             }
+            applySectionDynamics(newNotes, dynamics: context.dynamics)
             didAppend = appendNotes(newNotes, to: track, modelContext: modelContext) || didAppend
         }
 
@@ -429,10 +443,13 @@ struct StudioGenerator {
         sectionIds: Set<UUID>
     ) -> Bool {
         guard !sectionIds.isEmpty else { return false }
-        let timeline = buildTimeline(for: project)
+        // Same song-wide context as a full regeneration, so editing one chord
+        // doesn't change the register, voicing or velocity of its section.
+        let context = RegenerationContext(project: project, style: style)
+        let timeline = context.timeline
         let beatsPerBar = project.timeTop
         let timeBottom = project.timeBottom
-        let diatonicMap = diatonicQualityMap(forKey: project.keyRoot, mode: project.keyMode)
+        let diatonicMap = context.diatonicMap
 
         let ranges = sectionRanges(for: project).filter { sectionIds.contains($0.sectionId) }
         guard !ranges.isEmpty else { return false }
@@ -476,11 +493,14 @@ struct StudioGenerator {
                 arpeggioPattern: track.regenerateArpeggioPattern,
                 compingPattern: track.compingPattern,
                 bassPattern: track.bassPattern,
+                sectionBoundaryBars: context.sectionBounds,
+                arrangement: context.arrangement,
                 bassSong: track.instrument == .bass ? StudioBassComposer.SongContext(project: project, style: style) : nil
             )
             let arranged = track.followsArrangement
                 ? StudioArranger.arrange(notes, instrument: track.instrument, variant: track.variant, project: project, style: style)
                 : notes
+            applySectionDynamics(arranged, dynamics: context.dynamics)
             didChange = appendNotes(arranged, to: track, modelContext: modelContext) || didChange
         }
 
@@ -2268,9 +2288,18 @@ struct StudioGenerator {
 
         let density = max(0.0, min(1.0, complexity))
         if density < 0.35 {
+            // Keep the whole backbeat (2 and 4 in 4/4), not just the first
+            // snare; only a pattern with no snare on the backbeat (half-time)
+            // falls back to its first hit.
+            let lowBackbeat = Set(stepsFromOffsets(
+                meter.backbeatOffsets,
+                stepsPerBeat: stepsPerBeat,
+                stepsPerBar: stepsPerBar
+            ))
+            let backbeatSnares = pattern.snare.filter { lowBackbeat.contains($0) }
             pattern = DrumPattern(
                 kick: pattern.kick.filter { $0 % stepsPerBeat == 0 },
-                snare: Array(pattern.snare.prefix(1)),
+                snare: backbeatSnares.isEmpty ? Array(pattern.snare.prefix(1)) : backbeatSnares,
                 hatClosed: pattern.hatClosed.filter { $0 % stepsPerBeat == 0 },
                 hatOpen: [],
                 clap: [],

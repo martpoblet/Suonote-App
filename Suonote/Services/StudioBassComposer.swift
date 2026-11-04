@@ -24,12 +24,15 @@ enum StudioBassComposer {
         let keyPitchClass: Int
         let scale: [Int]
 
-        init(project: Project, style: StudioStyle) {
+        /// - Parameter drumTrack: the drum part to lock to when it isn't (yet)
+        ///   reachable through `project.studioTracks`, e.g. while the tracks of
+        ///   a brand-new project are still being generated.
+        init(project: Project, style: StudioStyle, drumTrack: StudioTrack? = nil) {
             map = StudioArranger.songMap(for: project)
             keyPitchClass = ChordPreviewPlayer.pitchClass(of: project.keyRoot) ?? 0
             scale = project.keyMode.intervals
             let beatsPerBar = Double(max(1, project.timeTop))
-            let drums = project.studioTracks.first { $0.instrument == .drums }
+            let drums = drumTrack ?? project.studioTracks.first { $0.instrument == .drums }
 
             var byBar: [Int: Set<Double>] = [:]
             for note in drums?.notes ?? [] where note.pitch == 35 || note.pitch == 36 {

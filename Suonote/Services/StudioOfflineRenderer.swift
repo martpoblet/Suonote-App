@@ -65,6 +65,11 @@ enum StudioOfflineRenderer {
 
         let beatScale = 4.0 / Double(max(1, project.timeBottom))
         let bpm = project.quarterNoteBpm()
+        // makeChain configures effects at a placeholder 120 bpm; re-apply with the
+        // project's tempo so tempo-synced delays match what playback sounds like.
+        for track in tracks {
+            graph.updateEffects(for: track, bpm: bpm)
+        }
         let sequencer = AVAudioSequencer(audioEngine: engine)
         graph.buildSequence(sequencer, tracks: tracks, beatScale: beatScale, beatsPerBar: project.timeTop)
         sequencer.tempoTrack.addEvent(AVExtendedTempoEvent(tempo: bpm), at: 0)

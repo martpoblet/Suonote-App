@@ -42,6 +42,8 @@ nonisolated final class TakeCapture: @unchecked Sendable {
     let url: URL
 
     private let engine = AVAudioEngine()
+    /// The capture's engine, for observing its configuration changes.
+    var audioEngine: AVAudioEngine { engine }
     private let clickNode = AVAudioPlayerNode()
     private var clickRate: Double = 48_000
     private var accentClick: AVAudioPCMBuffer?

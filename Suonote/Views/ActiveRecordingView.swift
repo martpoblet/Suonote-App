@@ -136,7 +136,7 @@ struct ActiveRecordingView: View {
                 Image(systemName: "xmark")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    .frame(width: 36, height: 36)
+                    .frame(width: 44, height: 44)
             }
             .buttonStyle(.glass)
             .buttonBorderShape(.circle)
@@ -158,7 +158,7 @@ struct ActiveRecordingView: View {
             Spacer(minLength: 0)
 
             // Balances the close button.
-            Color.clear.frame(width: 36, height: 36)
+            Color.clear.frame(width: 44, height: 44)
         }
     }
 
@@ -182,6 +182,10 @@ struct ActiveRecordingView: View {
 
                 if micDenied {
                     micDeniedCard
+                }
+
+                if let message = audioManager.startError ?? audioManager.notice {
+                    messageCard(message, isError: audioManager.startError != nil)
                 }
 
                 optionsCard
@@ -311,6 +315,33 @@ struct ActiveRecordingView: View {
         .padding(DesignSystem.Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
         .cardStyle(color: DesignSystem.Colors.record.opacity(0.4))
+    }
+
+    /// Why a take didn't start, or why it ended on its own (empty take,
+    /// interruption). Stays until dismissed or the next take begins.
+    private func messageCard(_ message: String, isError: Bool) -> some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+            Label(
+                isError ? String(localized: "Couldn't record") : String(localized: "Recording ended"),
+                systemImage: isError ? "exclamationmark.triangle" : "info.circle"
+            )
+            .font(DesignSystem.Typography.subheadline)
+            .foregroundStyle(isError ? DesignSystem.Colors.record : DesignSystem.Colors.textPrimary)
+            Text(message)
+                .font(DesignSystem.Typography.callout)
+                .foregroundStyle(DesignSystem.Colors.textSecondary)
+            Button("Dismiss") {
+                audioManager.startError = nil
+                audioManager.notice = nil
+            }
+            .buttonStyle(OutlineButtonStyle(compact: true))
+            .frame(minHeight: 44)
+            .padding(.top, DesignSystem.Spacing.xxs)
+        }
+        .padding(DesignSystem.Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardStyle(color: (isError ? DesignSystem.Colors.record : DesignSystem.Colors.textTertiary).opacity(0.4))
+        .accessibilityElement(children: .contain)
     }
 
     // MARK: Count-in

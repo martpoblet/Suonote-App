@@ -132,6 +132,7 @@ final class StudioMixGraph {
         mixState.removeAll()
         musicTracks.removeAll()
         layerTracks.removeAll()
+        controllerTimelines.removeAll()
         for node in [ambienceInput, ambienceReverb, ambienceTone, busEQ, glue, limiter, ceiling] where node.engine != nil {
             engine.detach(node)
         }
@@ -506,6 +507,7 @@ final class StudioMixGraph {
     func buildSequence(_ sequencer: AVAudioSequencer, tracks: [StudioTrack], beatScale: Double, beatsPerBar: Int) {
         musicTracks.removeAll()
         layerTracks.removeAll()
+        controllerTimelines.removeAll()
         for track in tracks where !track.instrument.isAudio {
             guard let chain = chains[track.id], let sampler = chain.sampler else { continue }
             let musicTrack = sequencer.createAndAppendTrack()
@@ -545,15 +547,69 @@ final class StudioMixGraph {
         let channel = midiChannel(for: track, chain: chain)
         musicTrack.clearEvents(in: AVMakeBeatRange(0, AVMusicTimeStampEndOfTrack))
         // Silence anything left hanging by the removed note-offs.
-        sampler.sendController(64, withValue: 0, onChannel: UInt8(channel))
-        sampler.sendController(123, withValue: 0, onChannel: UInt8(channel))
+        Self.silence(sampler, channel: UInt8(channel), hardCut: false)
         writeEvents(for: track, into: musicTrack, beatScale: beatScale, beatsPerBar: beatsPerBar)
         if let layerTrack = layerTracks[track.id], let layer = chain.layer {
             layerTrack.clearEvents(in: AVMakeBeatRange(0, AVMusicTimeStampEndOfTrack))
-            layer.sendController(123, withValue: 0, onChannel: 0)
+            Self.silence(layer, channel: 0, hardCut: false)
             writeLayerEvents(for: track, into: layerTrack, beatScale: beatScale)
         }
         return true
+    }
+
+    /// Releases the sustain pedal and ends every sounding note on a channel.
+    /// `hardCut` also sends all-sound-off (CC120), which skips release tails.
+    private static func silence(_ unit: AVAudioUnitMIDIInstrument, channel: UInt8, hardCut: Bool) {
+        unit.sendController(64, withValue: 0, onChannel: channel)        // sustain pedal up
+        if hardCut {
+            unit.sendController(120, withValue: 0, onChannel: channel)   // all sound off
+        }
+        unit.sendController(123, withValue: 0, onChannel: channel)       // all notes off
+    }
+
+    /// Controller state written into each part's sequence (expression swells
+    /// and pedalling, in sequencer beats), kept so playback can restore it when
+    /// starting from the middle of the song: the sequencer does not chase
+    /// controllers, so a start at the chorus would otherwise keep whatever
+    /// value the previous outro left behind.
+    private struct ControllerTimeline {
+        var channel: UInt8 = 0
+        var expression: [(beat: Double, value: UInt8)] = []
+        var pedal: [(beat: Double, down: Bool)] = []
+    }
+    private var controllerTimelines: [UUID: ControllerTimeline] = [:]
+
+    /// Stops all hanging sound on every sampler (transport stop / pause / seek).
+    func silenceAll() {
+        for (id, chain) in chains {
+            let channel = controllerTimelines[id]?.channel ?? 0
+            if let sampler = chain.sampler {
+                Self.silence(sampler, channel: channel, hardCut: true)
+            }
+            if let layer = chain.layer {
+                Self.silence(layer, channel: 0, hardCut: true)
+            }
+        }
+    }
+
+    /// Re-sends expression (CC11) and sustain (CC64) as they stand at
+    /// `sequencerBeat`. Defaults (full expression, pedal up) apply before the
+    /// first event of a part.
+    func chaseControllers(atSequencerBeat sequencerBeat: Double) {
+        for (id, chain) in chains {
+            guard let sampler = chain.sampler else { continue }
+            let timeline = controllerTimelines[id] ?? ControllerTimeline()
+            var expression: UInt8 = 127
+            for point in timeline.expression where point.beat <= sequencerBeat + 0.000_1 {
+                expression = point.value
+            }
+            var pedalDown = false
+            for point in timeline.pedal where point.beat <= sequencerBeat + 0.000_1 {
+                pedalDown = point.down
+            }
+            sampler.sendController(11, withValue: expression, onChannel: timeline.channel)
+            sampler.sendController(64, withValue: pedalDown ? 127 : 0, onChannel: timeline.channel)
+        }
     }
 
     private func midiChannel(for track: StudioTrack, chain: TrackChain) -> UInt32 {
@@ -563,6 +619,9 @@ final class StudioMixGraph {
     private func writeEvents(for track: StudioTrack, into musicTrack: AVMusicTrack, beatScale: Double, beatsPerBar: Int) {
         guard let chain = chains[track.id] else { return }
         let channel = midiChannel(for: track, chain: chain)
+
+        var timeline = ControllerTimeline()
+        timeline.channel = UInt8(channel)
 
         // Reset controllers so a reused sampler starts clean.
         musicTrack.addEvent(AVMIDIControlChangeEvent(channel: channel, messageType: .sustain, value: 0), at: 0)
@@ -588,6 +647,7 @@ final class StudioMixGraph {
                     AVMIDIControlChangeEvent(channel: channel, messageType: .expression, value: UInt32(point.value)),
                     at: max(0, point.beat * beatScale)
                 )
+                timeline.expression.append((beat: max(0, point.beat * beatScale), value: UInt8(max(0, min(127, point.value)))))
                 lastValue = point.value
             }
         }
@@ -598,8 +658,10 @@ final class StudioMixGraph {
                     AVMIDIControlChangeEvent(channel: channel, messageType: .sustain, value: down ? 127 : 0),
                     at: max(0, beat * beatScale)
                 )
+                timeline.pedal.append((beat: max(0, beat * beatScale), down: down))
             }
         }
+        controllerTimelines[track.id] = timeline
     }
 
     private func shouldPedal(track: StudioTrack, profile: StudioSoundCatalog.MixProfile) -> Bool {
