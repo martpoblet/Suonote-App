@@ -297,6 +297,10 @@ struct StudioNoteEditor: View {
                 .onTapGesture(coordinateSpace: .local) { location in
                     handleGridTap(location, rows: rows)
                 }
+                .accessibilityElement()
+                .accessibilityLabel("Note grid")
+                .accessibilityHint("Use the Add note action to write a note at the playhead")
+                .accessibilityAction(named: Text("Add note at playhead")) { addNoteAtPlayhead() }
 
             StudioPianoRollGrid(
                 rows: rows,
@@ -332,7 +336,8 @@ struct StudioNoteEditor: View {
                         onEditEnded: {
                             selectedNoteId = note.id
                             onNotesChanged()
-                        }
+                        },
+                        onDelete: { deleteNote(note) }
                     )
                 }
             }
@@ -362,7 +367,9 @@ struct StudioNoteEditor: View {
                         .background(
                             Capsule().fill(tool == option ? DesignSystem.Colors.textPrimary : Color.clear)
                         )
-                        .contentShape(Capsule())
+                        // 44 pt tall hit area; width stays put so the palette fits on iPhone.
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(option.title)
@@ -400,7 +407,8 @@ struct StudioNoteEditor: View {
             } label: {
                 Image(systemName: "minus.magnifyingglass")
                     .font(.system(size: 15, weight: .semibold))
-                    .frame(width: 32, height: 34)
+                    .frame(width: 32, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .foregroundStyle(DesignSystem.Colors.textPrimary)
@@ -411,7 +419,8 @@ struct StudioNoteEditor: View {
             } label: {
                 Image(systemName: "plus.magnifyingglass")
                     .font(.system(size: 15, weight: .semibold))
-                    .frame(width: 32, height: 34)
+                    .frame(width: 32, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .foregroundStyle(DesignSystem.Colors.textPrimary)
@@ -433,7 +442,8 @@ struct StudioNoteEditor: View {
         .foregroundStyle(DesignSystem.Colors.textPrimary)
         .padding(.horizontal, 8)
         .frame(height: 34)
-        .contentShape(Capsule())
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
     }
 
     // MARK: Editing
@@ -463,6 +473,16 @@ struct StudioNoteEditor: View {
             selectedNoteId = selectedNoteId == note.id && tool == .select ? nil : note.id
             haptic(.selection)
         }
+    }
+
+    /// VoiceOver alternative to tapping the grid: writes a note at the playhead,
+    /// on the selected note's pitch (or the middle of the range).
+    private func addNoteAtPlayhead() {
+        let rows = pitchRows
+        guard !rows.isEmpty else { return }
+        let start = min(max(0, snapped(playback.currentBeat)), max(0, totalBeats - stepLength))
+        let pitch = selectedNote?.pitch ?? rows[rows.count / 2].pitch
+        addNote(startBeat: start, pitch: pitch)
     }
 
     private func addNote(startBeat: Double, pitch: Int) {
@@ -692,6 +712,8 @@ struct StudioNoteBlock: View {
     let tool: StudioEditTool
     let onTap: () -> Void
     let onEditEnded: () -> Void
+    /// Removes the note (VoiceOver "Delete" action).
+    var onDelete: (() -> Void)? = nil
 
     @State private var dragStart: (beat: Double, row: Int)?
     @State private var resizeStart: Double?
@@ -720,6 +742,36 @@ struct StudioNoteBlock: View {
             .accessibilityLabel("\(StudioMusic.noteName(note.pitch)) note")
             .accessibilityValue("Starts beat \(String(format: "%.2g", note.startBeat + 1)), velocity \(note.velocity)")
             .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+            // The drag gestures have no VoiceOver equivalent, so every edit they
+            // make is also exposed as a custom action (same mutations).
+            .accessibilityAction(named: Text("Move earlier")) { nudge(beats: -snap) }
+            .accessibilityAction(named: Text("Move later")) { nudge(beats: snap) }
+            .accessibilityAction(named: Text("Move up a semitone")) { shiftPitch(by: 1) }
+            .accessibilityAction(named: Text("Move down a semitone")) { shiftPitch(by: -1) }
+            .accessibilityAction(named: Text("Longer")) { resize(by: snap) }
+            .accessibilityAction(named: Text("Shorter")) { resize(by: -snap) }
+            .accessibilityAction(named: Text("Delete")) { onDelete?() }
+    }
+
+    // MARK: Accessibility actions
+
+    private func nudge(beats: Double) {
+        let proposed = ((note.startBeat + beats) / snap).rounded() * snap
+        note.startBeat = min(max(0, proposed), max(0, totalBeats - note.duration))
+        onEditEnded()
+    }
+
+    private func shiftPitch(by semitones: Int) {
+        let target = note.pitch + semitones
+        guard rows.contains(where: { $0.pitch == target }) else { return }
+        note.pitch = target
+        onEditEnded()
+    }
+
+    private func resize(by beats: Double) {
+        let proposed = max(minDuration, ((note.duration + beats) / snap).rounded() * snap)
+        note.duration = min(proposed, max(minDuration, totalBeats - note.startBeat))
+        onEditEnded()
     }
 
     private var resizeHandle: some View {
@@ -867,7 +919,7 @@ struct NoteInspector: View {
                     Text(StudioGridValue.label(beats: note.duration, timeBottom: timeBottom))
                         .font(DesignSystem.Typography.caption.monospacedDigit())
                         .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        .frame(minWidth: 40)
+                        .frame(minWidth: 32)
                     stepButton("plus", label: "Longer") {
                         note.duration = min(maxDuration, note.duration + step)
                         onNoteUpdated()
@@ -897,6 +949,8 @@ struct NoteInspector: View {
                     .foregroundStyle(DesignSystem.Colors.error)
                     .frame(width: 34, height: 34)
                     .background(Circle().fill(DesignSystem.Colors.error.opacity(0.1)))
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Delete note")
@@ -910,6 +964,8 @@ struct NoteInspector: View {
                 .foregroundStyle(DesignSystem.Colors.textPrimary)
                 .frame(width: 26, height: 26)
                 .background(Circle().fill(DesignSystem.Colors.surfaceSecondary))
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)

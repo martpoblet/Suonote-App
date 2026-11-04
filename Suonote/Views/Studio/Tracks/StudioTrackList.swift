@@ -236,7 +236,7 @@ struct StudioTrackRow: View {
             Image(systemName: "ellipsis")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(DesignSystem.Colors.textSecondary)
-                .frame(width: 30, height: 32)
+                .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())
         }
         .accessibilityLabel("More for \(track.name)")

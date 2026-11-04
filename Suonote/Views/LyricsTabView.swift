@@ -137,7 +137,7 @@ struct LyricsTabView: View {
 
     private func startLyricsSection() {
         let section = SectionTemplate(
-            name: "Verse 1",
+            name: String(localized: "Verse 1", comment: "Song section name"),
             bars: 8,
             colorHex: SectionColor.sky.hex
         )

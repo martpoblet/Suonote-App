@@ -21,7 +21,9 @@ struct DesignSystem {
         /// Exact logo teal. Use for brand marks, waves, active meters.
         static let brand = Color(light: "00CCBE", dark: "00CCBE")
         /// Teal for fills (buttons, selected chips, playheads).
-        static let primary = Color(light: "00B5A8", dark: "1FD6C9")
+        /// Light mode is a deeper teal so `onPrimary` (white) label text reaches
+        /// WCAG AA (4.69:1). The bright logo teal stays in `brand`.
+        static let primary = Color(light: "00827A", dark: "1FD6C9")
         static let primaryLight = Color(light: "D6F4F1", dark: "123532")
         /// Teal for text & icons on paper (AA contrast).
         static let primaryDark = Color(light: "00786F", dark: "5FE6DC")
@@ -41,10 +43,11 @@ struct DesignSystem {
 
         // Ink
         static let textPrimary = Color(light: "171614", dark: "F3F0E9")
-        static let textSecondary = Color(light: "5E5A53", dark: "ADA89E")
-        static let textTertiary = Color(light: "8F8A80", dark: "7A766D")
+        // Contrast on paper / surfaces (WCAG AA >= 4.5:1 for all three).
+        static let textSecondary = Color(light: "57534B", dark: "B5B0A6")
+        static let textTertiary = Color(light: "666158", dark: "9C988E")
         static let textWhite = Color(light: "FFFFFF", dark: "FFFFFF")
-        static let textMuted = Color(light: "A9A398", dark: "6A665E")
+        static let textMuted = Color(light: "6E695F", dark: "8E8A81")
         /// Text placed on a `primary` fill.
         static let onPrimary = Color(light: "FFFFFF", dark: "08201E")
 

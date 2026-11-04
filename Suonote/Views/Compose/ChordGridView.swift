@@ -175,7 +175,7 @@ struct ComposeMeasureView: View {
                             .frame(width: beatWidth * CGFloat(slot.duration), alignment: .leading)
                     }
                 }
-                .frame(height: 38)
+                .frame(minHeight: 38)
 
                 beatTicks(beatWidth: beatWidth)
             }

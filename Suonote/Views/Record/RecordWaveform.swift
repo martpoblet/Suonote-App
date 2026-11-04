@@ -16,7 +16,8 @@ enum RecordWaveformCache {
         let values = await Task.detached(priority: .utility) {
             FileManagerUtils.extractWaveform(from: fileName, samples: samples)
         }.value
-        store["\(fileName)#\(samples)"] = values
+        // Don't cache an empty result: the file may simply not be on this device yet.
+        if !values.isEmpty { store["\(fileName)#\(samples)"] = values }
         return values
     }
 }

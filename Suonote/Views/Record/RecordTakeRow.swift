@@ -12,6 +12,8 @@ struct RecordTakeRow: View {
 
     private var isPlaying: Bool { player.isPlaying(recording) }
     private var isLoaded: Bool { player.isLoaded(recording) }
+    /// Audio files don't sync between devices — only the take's metadata does.
+    private var isAudioAvailable: Bool { FileManagerUtils.audioFileExists(fileName: recording.fileName) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
@@ -47,15 +49,20 @@ struct RecordTakeRow: View {
                 }
             }
 
-            RecordWaveformView(
-                fileName: recording.fileName,
-                samples: 56,
-                progress: player.progress(for: recording),
-                isActive: isLoaded,
-                onSeek: isLoaded ? { fraction in player.seek(recording, to: fraction) } : nil
-            )
-            .frame(height: 34)
-            .allowsHitTesting(isLoaded)
+            if isAudioAvailable {
+                RecordWaveformView(
+                    fileName: recording.fileName,
+                    samples: 56,
+                    progress: player.progress(for: recording),
+                    isActive: isLoaded,
+                    onSeek: isLoaded ? { fraction in player.seek(recording, to: fraction) } : nil
+                )
+                .frame(height: 34)
+                .allowsHitTesting(isLoaded)
+            } else {
+                AudioUnavailableLabel()
+                    .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+            }
 
             if linkedSection != nil || !recording.recordActiveEffectNames.isEmpty {
                 HStack(spacing: DesignSystem.Spacing.xs) {
@@ -102,7 +109,10 @@ struct RecordTakeRow: View {
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .disabled(!isAudioAvailable)
+        .opacity(isAudioAvailable ? 1 : 0.4)
         .accessibilityLabel(isPlaying ? "Pause \(recording.name)" : "Play \(recording.name)")
+        .accessibilityHint(isAudioAvailable ? "" : String(localized: "Audio not available on this device"))
     }
 
     private var favoriteButton: some View {

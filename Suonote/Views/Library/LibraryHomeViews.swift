@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 // MARK: - Greeting header
 
@@ -239,6 +240,7 @@ struct LibraryProjectRow: View {
 struct LibraryEmptyState: View {
     let create: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.modelContext) private var modelContext
 
     var body: some View {
         VStack(spacing: DesignSystem.Spacing.xl) {
@@ -262,6 +264,21 @@ struct LibraryEmptyState: View {
                 Label("Start a song", systemImage: "plus")
             }
             .buttonStyle(InkButtonStyle())
+
+            Button {
+                // Same entry point as Settings > About > Add the demo song.
+                DemoSong.replace(in: modelContext)
+                HapticFeedback.success.trigger()
+            } label: {
+                Label("Try the example song", systemImage: "play.circle")
+                    .font(DesignSystem.Typography.buttonSmall)
+                    .foregroundStyle(DesignSystem.Colors.primaryDark)
+                    .frame(minHeight: 44)
+                    .padding(.horizontal, DesignSystem.Spacing.sm)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Adds the demo song to your library")
 
             VStack(alignment: .leading, spacing: 0) {
                 step("1", "Compose", "Sections, chords and a shape.")

@@ -13796,6 +13796,136 @@
           }
         }
       }
+    },
+    "Audio not available on this device" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio no disponible en este dispositivo"
+          }
+        }
+      }
+    },
+    "Song structure, chords and lyrics sync through iCloud. Recorded audio stays on the device where it was recorded." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La estructura, los acordes y la letra se sincronizan con iCloud. El audio grabado se queda en el dispositivo donde se grabó."
+          }
+        }
+      }
+    },
+    "Listen to an example song" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escuchar una canción de ejemplo"
+          }
+        }
+      }
+    },
+    "Adds the demo song to your library and starts using Suonote" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añade la canción de demostración a tu biblioteca y empieza a usar Suonote"
+          }
+        }
+      }
+    },
+    "Try the example song" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Probar la canción de ejemplo"
+          }
+        }
+      }
+    },
+    "Adds the demo song to your library" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añade la canción de demostración a tu biblioteca"
+          }
+        }
+      }
+    },
+    "Note grid" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cuadrícula de notas"
+          }
+        }
+      }
+    },
+    "Use the Add note action to write a note at the playhead" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usa la acción Añadir nota para escribir una nota en la posición de reproducción"
+          }
+        }
+      }
+    },
+    "Add note at playhead" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadir nota en la posición de reproducción"
+          }
+        }
+      }
+    },
+    "Move up a semitone" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subir un semitono"
+          }
+        }
+      }
+    },
+    "Move down a semitone" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bajar un semitono"
+          }
+        }
+      }
+    },
+    "%@, step %lld" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, paso %lld"
+          }
+        }
+      }
+    },
+    "Parts rewritten" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Partes reescritas"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

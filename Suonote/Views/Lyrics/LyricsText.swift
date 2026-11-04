@@ -1,4 +1,5 @@
 import SwiftUI
+import NaturalLanguage
 
 // MARK: - Lyrics typography
 
@@ -39,8 +40,13 @@ enum LyricsAnalysis {
             .filter { !$0.isEmpty }
     }
 
-    /// Estimated syllables in one word (vowel groups, with a silent-e rule).
-    static func syllables(inWord raw: String) -> Int {
+    /// Estimated syllables in one word. English counts vowel groups with a
+    /// silent-e rule; Spanish uses `spanishSyllables(inWord:)`. `language` nil
+    /// means "the app's current language" (a lone word is too short to detect).
+    static func syllables(inWord raw: String, language: NLLanguage? = nil) -> Int {
+        if (language ?? fallbackLanguage) == .spanish {
+            return spanishSyllables(inWord: raw)
+        }
         let word = normalized(raw)
         guard !word.isEmpty else { return 0 }
         var count = 0
@@ -60,8 +66,85 @@ enum LyricsAnalysis {
         return max(1, count)
     }
 
-    static func syllables(inLine line: String) -> Int {
-        words(in: line).reduce(0) { $0 + syllables(inWord: $1) }
+    /// `language` nil detects English vs Spanish from the line itself (falling
+    /// back to the app language when the line is too short to tell).
+    static func syllables(inLine line: String, language: NLLanguage? = nil) -> Int {
+        let resolved = language ?? detectedLanguage(of: line)
+        return words(in: line).reduce(0) { $0 + syllables(inWord: $1, language: resolved) }
+    }
+
+    // MARK: Language
+
+    /// The app's current language (English unless the app resolves to Spanish).
+    private static var fallbackLanguage: NLLanguage {
+        Bundle.main.preferredLocalizations.first?.hasPrefix("es") == true ? .spanish : .english
+    }
+
+    /// English or Spanish for a piece of lyrics; the app language when unsure.
+    static func detectedLanguage(of text: String) -> NLLanguage {
+        let recognizer = NLLanguageRecognizer()
+        recognizer.languageConstraints = [.english, .spanish]
+        recognizer.processString(text)
+        if let dominant = recognizer.dominantLanguage,
+           (recognizer.languageHypotheses(withMaximum: 2)[dominant] ?? 0) >= 0.6 {
+            return dominant
+        }
+        return fallbackLanguage
+    }
+
+    // MARK: Spanish syllables
+
+    private enum SpanishLetter { case consonant, strong, weak, stressedWeak }
+
+    /// Syllables in a Spanish word from its vowel nuclei. a/e/o (and accented
+    /// á/é/ó) are strong; i/u/ü are weak and fuse with a neighbouring vowel
+    /// into a diphthong; accented í/ú break it (hiatus), as do two strong
+    /// vowels. "u" is silent in qu- and in gu- before e/i (but not in gü-);
+    /// a final "y" acts as a vowel; there is no silent-final-e rule.
+    static func spanishSyllables(inWord raw: String) -> Int {
+        let chars = Array(raw.lowercased().filter { $0.isLetter })
+        guard !chars.isEmpty else { return 0 }
+
+        var letters: [SpanishLetter] = []
+        for (index, char) in chars.enumerated() {
+            let previous: Character? = index > 0 ? chars[index - 1] : nil
+            let next: Character? = index + 1 < chars.count ? chars[index + 1] : nil
+            switch char {
+            case "a", "e", "o", "á", "é", "ó":
+                letters.append(.strong)
+            case "í", "ú":
+                letters.append(.stressedWeak)
+            case "i", "ü":
+                letters.append(.weak)
+            case "u":
+                if previous == "q" {
+                    letters.append(.consonant)
+                } else if previous == "g", let next, ["e", "i", "é", "í"].contains(next) {
+                    letters.append(.consonant)
+                } else {
+                    letters.append(.weak)
+                }
+            case "y":
+                letters.append(index == chars.count - 1 ? .weak : .consonant)
+            default:
+                letters.append(.consonant)
+            }
+        }
+
+        var count = 0
+        for index in letters.indices where letters[index] != .consonant {
+            guard index > 0, letters[index - 1] != .consonant else {
+                count += 1
+                continue
+            }
+            let before = letters[index - 1]
+            let current = letters[index]
+            let isHiatus = (before == .strong && current == .strong)
+                || before == .stressedWeak
+                || current == .stressedWeak
+            if isHiatus { count += 1 }
+        }
+        return max(1, count)
     }
 
     /// The sound a line ends on: last vowel (+ silent e handling) and what follows.

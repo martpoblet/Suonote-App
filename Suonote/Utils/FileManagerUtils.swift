@@ -26,11 +26,20 @@ nonisolated enum FileManagerUtils {
         ]
         return candidates.first(where: { fileExists(at: $0) })
     }
-    
-    /// Extract waveform samples from an audio file, returns normalized 0...1 values
+
+    /// True when the audio file for a recording exists on this device.
+    /// Recording metadata syncs through iCloud but the audio files do not, so a
+    /// take recorded on another device has no local file.
+    static func audioFileExists(fileName: String) -> Bool {
+        existingRecordingURL(for: fileName) != nil
+    }
+
+    /// Extract waveform samples from an audio file, returns normalized 0...1 values.
+    /// Returns an empty array when the file is missing or unreadable — never
+    /// fabricated data. Callers draw a flat placeholder for an empty result.
     static func extractWaveform(from fileName: String, samples: Int = 50) -> [CGFloat] {
         guard let url = existingRecordingURL(for: fileName) else {
-            return (0..<samples).map { _ in CGFloat.random(in: 0.1...0.5) }
+            return []
         }
         
         do {
@@ -68,7 +77,7 @@ nonisolated enum FileManagerUtils {
             
             return waveform
         } catch {
-            return (0..<samples).map { _ in CGFloat.random(in: 0.1...0.5) }
+            return []
         }
     }
 }

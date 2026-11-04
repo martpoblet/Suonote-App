@@ -57,7 +57,7 @@ struct LibrarySettingsView: View {
                             Text("Sync")
                                 .font(DesignSystem.Typography.headline)
                                 .foregroundStyle(DesignSystem.Colors.textPrimary)
-                            Text("Songs sync across your devices automatically.")
+                            Text("Song structure, chords and lyrics sync through iCloud. Recorded audio stays on the device where it was recorded.")
                                 .font(DesignSystem.Typography.caption)
                                 .foregroundStyle(DesignSystem.Colors.textSecondary)
                         }

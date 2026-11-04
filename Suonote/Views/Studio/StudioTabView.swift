@@ -27,6 +27,10 @@ struct StudioTabView: View {
     @State private var mixProgress: Double?
     @EnvironmentObject private var playback: StudioPlaybackEngine
     @State private var showingNoSectionsAlert = false
+    /// Notes (and style) from before the last "rewrite", kept in memory so the
+    /// snackbar can undo it. Cleared after a few seconds.
+    @State private var regenerationUndo: RegenerationSnapshot?
+    @State private var regenerationUndoTask: Task<Void, Never>?
 
     private var sortedTracks: [StudioTrack] {
         project.studioTracks.sorted { $0.orderIndex < $1.orderIndex }
@@ -114,6 +118,8 @@ struct StudioTabView: View {
             }
         }
         .animation(DesignSystem.Animations.smoothSpring, value: mixProgress == nil)
+        .overlay(alignment: .bottom) { regenerationUndoToast }
+        .onDisappear { dismissRegenerationUndo() }
         .alert("Couldn't export", isPresented: $exportFailed) {
             Button("OK", role: .cancel) {}
         }
@@ -139,8 +145,10 @@ struct StudioTabView: View {
             lastTotalBars = timeline.totalBars
             syncStudioIfNeeded()
         }
-        .onChange(of: projectStudioSignature) { _, newSignature in
-            handleProjectChange(newSignature: newSignature)
+        // The cheap hash only *triggers*; the full signature is built (once) in
+        // the handler, which still ignores changes that leave it unchanged.
+        .onChange(of: projectStudioChangeKey) { _, _ in
+            handleProjectChange(newSignature: projectStudioSignature)
         }
         .onChange(of: project.arrangementItems.count) { _, newValue in
             if newValue == 0 {
@@ -488,6 +496,7 @@ struct StudioTabView: View {
 
     private func applyStyle(_ style: StudioStyle) {
         let previousStyle = project.studioStyle
+        let snapshot = hasGeneratedTracks ? captureRegenerationSnapshot(style: previousStyle) : nil
         project.studioStyle = style
         project.updatedAt = Date()
         if previousStyle != style, hasGeneratedTracks {
@@ -500,6 +509,7 @@ struct StudioTabView: View {
             updateStudioSyncState(signature: projectStudioSignature, timeline: StudioGenerator.timeline(for: project))
             playback.needsSequenceRebuild = true
             try? modelContext.save()
+            if let snapshot { offerRegenerationUndo(snapshot) }
         } else {
             try? modelContext.save()
         }
@@ -507,6 +517,7 @@ struct StudioTabView: View {
 
     private func regenerateNotes() {
         guard let style = project.studioStyle else { return }
+        let snapshot = captureRegenerationSnapshot(style: project.studioStyle)
         StudioGenerator.regenerateNotes(for: project, style: style, modelContext: modelContext)
         updateStudioSyncState(signature: projectStudioSignature, timeline: StudioGenerator.timeline(for: project))
         project.updatedAt = Date()
@@ -514,6 +525,88 @@ struct StudioTabView: View {
         playback.needsSequenceRebuild = true
         playback.stop(resetPosition: true)
         haptic(.success)
+        offerRegenerationUndo(snapshot)
+    }
+
+    // MARK: Undo for "rewrite"
+
+    private func captureRegenerationSnapshot(style: StudioStyle?) -> RegenerationSnapshot {
+        let parts = project.studioTracks
+            .filter { !$0.instrument.isAudio }
+            .map { track in
+                RegenerationSnapshot.Part(
+                    trackId: track.id,
+                    drumPreset: track.drumPreset,
+                    notes: track.notes.map {
+                        RegenerationSnapshot.SavedNote(startBeat: $0.startBeat, duration: $0.duration, pitch: $0.pitch, velocity: $0.velocity)
+                    }
+                )
+            }
+        return RegenerationSnapshot(style: style, parts: parts)
+    }
+
+    private func offerRegenerationUndo(_ snapshot: RegenerationSnapshot) {
+        regenerationUndoTask?.cancel()
+        withAnimation(DesignSystem.Animations.quickSpring) { regenerationUndo = snapshot }
+        regenerationUndoTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(8))
+            guard !Task.isCancelled else { return }
+            dismissRegenerationUndo()
+        }
+    }
+
+    private func dismissRegenerationUndo() {
+        regenerationUndoTask?.cancel()
+        regenerationUndoTask = nil
+        guard regenerationUndo != nil else { return }
+        withAnimation(DesignSystem.Animations.quickSpring) { regenerationUndo = nil }
+    }
+
+    /// Puts every generated track back the way it was (notes, drum groove, style).
+    private func undoRegeneration() {
+        guard let snapshot = regenerationUndo else { return }
+        dismissRegenerationUndo()
+        for part in snapshot.parts {
+            guard let track = project.studioTracks.first(where: { $0.id == part.trackId }) else { continue }
+            for note in track.notes {
+                modelContext.delete(note)
+            }
+            track.notes.removeAll()
+            for saved in part.notes {
+                let note = StudioNote(startBeat: saved.startBeat, duration: saved.duration, pitch: saved.pitch, velocity: saved.velocity)
+                note.track = track
+                track.notes.append(note)
+                modelContext.insert(note)
+            }
+            if track.instrument == .drums { track.drumPreset = part.drumPreset }
+        }
+        project.studioStyle = snapshot.style
+        updateStudioSyncState(signature: projectStudioSignature, timeline: StudioGenerator.timeline(for: project))
+        project.updatedAt = Date()
+        try? modelContext.save()
+        playback.needsSequenceRebuild = true
+        playback.stop(resetPosition: true)
+        haptic(.success)
+    }
+
+    @ViewBuilder
+    private var regenerationUndoToast: some View {
+        if regenerationUndo != nil {
+            HStack(spacing: DesignSystem.Spacing.sm) {
+                Text("Parts rewritten")
+                    .font(DesignSystem.Typography.calloutBold)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+                    .lineLimit(1)
+                Button("Undo") { undoRegeneration() }
+                    .font(DesignSystem.Typography.buttonSmall)
+                    .foregroundStyle(DesignSystem.Colors.primaryDark)
+                    .frame(minHeight: 44)
+            }
+            .padding(.horizontal, DesignSystem.Spacing.md)
+            .glassEffect(.regular, in: .capsule)
+            .padding(.bottom, 96)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
     }
 
     private func promptAddTrack() {
@@ -781,6 +874,37 @@ struct StudioTabView: View {
         StudioSync.signature(for: project)
     }
 
+    /// Lightweight stand-in for `projectStudioSignature` in `.onChange`: hashes
+    /// the same fields without building or sorting strings on every body pass.
+    private var projectStudioChangeKey: Int {
+        var hasher = Hasher()
+        hasher.combine(project.bpm)
+        hasher.combine(project.timeTop)
+        hasher.combine(project.timeBottom)
+        hasher.combine(project.keyRoot)
+        hasher.combine(project.keyMode.rawValue)
+        for item in project.arrangementItems {
+            hasher.combine(item.id)
+            hasher.combine(item.orderIndex)
+            hasher.combine(item.labelOverride)
+            guard let section = item.sectionTemplate else { continue }
+            hasher.combine(section.id)
+            hasher.combine(section.bars)
+            for chord in section.chordEvents {
+                hasher.combine(chord.id)
+                hasher.combine(chord.barIndex)
+                hasher.combine(chord.beatOffset)
+                hasher.combine(chord.duration)
+                hasher.combine(chord.isRest)
+                hasher.combine(chord.root)
+                hasher.combine(chord.quality.rawValue)
+                hasher.combine(chord.extensions)
+                hasher.combine(chord.slashRoot)
+            }
+        }
+        return hasher.finalize()
+    }
+
     private func normalizeLegacyPianoOctavesIfNeeded() {
         guard let style = project.studioStyle else { return }
 
@@ -819,4 +943,26 @@ struct StudioTabView: View {
 
 
 
+}
+
+// MARK: - Undo snapshot
+
+/// In-memory copy of the generated tracks taken before a "rewrite", so the
+/// snackbar can restore hand edits. Tracks are matched by id on restore.
+private struct RegenerationSnapshot {
+    struct SavedNote {
+        let startBeat: Double
+        let duration: Double
+        let pitch: Int
+        let velocity: Int
+    }
+
+    struct Part {
+        let trackId: UUID
+        let drumPreset: DrumPreset?
+        let notes: [SavedNote]
+    }
+
+    let style: StudioStyle?
+    let parts: [Part]
 }

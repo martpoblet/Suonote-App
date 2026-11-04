@@ -32,6 +32,9 @@ struct StudioDrumEditor: View {
     @State private var hScroll = ScrollPosition()
     @State private var hVisible: CGRect = .zero
     @State private var showingClearConfirm = false
+    /// The pad grid is a Canvas; while VoiceOver runs we lay invisible,
+    /// accessible step elements over it (not built otherwise: ~12 x steps views).
+    @State private var voiceOverRunning = UIAccessibility.isVoiceOverRunning
 
     private let laneHeight: CGFloat = 36
     private let rulerHeight: CGFloat = 40
@@ -193,6 +196,9 @@ struct StudioDrumEditor: View {
                     .frame(width: viewport.width, height: viewport.height)
                     .offset(x: viewport.minX)
                     .allowsHitTesting(false)
+                    if voiceOverRunning {
+                        accessibleStepCells(lanes: lanes, notesByPitch: notesByPitch)
+                    }
                 }
                 .frame(width: gridWidth, height: gridHeight, alignment: .topLeading)
             }
@@ -209,6 +215,33 @@ struct StudioDrumEditor: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Drum pattern, \(totalBars) bars")
+        .onReceive(NotificationCenter.default.publisher(for: UIAccessibility.voiceOverStatusDidChangeNotification)) { _ in
+            voiceOverRunning = UIAccessibility.isVoiceOverRunning
+        }
+    }
+
+    /// One accessible toggle per step, laid exactly over the Canvas pads.
+    /// Activating it runs the same logic as tapping the pad.
+    private func accessibleStepCells(lanes: [DrumLane], notesByPitch: [Int: [Int: StudioNote]]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(lanes.indices, id: \.self) { laneIndex in
+                let lane = lanes[laneIndex]
+                HStack(spacing: 0) {
+                    ForEach(0..<totalSteps, id: \.self) { step in
+                        let isOn = notesByPitch[lane.pitch]?[step] != nil
+                        Color.clear
+                            .frame(width: cellWidth, height: laneHeight)
+                            .accessibilityElement()
+                            .accessibilityLabel(Text("\(lane.name), step \(step + 1)"))
+                            .accessibilityValue(isOn ? Text("On") : Text("Off"))
+                            .accessibilityAddTraits(.isButton)
+                            .accessibilityAction { activate(lane: lane, step: step) }
+                    }
+                }
+            }
+        }
+        .frame(width: gridWidth, height: gridHeight, alignment: .topLeading)
+        .allowsHitTesting(false)
     }
 
     // MARK: Tool palette
@@ -230,7 +263,8 @@ struct StudioDrumEditor: View {
                     .padding(.horizontal, 12)
                     .frame(height: 34)
                     .background(Capsule().fill(mode == option ? DesignSystem.Colors.textPrimary : Color.clear))
-                    .contentShape(Capsule())
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(mode == option ? .isSelected : [])
@@ -264,7 +298,8 @@ struct StudioDrumEditor: View {
                 .foregroundStyle(DesignSystem.Colors.textPrimary)
                 .padding(.horizontal, 8)
                 .frame(height: 34)
-                .contentShape(Capsule())
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
             }
             .accessibilityLabel(copiedBarIndex.map { String(localized: "Paste bar \($0 + 1)") } ?? String(localized: "Copy a bar"))
 
@@ -275,7 +310,8 @@ struct StudioDrumEditor: View {
             } label: {
                 Image(systemName: "trash")
                     .font(.system(size: 14, weight: .semibold))
-                    .frame(width: 32, height: 34)
+                    .frame(width: 32, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .foregroundStyle(DesignSystem.Colors.textPrimary)
@@ -286,7 +322,8 @@ struct StudioDrumEditor: View {
             } label: {
                 Image(systemName: cellWidth > 30 ? "minus.magnifyingglass" : "plus.magnifyingglass")
                     .font(.system(size: 15, weight: .semibold))
-                    .frame(width: 32, height: 34)
+                    .frame(width: 32, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .foregroundStyle(DesignSystem.Colors.textPrimary)
@@ -303,7 +340,11 @@ struct StudioDrumEditor: View {
         let laneIndex = Int(location.y / laneHeight)
         let step = Int(location.x / cellWidth)
         guard lanes.indices.contains(laneIndex), step >= 0, step < totalSteps else { return }
-        let lane = lanes[laneIndex]
+        activate(lane: lanes[laneIndex], step: step)
+    }
+
+    /// Tap on a pad (also the VoiceOver activation of a step).
+    private func activate(lane: DrumLane, step: Int) {
         switch mode {
         case .hits:
             toggleStep(lane: lane, step: step)

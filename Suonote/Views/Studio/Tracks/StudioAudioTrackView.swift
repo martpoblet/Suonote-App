@@ -44,7 +44,12 @@ struct StudioAudioTrackView: View {
                 }
 
                 Group {
-                    if waveformSamples.isEmpty {
+                    if !FileManagerUtils.audioFileExists(fileName: recording.fileName) {
+                        // Takes sync as metadata only; the audio lives where it was recorded.
+                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                            .fill(DesignSystem.Colors.surfaceSecondary)
+                            .overlay(AudioUnavailableLabel().padding(DesignSystem.Spacing.sm))
+                    } else if waveformSamples.isEmpty {
                         RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
                             .fill(DesignSystem.Colors.surfaceSecondary)
                             .overlay(LoadingView(String(localized: "Reading the take…")).scaleEffect(0.8))

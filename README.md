@@ -61,7 +61,8 @@ This allows users to move from idea capture to compositional development without
   - tags,
   - BPM presets and tempo preview.
 - Deep linking support:
-  - open a project with `suonote://project/<uuid>`.
+  - open a project with `suonote://project/<uuid>[/compose|studio|lyrics|record]`,
+  - `suonote://new` creates a song, `suonote://record` records on the latest song.
 
 ## 2. Composition Workspace (Compose Tab)
 - Section-based songwriting model (verse, chorus, bridge, custom sections).
@@ -254,8 +255,11 @@ This allows users to move from idea capture to compositional development without
 ## 8. Sync and Apple Ecosystem Integration
 - Local-first persistence with SwiftData.
 - Cloud-backed sync with CloudKit private database (`iCloud.Suonote`).
+  - Song structure, chords, lyrics and recording *metadata* sync across devices.
+  - Recorded audio files are **not** synced: they stay in the Documents folder of the device where they were recorded, and other devices show "Audio not available on this device" for those takes.
 - Migration fallback logic for schema/store changes.
 - App Group support (`group.MartinCode.Suonote.shared`) for widget data sharing.
+- Home Screen widget (`SuonoteWidget`) with deep links into a song's tabs.
 - App Intents / Shortcuts integration:
   - create a new project from Siri/Shortcuts.
 
@@ -264,10 +268,12 @@ This allows users to move from idea capture to compositional development without
   - project structuring,
   - chord intelligence,
   - record + studio workflow.
+- The last onboarding page offers "Listen to an example song", which adds the demo song to the library.
 - Splash transition to main project list.
 - Design system with consistent typography, spacing, and component styles.
 - Haptic feedback integration in key interactions.
-- Accessibility-oriented utility layer (helpers and adaptive layout support).
+- Light, dark and system appearance, plus an in-app language override (English / Spanish).
+- Accessibility work in progress: VoiceOver labels and custom actions on the editors, Reduce Motion support, and AA-contrast text colors.
 
 ## Domain Model (Data Architecture)
 
@@ -307,45 +313,76 @@ Supporting enums/models cover:
 - `AVFoundation` for recording/playback/audio engine composition.
 - `AudioToolbox` integrations for metronome and low-level audio utilities.
 - `CloudKit` for sync.
+- `WidgetKit` and `App Intents` for the widget and Shortcuts.
 - SoundFont-based playback using `MS_Basic.sf2` (MuseScore General, MIT license).
+- Swift 5 language mode with default `MainActor` isolation; iOS 26 (Liquid Glass) deployment target.
 
 ## Repository Structure
 
 ```text
-/Users/martinpoblet/Documents/Xcode/Suonote/
+Suonote-App/
 ├── README.md
-├── ARCHITECTURE.md
-├── ADVANCED_FEATURES.md
-├── CHANGELOG.md
+├── Info.plist
 ├── Suonote.xcodeproj
-├── Suonote/
-│   ├── SuonoteApp.swift
-│   ├── Models/
-│   ├── Views/
+├── Suonote/                      # App target
+│   ├── SuonoteApp.swift          # Entry point, ModelContainer + CloudKit setup
+│   ├── Models/                   # SwiftData models (Project, SectionTemplate, ChordEvent, Recording, StudioTrack…)
+│   ├── Views/                    # SwiftUI screens: Compose/, Lyrics/, Record/, Studio/, Library/, Components/
 │   ├── ViewModels/
-│   ├── Services/
-│   ├── Utils/
-│   ├── Resources/
-│   └── SoundFonts/
-├── SuonoteTests/
-└── SuonoteWidget/
+│   ├── Services/                 # Audio recording, Studio generation/playback, sync, export, shortcuts
+│   ├── Utils/                    # DesignSystem, music theory, settings, haptics, helpers
+│   ├── Resources/                # Fonts (Erode, Manrope), logo, THIRD_PARTY_NOTICES.md
+│   ├── SoundFonts/MuseScore/     # MS_Basic.sf2 goes here (git-ignored, see below)
+│   ├── Assets.xcassets
+│   └── *.xcstrings               # Localizable, InfoPlist, AppShortcuts string catalogs
+├── SuonoteTests/                 # XCTest unit tests
+├── SuonoteWidget/                # Widget extension
+├── SuonoteWidgetExtension.entitlements
+└── docs/                         # Design notes, audits and App Store assets
 ```
+
+### Documentation (`docs/`)
+- `DESIGN_LANGUAGE.md` — visual language: paper surfaces, ink, teal accent, typography.
+- `LIQUID_GLASS_REDESIGN.md` — how Liquid Glass (iOS 26) is used for the floating control layer.
+- `SOUND_ENGINE.md` — Studio sound engine architecture.
+- `SOUND_UPGRADE_RESEARCH.md` — research behind the SoundFont/sound upgrade.
+- `AUDIT_2026-06.md` — June 2026 technical audit (historical; see `AUDIT_2026-11.md` for the current state).
+- `app-store/` — App Store screenshots.
 
 ## Build and Run
 
-1. Open `/Users/martinpoblet/Documents/Xcode/Suonote/Suonote.xcodeproj` in Xcode 15+.
-2. Select the `Suonote` target.
-3. Run on iOS 17+ simulator or device.
-4. For real iCloud sync testing, ensure iCloud + CloudKit capabilities are enabled in Signing & Capabilities.
+Requirements: a recent Xcode that supports the iOS 26 SDK (the project's deployment target is **iOS 26.0**).
+
+1. Add the SoundFont (see below). The app builds without it, but Studio and chord-preview instrument sounds will be missing (a debug log reports the missing bank).
+2. Open `Suonote.xcodeproj` in Xcode.
+3. Select the `Suonote` scheme and an iOS 26 simulator or device.
+4. Run (`Cmd+R`).
+5. For real iCloud sync testing, use a device or simulator signed in to iCloud and make sure the iCloud (CloudKit, container `iCloud.Suonote`) and App Group (`group.MartinCode.Suonote.shared`) capabilities are enabled for your team in Signing & Capabilities.
+
+### SoundFont (`MS_Basic.sf2`)
+
+`MS_Basic.sf2` (MS Basic / MuseScore General, MIT license) is too large for GitHub, so it is git-ignored (`Suonote/SoundFonts/**/*.sf2`) and not in the repository. To build a working app, download it from the MuseScore General upstream
+(`https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/`) and save it as
+`Suonote/SoundFonts/MuseScore/MS_Basic.sf2`. See `Suonote/SoundFonts/MuseScore/README.md` for details.
+
+## Tests
+
+Unit tests live in `SuonoteTests/` (music theory, chord suggestions, MIDI export, Studio generator and sound, recording and structure, lyrics syllable counting).
+
+- In Xcode: select the `Suonote` scheme and press `Cmd+U`.
+- From the command line (adjust the simulator name to one you have installed):
+
+```bash
+xcodebuild test -project Suonote.xcodeproj -scheme Suonote \
+  -destination 'platform=iOS Simulator,name=iPhone 17'
+```
 
 ## Configuration Notes
 
-- iCloud/CloudKit setup guide:
-  - `/Users/martinpoblet/Documents/Xcode/Suonote/Suonote/ICLOUD_SETUP_GUIDE.md`
-- SoundFont setup and licensing guidance:
-  - `/Users/martinpoblet/Documents/Xcode/Suonote/Suonote/SOUNDFONTS_FREEPATS_SETUP.md`
-- Third-party notices:
-  - `/Users/martinpoblet/Documents/Xcode/Suonote/Suonote/Resources/THIRD_PARTY_NOTICES.md`
+- Third-party notices (fonts, SoundFont license):
+  - `Suonote/Resources/THIRD_PARTY_NOTICES.md`
+- SoundFont credits:
+  - `Suonote/SoundFonts/MuseScore/README.md`
 
 ## Why Suonote
 

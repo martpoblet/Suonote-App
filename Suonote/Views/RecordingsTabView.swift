@@ -347,6 +347,7 @@ struct RecordingsTabView: View {
                 Label(player.isPlaying(recording) ? "Pause" : "Play",
                       systemImage: player.isPlaying(recording) ? "pause" : "play")
             }
+            .disabled(!FileManagerUtils.audioFileExists(fileName: recording.fileName))
             Button {
                 renameText = recording.name
                 recordingToRename = recording

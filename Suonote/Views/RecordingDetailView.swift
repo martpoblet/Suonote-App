@@ -16,6 +16,8 @@ struct RecordingDetailView: View {
 
     private var isPlaying: Bool { player.isPlaying(recording) }
     private var isLoaded: Bool { player.isLoaded(recording) }
+    /// Audio files don't sync between devices — only the take's metadata does.
+    private var isAudioAvailable: Bool { FileManagerUtils.audioFileExists(fileName: recording.fileName) }
 
     private var effectsBinding: Binding<AudioEffectsProcessor.EffectSettings> {
         Binding(
@@ -59,18 +61,23 @@ struct RecordingDetailView: View {
 
     private var playerCard: some View {
         VStack(spacing: DesignSystem.Spacing.md) {
-            RecordWaveformView(
-                fileName: recording.fileName,
-                samples: 72,
-                progress: player.progress(for: recording) ?? 0,
-                isActive: isLoaded,
-                barSpacing: 2.5,
-                onSeek: { fraction in
-                    HapticFeedback.light.trigger()
-                    player.seek(recording, to: fraction)
-                }
-            )
-            .frame(height: 88)
+            if isAudioAvailable {
+                RecordWaveformView(
+                    fileName: recording.fileName,
+                    samples: 72,
+                    progress: player.progress(for: recording) ?? 0,
+                    isActive: isLoaded,
+                    barSpacing: 2.5,
+                    onSeek: { fraction in
+                        HapticFeedback.light.trigger()
+                        player.seek(recording, to: fraction)
+                    }
+                )
+                .frame(height: 88)
+            } else {
+                AudioUnavailableLabel()
+                    .frame(maxWidth: .infinity, minHeight: 88)
+            }
 
             HStack {
                 Text(RecordFormat.duration(isLoaded ? player.currentTime : 0))
@@ -110,6 +117,8 @@ struct RecordingDetailView: View {
                 }
             }
             .frame(maxWidth: .infinity)
+            .disabled(!isAudioAvailable)
+            .opacity(isAudioAvailable ? 1 : 0.4)
         }
         .padding(DesignSystem.Spacing.md)
         .cardStyle(color: isLoaded ? DesignSystem.Colors.primary.opacity(0.45) : nil)
