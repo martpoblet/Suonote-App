@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import os
 
 /// Extracted business logic from Project model (A-02)
 /// Provides operations that modify project data without cluttering the model

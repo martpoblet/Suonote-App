@@ -11,7 +11,7 @@ enum ReviewPrompt {
     /// Leave `nil` until the app has an ID: the card then uses the system rating
     /// dialog. With an ID, "Rate" opens the App Store review screen directly, which
     /// always works (the system dialog is rate-limited by Apple).
-    static let appStoreID: String? = nil
+    static let appStoreID: String? = "6758340405"
 
     static let minimumLaunches = 5
     static let minimumSongs = 2

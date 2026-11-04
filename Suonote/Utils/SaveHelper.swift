@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import os
 
 extension ModelContext {
     /// Saves the context and logs a failure instead of silently dropping it
