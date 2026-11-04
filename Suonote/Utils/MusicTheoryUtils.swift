@@ -252,8 +252,10 @@ struct MusicTheoryUtils {
     /// Returns the Roman numeral for a chord in a given key/mode
     static func romanNumeral(root: String, quality: ChordQuality, keyRoot: String, mode: KeyMode) -> String {
         let interval = ChordSuggestionEngine.intervalBetween(from: keyRoot, to: root)
-        let scaleIntervals = mode.intervals
-        
+        // Pentatonic/blues scales have fewer than 7 degrees; number them against their parent
+        // 7-note scale or the degree index would be wrong (a pentatonic V would read "IV").
+        let scaleIntervals = ChordSuggestionEngine.suggestionMode(for: mode).intervals
+
         guard let degreeIndex = scaleIntervals.firstIndex(of: interval) else {
             // Chromatic / non-diatonic chord
             let semitoneToRoman = ["I", "♭II", "II", "♭III", "III", "IV", "♯IV/♭V", "V", "♭VI", "VI", "♭VII", "VII"]
@@ -272,6 +274,10 @@ struct MusicTheoryUtils {
         case .dominant7: return numeral + "7"
         case .major7: return numeral + "Δ7"
         case .minor7: return numeral + "7"
+        case .dominant9, .minor9: return numeral + "9"
+        case .major9: return numeral + "Δ9"
+        case .sixth, .minorSixth: return numeral + "6"
+        case .add9: return numeral + "add9"
         case .sus2: return numeral + "sus2"
         case .sus4: return numeral + "sus4"
         default: return numeral
@@ -288,7 +294,7 @@ struct MusicTheoryUtils {
         guard let degreeIndex = majorIntervals.firstIndex(of: interval) else {
             let flatDegrees = [1: "♭2", 3: "♭3", 6: "♭5", 8: "♭6", 10: "♭7"]
             let num = flatDegrees[interval] ?? "\(interval)"
-            return quality.isMinor ? "-\(num)" : num
+            return quality.isMinor ? "\(num)-" : num
         }
         
         let number = "\(degreeIndex + 1)"
@@ -296,7 +302,7 @@ struct MusicTheoryUtils {
         if quality.isMinor { suffix = "-" }
         if quality == .diminished || quality == .diminished7 { suffix = "°" }
         if quality == .augmented { suffix = "+" }
-        if quality == .dominant7 { suffix += "7" }
+        if quality == .dominant7 || quality == .minor7 { suffix += "7" }
         if quality == .major7 { suffix += "Δ" }
         
         return suffix.isEmpty ? number : "\(number)\(suffix)"

@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          ls /Applications | grep -i xcode || true
+          sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)/Contents/Developer"
+          xcodebuild -version
+
+      # MS_Basic.sf2 is too large for git (see .gitignore), so a clean checkout does not have it.
+      # Tests that need the real bank are skipped here and still run locally.
+      - name: Build and test
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Suonote.xcodeproj \
+            -scheme Suonote \
+            -destination 'platform=iOS Simulator,name=iPhone 17' \
+            -skip-testing:SuonoteTests/StudioGeneratorTests/testBundledSoundFontExistsForEveryInstrument \
+            -skip-testing:SuonoteTests/StudioGeneratorTests/testEverySupportedVariantLoadsFromBundledBank \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee xcodebuild.log | tail -n 200
+
+      - name: Upload log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: xcodebuild.log

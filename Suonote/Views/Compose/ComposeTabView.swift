@@ -75,6 +75,7 @@ struct ComposeTabView: View {
         }
         .background(ComposePlayheadObserver(project: project, playhead: $playhead))
         .environment(editor)
+        .environment(\.chordKeyContext, ChordKeyContext(root: project.keyRoot, mode: project.keyMode))
         .onAppear {
             editor.attach(project: project, context: modelContext)
             audioManager.setup(project: project)

@@ -457,17 +457,41 @@ struct ComposeEmptyBeat: View {
 
 // MARK: - Chord symbol
 
+/// The song's key, so chord roots are spelled the way a musician would write them
+/// (Bb major shows "Bb"/"Eb", not "A#"/"D#"). Chords are stored with sharps.
+struct ChordKeyContext: Equatable {
+    var root: String
+    var mode: KeyMode
+
+    func spell(_ note: String) -> String {
+        MusicTheory.displayName(for: note, inKey: root, mode: mode)
+    }
+}
+
+private struct ChordKeyContextKey: EnvironmentKey {
+    static let defaultValue: ChordKeyContext? = nil
+}
+
+extension EnvironmentValues {
+    var chordKeyContext: ChordKeyContext? {
+        get { self[ChordKeyContextKey.self] }
+        set { self[ChordKeyContextKey.self] = newValue }
+    }
+}
+
 /// Lead-sheet chord typesetting: root in Erode, quality set smaller and raised.
 struct ComposeChordSymbol: View {
     enum Size { case small, regular, large, hero }
 
     let value: ComposeChordValue
     var size: Size = .regular
+    @Environment(\.chordKeyContext) private var keyContext
 
     var body: some View {
         let suffix = value.quality.symbol + value.extensions.joined()
-        let slash = value.slashRoot.map { "/" + $0 } ?? ""
-        Text("\(Text(value.root).font(rootFont))\(Text(suffix).font(suffixFont).baselineOffset(raise))\(Text(slash).font(suffixFont))")
+        let rootText = keyContext?.spell(value.root) ?? value.root
+        let slash = value.slashRoot.map { "/" + (keyContext?.spell($0) ?? $0) } ?? ""
+        Text("\(Text(rootText).font(rootFont))\(Text(suffix).font(suffixFont).baselineOffset(raise))\(Text(slash).font(suffixFont))")
             .lineLimit(1)
             .minimumScaleFactor(0.5)
             .accessibilityLabel(ComposeChordSpeech.spoken(value))

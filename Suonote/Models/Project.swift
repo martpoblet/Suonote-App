@@ -267,12 +267,18 @@ extension Project {
         }
 
         for section in allSections {
+            // Sections with their own key must move with the song, otherwise they end up out of key.
+            if let sectionRoot = section.sectionKeyRoot, !sectionRoot.isEmpty {
+                section.sectionKeyRoot = NoteUtils.transpose(note: sectionRoot, semitones: semitones)
+            }
             for chord in section.chordEvents {
                 guard !chord.isRest else { continue }
                 chord.root = NoteUtils.transpose(note: chord.root, semitones: semitones)
                 if let slash = chord.slashRoot, !slash.isEmpty {
                     chord.slashRoot = NoteUtils.transpose(note: slash, semitones: semitones)
                 }
+                // `display` is persisted and read by the PDF, lyrics chord line, snapshots and search.
+                chord.updateDisplay()
             }
         }
     }

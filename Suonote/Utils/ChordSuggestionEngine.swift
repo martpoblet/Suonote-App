@@ -34,12 +34,48 @@ enum MusicTheory {
     
     /// Get the display name for a note in a given key context (sharp or flat)
     static func displayName(for note: String, inKey root: String, mode: KeyMode? = nil) -> String {
-        let keyId = root + (mode == .minor ? "m" : "")
-        if flatKeys.contains(keyId) || flatKeys.contains(root) {
-            let normalized = normalize(note)
+        let normalized = normalize(note)
+        if prefersFlats(forKey: root, mode: mode) {
             return sharpToFlat[normalized] ?? normalized
         }
-        return normalize(note)
+        // Natural keys (C major / A minor family): the borrowed chords people actually play
+        // are ♭III, ♭VI and ♭VII, so spell those with flats (Bb, Eb, Ab rather than A#, D#, G#).
+        if parentMajorIndex(forKey: root, mode: mode) == 0,
+           normalized == "A#" || normalized == "D#" || normalized == "G#" {
+            return sharpToFlat[normalized] ?? normalized
+        }
+        return normalized
+    }
+
+    /// Whether the key signature of `root`/`mode` is spelled with flats.
+    /// Roots are stored with sharps ("A#"), so this looks at the parent major key
+    /// (the one that shares the key signature) by pitch class, not by the string.
+    static func prefersFlats(forKey root: String, mode: KeyMode? = nil) -> Bool {
+        guard let parentMajor = parentMajorIndex(forKey: root, mode: mode) else { return false }
+        switch parentMajor {
+        case 1, 3, 5, 8, 10:   // Db, Eb, F, Ab, Bb major signatures
+            return true
+        case 6:                // F# / Gb: ambiguous; only flats if the user wrote the key with a flat
+            return flatToSharp[root] != nil
+        default:
+            return false
+        }
+    }
+
+    /// Pitch class (0–11) of the major key that shares the key signature of `root`/`mode`.
+    static func parentMajorIndex(forKey root: String, mode: KeyMode? = nil) -> Int? {
+        guard let rootIndex = noteIndex(root) else { return nil }
+        let modeOffset: Int
+        switch mode ?? .major {
+        case .major, .pentatonicMajor: modeOffset = 0
+        case .dorian: modeOffset = 2
+        case .phrygian: modeOffset = 4
+        case .lydian: modeOffset = 5
+        case .mixolydian: modeOffset = 7
+        case .minor, .aeolian, .harmonicMinor, .melodicMinor, .pentatonicMinor, .blues: modeOffset = 9
+        case .locrian: modeOffset = 11
+        }
+        return (rootIndex - modeOffset + 12) % 12
     }
     
     // Intervals in semitones
@@ -294,14 +330,27 @@ class ChordSuggestionEngine {
     }
     
     // MARK: - Smart Suggestions (Context-Aware)
-    
+
+    /// The suggestion logic indexes the 7 diatonic degrees (I…VII). Pentatonic and blues
+    /// scales only have 5–6 chords, so they borrow the harmony of their parent 7-note mode.
+    static func suggestionMode(for mode: KeyMode) -> KeyMode {
+        switch mode {
+        case .pentatonicMajor: return .major
+        case .pentatonicMinor, .blues: return .minor
+        default: return mode
+        }
+    }
+
     static func suggestNextChord(
         after lastChord: ChordEvent?,
         inKey keyRoot: String,
         mode: KeyMode
     ) -> [ChordSuggestion] {
+        let mode = suggestionMode(for: mode)
         let diatonic = diatonicChords(forKey: keyRoot, mode: mode)
-        
+        // Safety net: never index past the end of the scale.
+        guard diatonic.count >= 7 else { return diatonic }
+
         guard let last = lastChord else {
             // No previous chord - suggest strong opening chords
             return [
@@ -314,8 +363,16 @@ class ChordSuggestionEngine {
         
         var suggestions: [ChordSuggestion] = []
         
-        // Find the last chord in the scale
-        if let lastIndex = diatonic.firstIndex(where: { $0.root == last.root && $0.quality == last.quality }) {
+        // Find the last chord in the scale. Match by pitch class (so Db == C#) and fall back to the
+        // chord's basic triad quality so a G7 or Cmaj7 is still recognised as V or I.
+        let lastPitch = MusicTheory.noteIndex(last.root)
+        let exactMatch = diatonic.firstIndex(where: {
+            MusicTheory.noteIndex($0.root) == lastPitch && $0.quality == last.quality
+        })
+        let triadMatch = diatonic.firstIndex(where: {
+            MusicTheory.noteIndex($0.root) == lastPitch && $0.quality == baseQuality(for: last.quality)
+        })
+        if let lastIndex = exactMatch ?? triadMatch {
             // Use music theory progressions based on functional harmony
             switch lastIndex {
             case 0: // I/i (Tonic) - can go anywhere, common: IV, V, vi/VI, iii
@@ -400,6 +457,7 @@ class ChordSuggestionEngine {
         inKey keyRoot: String,
         mode: KeyMode
     ) -> [ChordSuggestion] {
+        let mode = suggestionMode(for: mode)
         let diatonic = diatonicChords(forKey: keyRoot, mode: mode)
         let lastChord = previousChords.last
         let nextChord = nextChords.first
@@ -411,12 +469,18 @@ class ChordSuggestionEngine {
         )
 
         var suggestionMap = [String: ChordSuggestion]()
-        for suggestion in suggestions {
-            suggestionMap[uniqueKey(for: suggestion)] = suggestion
+
+        // Keep the most confident suggestion when several rules propose the same chord.
+        func addSuggestion(_ suggestion: ChordSuggestion) {
+            let key = uniqueKey(for: suggestion)
+            if let existing = suggestionMap[key], existing.confidence >= suggestion.confidence {
+                return
+            }
+            suggestionMap[key] = suggestion
         }
 
-        func addSuggestion(_ suggestion: ChordSuggestion) {
-            suggestionMap[uniqueKey(for: suggestion)] = suggestion
+        for suggestion in suggestions {
+            addSuggestion(suggestion)
         }
 
         if previousChords.count >= 2 {
@@ -582,15 +646,22 @@ class ChordSuggestionEngine {
         let refined = suggestionMap.values.map { suggestion in
             adjustConfidence(suggestion, lastChord: lastChord, nextChord: nextChord)
         }
-        suggestions = refined.sorted { $0.confidence > $1.confidence }
+        // Deterministic order: confidence first, then root and quality so ties never reshuffle between launches.
+        suggestions = refined.sorted { a, b in
+            if a.confidence != b.confidence { return a.confidence > b.confidence }
+            if a.root != b.root { return a.root < b.root }
+            return a.quality.rawValue < b.quality.rawValue
+        }
         return Array(suggestions.prefix(12))
     }
     
     // MARK: - Popular Progressions
     
     static func popularProgressions(forKey root: String, mode: KeyMode) -> [(name: String, progression: [ChordSuggestion])] {
+        let mode = suggestionMode(for: mode)
         let chords = diatonicChords(forKey: root, mode: mode)
-        
+        guard chords.count >= 7 else { return [] }
+
         if mode == .major {
             return [
                 ("I-V-vi-IV (Pop)", [chords[0], chords[4], chords[5], chords[3]]),
