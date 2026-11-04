@@ -13926,6 +13926,46 @@
           }
         }
       }
+    },
+    "Enjoying Suonote?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Te gusta Suonote?"
+          }
+        }
+      }
+    },
+    "A quick rating helps other songwriters find it and keeps us building." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Una valoración rápida ayuda a otros compositores a encontrarla y nos anima a seguir mejorándola."
+          }
+        }
+      }
+    },
+    "Rate Suonote" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Valorar Suonote"
+          }
+        }
+      }
+    },
+    "Not now" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ahora no"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

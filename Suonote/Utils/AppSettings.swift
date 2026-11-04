@@ -108,6 +108,8 @@ class AppSettings {
 
         let languageRaw = UserDefaults.standard.string(forKey: "appLanguage") ?? AppLanguage.system.rawValue
         self.appLanguage = AppLanguage(rawValue: languageRaw) ?? .system
+
+        ReviewPrompt.recordLaunch()
     }
     
     func completeOnboarding() {

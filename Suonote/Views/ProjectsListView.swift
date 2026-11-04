@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import StoreKit
 import UniformTypeIdentifiers
 
 /// The library — Suonote's home. An editorial page: greeting, a "Continue"
@@ -7,7 +8,10 @@ import UniformTypeIdentifiers
 /// with its shape (section colors), key, tempo and status.
 struct ProjectsListView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.requestReview) private var requestReview
+    @Environment(\.openURL) private var openURL
     @Query(sort: \Project.updatedAt, order: .reverse) private var allProjects: [Project]
+    @State private var showingReviewCard = false
 
     @State private var searchText = ""
     @State private var selectedStatus: ProjectStatus?
@@ -86,6 +90,9 @@ struct ProjectsListView: View {
             }
         }
         .paperBackground()
+        .onAppear {
+            showingReviewCard = ReviewPrompt.shouldAsk(songCount: allProjects.count)
+        }
         .navigationTitle("Library")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(removing: .title)
@@ -235,6 +242,25 @@ struct ProjectsListView: View {
         }
     }
 
+    // MARK: Rating invitation
+
+    private func rateApp() {
+        HapticFeedback.light.trigger()
+        dismissReviewCard()
+        if let url = ReviewPrompt.writeReviewURL {
+            openURL(url)            // App Store review screen (needs ReviewPrompt.appStoreID)
+        } else {
+            requestReview()         // System rating dialog
+        }
+    }
+
+    private func dismissReviewCard() {
+        ReviewPrompt.markAsked()
+        withAnimation(DesignSystem.Animations.quickSpring) {
+            showingReviewCard = false
+        }
+    }
+
     // MARK: Library list
 
     private var library: some View {
@@ -245,6 +271,13 @@ struct ProjectsListView: View {
                     inProgressCount: activeProjects.filter { $0.status == .inProgress }.count
                 )
                 .clearLibraryRow(top: DesignSystem.Spacing.xs)
+            }
+
+            if showingReviewCard {
+                Section {
+                    ReviewPromptCard(onRate: rateApp, onLater: dismissReviewCard)
+                        .clearLibraryRow()
+                }
             }
 
             if let hero = continueProject {
