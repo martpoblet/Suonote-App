@@ -347,7 +347,7 @@ Suonote-App/
 - `SOUND_ENGINE.md` — Studio sound engine architecture.
 - `SOUND_UPGRADE_RESEARCH.md` — research behind the SoundFont/sound upgrade.
 - `AUDIT_2026-06.md` — June 2026 technical audit (historical; see `AUDIT_2026-11.md` for the current state).
-- `app-store/` — App Store screenshots.
+- `app-store/` — App Store screenshots and `RELEASE_2.1.0.md` (release notes, store copy, App Review notes, pre-archive checklist).
 
 ## Build and Run
 

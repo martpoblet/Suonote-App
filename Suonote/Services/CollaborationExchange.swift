@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import os
 
 /// Collaboration support — project sharing via codable format (F-05)
 /// The portable `.suonote` file: JSON describing the song (sections, chords,
