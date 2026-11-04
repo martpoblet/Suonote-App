@@ -13576,6 +13576,226 @@
           }
         }
       }
+    },
+    "Couldn't start recording. Check that the microphone is available and not being used by another app, then try again." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo iniciar la grabación. Comprueba que el micrófono esté disponible y que no lo use otra app, e inténtalo de nuevo."
+          }
+        }
+      }
+    },
+    "Nothing was recorded, so the take was discarded." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se grabó nada, así que se descartó la toma."
+          }
+        }
+      }
+    },
+    "Recording stopped: the audio was interrupted. Your take was saved." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grabación detenida: el audio fue interrumpido. Tu toma se guardó."
+          }
+        }
+      }
+    },
+    "Recording stopped: the audio device changed. Your take was saved." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grabación detenida: cambió el dispositivo de audio. Tu toma se guardó."
+          }
+        }
+      }
+    },
+    "Recording stopped before anything was captured." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La grabación se detuvo antes de capturar nada."
+          }
+        }
+      }
+    },
+    "Couldn't record" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo grabar"
+          }
+        }
+      }
+    },
+    "Recording ended" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La grabación terminó"
+          }
+        }
+      }
+    },
+    "Dismiss" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerrar"
+          }
+        }
+      }
+    },
+    "Couldn't open song" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo abrir la canción"
+          }
+        }
+      }
+    },
+    "Import song" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importar canción"
+          }
+        }
+      }
+    },
+    "The song couldn't be saved. Please try again." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo guardar la canción. Inténtalo de nuevo."
+          }
+        }
+      }
+    },
+    "Its sections, lyrics, recorded takes and Studio parts will be removed. This can't be undone." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se eliminarán sus secciones, letras, tomas grabadas y partes de Studio. Esto no se puede deshacer."
+          }
+        }
+      }
+    },
+    "This file isn't a valid Suonote song." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este archivo no es una canción de Suonote válida."
+          }
+        }
+      }
+    },
+    "This file is too large to be a Suonote song." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este archivo es demasiado grande para ser una canción de Suonote."
+          }
+        }
+      }
+    },
+    "This song was saved by a newer version of Suonote. Update the app to open it." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta canción se guardó con una versión más reciente de Suonote. Actualiza la app para abrirla."
+          }
+        }
+      }
+    },
+    "This song file can't be opened: %@" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se puede abrir este archivo de canción: %@"
+          }
+        }
+      }
+    },
+    "unsupported time signature" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "compás no compatible"
+          }
+        }
+      }
+    },
+    "the song is too large" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "la canción es demasiado grande"
+          }
+        }
+      }
+    },
+    "Not syncing with iCloud" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin sincronizar con iCloud"
+          }
+        }
+      }
+    },
+    "iCloud sync could not be opened, so Suonote started with an empty local store. A backup copy of your previous data was saved on this device." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo abrir la sincronización con iCloud, así que Suonote se inició con un almacenamiento local vacío. Se guardó una copia de seguridad de tus datos anteriores en este dispositivo."
+          }
+        }
+      }
+    },
+    "iCloud sync could not be opened, so Suonote started with an empty local store. Your songs may not show up until iCloud sync works again." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo abrir la sincronización con iCloud, así que Suonote se inició con un almacenamiento local vacío. Puede que tus canciones no aparezcan hasta que la sincronización con iCloud vuelva a funcionar."
+          }
+        }
+      }
+    },
+    "Suonote could not open its storage. Songs you create now will be lost when you close the app." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suonote no pudo abrir su almacenamiento. Las canciones que crees ahora se perderán al cerrar la app."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
